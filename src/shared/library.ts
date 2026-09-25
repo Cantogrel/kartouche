@@ -5,7 +5,7 @@ export const ROM_EXTENSIONS: Record<string, readonly string[]> = {
   z64: ['n64'], n64: ['n64'], v64: ['n64'],
   gb: ['gb'], gbc: ['gbc'], gba: ['gba'], nds: ['nds'],
   '3ds': ['n3ds'], cci: ['n3ds'], cxi: ['n3ds'], cia: ['n3ds'],
-  gcm: ['gc'], gcz: ['gc'], ciso: ['gc'], rvz: ['gc', 'wii'], wbfs: ['wii'], wad: ['wii'],
+  gc: ['gc'], gcm: ['gc'], gcz: ['gc'], ciso: ['gc'], rvz: ['gc', 'wii'], wbfs: ['wii'], wad: ['wii'],
   wua: ['wiiu'], wud: ['wiiu'], wux: ['wiiu'], rpx: ['wiiu'],
   nsp: ['switch'], xci: ['switch'], nsz: ['switch'], xcz: ['switch'],
   pbp: ['ps1', 'psp'], ecm: ['ps1'], cso: ['ps2', 'psp'], pkg: ['ps3'], vpk: ['vita'],

@@ -19,6 +19,14 @@ export function Library() {
   const [tab, setTab] = useState<Tab>('all')
   const [over, setOver] = useState(false)
   const [menu, setMenu] = useState(false)
+  // Le menu d'ajout se referme au clic ailleurs ou sur Échap.
+  useEffect(() => {
+    if (!menu) return
+    const close = (): void => setMenu(false)
+    const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') setMenu(false) }
+    window.addEventListener('click', close); window.addEventListener('keydown', key)
+    return () => { window.removeEventListener('click', close); window.removeEventListener('keydown', key) }
+  }, [menu])
   useEffect(() => { void refresh() }, [refresh])
 
   const q = librarySearch.trim().toLowerCase()
@@ -41,7 +49,7 @@ export function Library() {
         <div className="row">
           {hasScanFolders && <Button disabled={busy} onClick={() => void scan()}>{t('library.scan')}</Button>}
           <span className="menu-wrap">
-            <Button variant="primary" disabled={busy} onClick={() => setMenu(!menu)}>+ {t('addGame')}</Button>
+            <Button variant="primary" disabled={busy} onClick={(e) => { e.stopPropagation(); setMenu(!menu) }}>+ {t('addGame')}</Button>
             {menu && (
               <div className="menu">
                 <button onClick={() => void pick('files')}>{t('import.files')}</button>
