@@ -122,7 +122,9 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .lib-file { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; word-break: break-all; }
 
 /* Liste des jeux du menu latéral (miniature, séparation du menu principal) et menu contextuel */
-.side-lib { margin-top: 14px; padding-top: 2px; border-top: 1px solid var(--border); }
+.side-lib { margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--border); }
+.side-lib .searchbox.side { margin: 8px 0 14px; }
+.side-lib .search.side { margin: 0; }
 .nav-item.small { display: flex; align-items: center; gap: 10px; }
 .console-tile { flex: none; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font-size: 9px; font-weight: 800; letter-spacing: -.02em; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.35); }
 .side-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -131,3 +133,6 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .ctx button { display: block; width: 100%; text-align: left; padding: 9px 14px; background: transparent; color: var(--text-strong); border: 0; cursor: pointer; }
 .ctx button:hover { background: var(--bg-card); }
 .ctx button.danger { color: #ff7b7b; }
+
+.game-icon { position: relative; flex: none; width: 26px; height: 26px; }
+.game-icon-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }

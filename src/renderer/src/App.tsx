@@ -5,7 +5,7 @@ import { useApp, type Route } from '@/store/app'
 import { PageHead } from '@/ui'
 import { DEMO_GAMES } from '@/data/demo'
 import { useLibrary } from '@/store/library'
-import { ConsoleTile } from '@/ui/ConsoleTile'
+import { GameIcon } from '@/ui/ConsoleTile'
 import { EntryMenu, onEntryContext } from '@/ui/EntryMenu'
 import { Library } from '@/pages/Library'
 import { SearchBox } from '@/ui'
@@ -52,7 +52,7 @@ export default function App() {
           <div className="side-games">
             {libEntries.filter((g) => !librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase())).map((g) => (
               <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} onClick={() => go('game', `lib:${g.id}`)} onContextMenu={onEntryContext(g.id)}>
-                <ConsoleTile id={g.console} />
+                <GameIcon gameId={g.gameId} console={g.console} />
                 <span className="side-name">{g.title}</span>
               </button>
             ))}

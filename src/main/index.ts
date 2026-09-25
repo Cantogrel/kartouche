@@ -45,7 +45,7 @@ app.whenReady().then(() => {
   protocol.handle('rvimg', async (req) => {
     const u = new URL(req.url)
     const game = getGame(db, Number(u.pathname.split('/').filter(Boolean)[0]))
-    const kind = u.hostname === 'hero' ? 'hero' : 'card'
+    const kind = u.hostname === 'hero' ? 'hero' : u.hostname === 'icon' ? 'icon' : 'card'
     const img = game ? await getImage(db, paths.cache, game, kind, loadSettings(db)) : null
     return img ? new Response(new Uint8Array(img.data), { headers: { 'content-type': img.type, 'cache-control': 'max-age=86400' } }) : new Response(null, { status: 404 })
   })

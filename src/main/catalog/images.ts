@@ -8,8 +8,8 @@ import { thumbnailUrl } from './libretro'
 import { igdbQuery, igdbToken, searchTerm } from './igdb'
 import { recordUse, usedToday } from './providers'
 
-/** `card` : vignette de liste ; `hero` : grande bannière de la fiche. Les deux préfèrent le format horizontal. */
-export type ImageKind = 'card' | 'hero'
+/** `card` : vignette de liste ; `hero` : grande bannière de la fiche (les deux préfèrent le format horizontal) ; `icon` : icône carrée du jeu (menu latéral). */
+export type ImageKind = 'card' | 'hero' | 'icon'
 export interface Img { data: Buffer; type: string }
 
 /** Une source renvoie null si elle n'a pas d'image ; elle lève une erreur si le réseau est indisponible (rien n'est alors retenu). */
@@ -86,11 +86,11 @@ async function sgdbId(db: DatabaseSync, game: CatalogGame, key: string): Promise
   return hit?.id ?? null
 }
 
-const sgdbSource = (db: DatabaseSync, game: CatalogGame, s: Settings, kind: 'grids' | 'heroes'): ImageSource => async () => {
+const sgdbSource = (db: DatabaseSync, game: CatalogGame, s: Settings, kind: 'grids' | 'heroes' | 'icons'): ImageSource => async () => {
   if (!s.sgdbApiKey) return null
   const id = await sgdbId(db, game, s.sgdbApiKey)
   if (id === null) return null
-  const q = kind === 'grids' ? '?dimensions=460x215,920x430&limit=1' : '?limit=1'
+  const q = kind === 'grids' ? '?dimensions=460x215,920x430&limit=1' : kind === 'icons' ? '?mimes=image/png&limit=1' : '?limit=1'
   const list = await sgdbApi<{ url: string }[]>(db, `/${kind}/game/${id}${q}`, s.sgdbApiKey)
   return list?.[0] ? fetchImage(list[0].url) : null
 }
@@ -120,6 +120,8 @@ const libretroSource = (game: CatalogGame, kind: 'Named_Boxarts' | 'Named_Snaps'
  * jaquette verticale Libretro en dernier recours.
  */
 export function imageSources(db: DatabaseSync, game: CatalogGame, kind: ImageKind, s: Settings): ImageSource[] {
+  // Icône : uniquement de vraies icônes carrées (SteamGridDB) ; sans icône, l'interface affiche la pastille de la console, jamais une jaquette rognée.
+  if (kind === 'icon') return [sgdbSource(db, game, s, 'icons')]
   if (kind === 'hero') {
     return [sgdbSource(db, game, s, 'heroes'), igdbSource(db, game, s, 't_1080p'), sgdbSource(db, game, s, 'grids'),
       libretroSource(game, 'Named_Titles'), libretroSource(game, 'Named_Snaps'), libretroSource(game, 'Named_Boxarts')]
