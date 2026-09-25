@@ -20,7 +20,7 @@ export function CatalogGameDetail({ id }: { id: number }) {
   const genres = details?.genres?.length ? details.genres : game.genre ? [game.genre] : []
   return (
     <div className="content nopad">
-      <Cover className="hero" consoleId={game.console} title={game.title}>
+      <Cover className="hero" consoleId={game.console} title={game.title} heroId={details?.heroUrl ? game.id : undefined}>
         <div className="hero-title">{game.title}</div>
         <div className="hero-bar">
           <strong>{consoleById(game.console)?.label ?? game.console}</strong>

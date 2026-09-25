@@ -78,5 +78,8 @@
   "settings.igdbHint": "IGDB est optionnel et ajoute des descriptions. Créez une application développeur Twitch gratuite et collez son Client ID et son Secret. Les clés restent dans votre base locale.",
   "settings.igdbId": "IGDB / Twitch Client ID",
   "settings.igdbSecret": "IGDB / Twitch Client Secret",
-  "settings.quota": "{used} / {limit} requêtes aujourd'hui"
+  "settings.quota": "{used} / {limit} requêtes aujourd'hui",
+  "catalog.rating": "Classement des jeux par popularité… {n}/{total}",
+  "settings.tgdbKey": "Clé API TheGamesDB",
+  "settings.sgdbKey": "Clé API SteamGridDB"
 }

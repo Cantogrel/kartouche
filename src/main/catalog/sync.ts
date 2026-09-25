@@ -1,11 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { CONSOLES } from '@shared/consoles'
 import type { SyncProgress, SyncResult } from '@shared/catalog'
-import { replaceConsole } from './catalogStore'
+import { pruneUnknownConsoles, replaceConsole } from './catalogStore'
 import { fetchConsoleCatalog, type Fetcher } from './libretro'
 
 /** Synchronise les consoles demandées, une à une ; l'échec d'une console n'arrête pas les autres. */
 export async function syncCatalog(db: DatabaseSync, ids: string[] | undefined, onProgress: (p: SyncProgress) => void, get?: Fetcher): Promise<SyncResult> {
+  pruneUnknownConsoles(db, CONSOLES.map((c) => c.id))
   const defs = CONSOLES.filter((c) => !ids || ids.includes(c.id))
   const result: SyncResult = { synced: 0, failed: [] }
   let done = 0

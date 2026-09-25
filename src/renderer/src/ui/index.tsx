@@ -67,12 +67,12 @@ export const GameCard = ({ title, console: cons, hasFile, progress, minutes, onC
 )
 
 /** Jaquette du catalogue (cache local via rvimg://) ; repli sur le dégradé si l'image n'existe pas. */
-export function Cover({ consoleId, title, className, children }: { consoleId: string; title: string; className?: string; children?: ReactNode }) {
+export function Cover({ consoleId, title, className, children, heroId }: { consoleId: string; title: string; className?: string; children?: ReactNode; heroId?: number }) {
   const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [consoleId, title])
+  useEffect(() => setFailed(false), [consoleId, title, heroId])
   return (
     <div className={className} style={artStyle(title)}>
-      {!failed && <img className="cover-img" loading="lazy" alt="" src={`rvimg://cover/${consoleId}/${encodeURIComponent(title)}`} onError={() => setFailed(true)} />}
+      {!failed && <img className="cover-img" loading="lazy" alt="" src={heroId !== undefined ? `rvimg://hero/${heroId}` : `rvimg://cover/${consoleId}/${encodeURIComponent(title)}`} onError={() => setFailed(true)} />}
       {children}
     </div>
   )

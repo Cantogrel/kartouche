@@ -8,7 +8,7 @@ export interface MetadataProvider {
   /** Plafond d'appels par jour (quota du service, avec marge). */
   dailyLimit: number
   isConfigured(settings: Settings): boolean
-  fetchDetails(game: CatalogGame, settings: Settings): Promise<GameDetails | null>
+  fetchDetails(game: CatalogGame, settings: Settings): Promise<Partial<GameDetails> | null>
 }
 
 const DAY = (now: number): string => new Date(now).toISOString().slice(0, 10)
@@ -29,34 +29,42 @@ export function providerStatus(db: DatabaseSync, providers: MetadataProvider[], 
   return providers.map((p) => ({ id: p.id, configured: p.isConfigured(settings), usedToday: usedToday(db, p.id, now), dailyLimit: p.dailyLimit }))
 }
 
+const FIELDS = ['summary', 'publisher', 'developer', 'releaseYear', 'genres', 'heroUrl'] as const
+
 /**
- * Cascade : cache local d'abord (30 j ; un échec « inconnu » est retenu 24 h pour ne pas re-solliciter les quotas),
- * puis chaque fournisseur configuré et sous son quota, dans l'ordre. Un fournisseur en erreur passe la main au suivant.
+ * Cascade : chaque fournisseur configuré, dans l'ordre, complète la fiche (le premier qui renseigne un champ l'emporte).
+ * Par fournisseur : cache local 30 j (un « inconnu » est retenu 24 h), sinon appel si le quota du jour le permet.
+ * Un fournisseur en erreur ou à court de quota est simplement sauté.
  */
 export async function getDetails(db: DatabaseSync, game: CatalogGame, providers: MetadataProvider[], settings: Settings,
   opts: { refresh?: boolean; now?: number } = {}): Promise<GameDetails | null> {
   const now = opts.now ?? Date.now()
-  if (!opts.refresh) {
-    const hit = db.prepare('SELECT provider, json, fetched_at FROM game_meta WHERE game_id = ? ORDER BY fetched_at DESC').all(game.id) as { provider: string; json: string; fetched_at: number }[]
-    for (const h of hit) {
-      if (h.provider === '_miss') { if (now - h.fetched_at < MISS_TTL_MS) return null; continue }
-      if (now - h.fetched_at < CACHE_TTL_MS) return JSON.parse(h.json) as GameDetails
-    }
-  }
-  let tried = false
+  const merged: Record<string, unknown> = {}
+  const sources: string[] = []
+  const select = db.prepare('SELECT json, fetched_at FROM game_meta WHERE game_id = ? AND provider = ?')
+  const store = db.prepare(`INSERT INTO game_meta (game_id, provider, json, fetched_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT(game_id, provider) DO UPDATE SET json = excluded.json, fetched_at = excluded.fetched_at`)
   for (const p of providers) {
-    if (!p.isConfigured(settings) || usedToday(db, p.id, now) >= p.dailyLimit) continue
-    tried = true
-    recordUse(db, p.id, now)
-    let d: GameDetails | null = null
-    try { d = await p.fetchDetails(game, settings) } catch { continue }
-    if (d) {
-      db.prepare(`INSERT INTO game_meta (game_id, provider, json, fetched_at) VALUES (?, ?, ?, ?)
-        ON CONFLICT(game_id, provider) DO UPDATE SET json = excluded.json, fetched_at = excluded.fetched_at`).run(game.id, p.id, JSON.stringify(d), now)
-      return d
+    if (!p.isConfigured(settings)) continue
+    let d: Partial<GameDetails> | null | undefined
+    const hit = opts.refresh ? undefined : select.get(game.id, p.id) as { json: string; fetched_at: number } | undefined
+    if (hit) {
+      const cached = JSON.parse(hit.json) as Partial<GameDetails> | null
+      if (now - hit.fetched_at < (cached ? CACHE_TTL_MS : MISS_TTL_MS)) d = cached
     }
+    if (d === undefined) {
+      if (usedToday(db, p.id, now) >= p.dailyLimit) continue
+      recordUse(db, p.id, now)
+      try { d = await p.fetchDetails(game, settings) } catch { continue }
+      store.run(game.id, p.id, JSON.stringify(d), now)
+    }
+    if (!d) continue
+    let used = false
+    for (const f of FIELDS) {
+      const v = d[f]
+      if (v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0) && merged[f] === undefined) { merged[f] = v; used = true }
+    }
+    if (used) sources.push(p.id)
   }
-  if (tried) db.prepare(`INSERT INTO game_meta (game_id, provider, json, fetched_at) VALUES (?, '_miss', '{}', ?)
-    ON CONFLICT(game_id, provider) DO UPDATE SET fetched_at = excluded.fetched_at`).run(game.id, now)
-  return null
+  return sources.length ? { ...merged, provider: sources.join('+') } : null
 }

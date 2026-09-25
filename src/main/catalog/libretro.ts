@@ -19,7 +19,7 @@ const datUrl = (kind: string, system: string): string => `${RAW}/${kind}/${encod
 
 /** Assemble le catalogue d'une console : DAT No-Intro/Redump + genre, année et développeur. */
 export async function fetchConsoleCatalog(def: ConsoleDef, get: Fetcher = httpText): Promise<{ rows: CatalogRow[]; version: string | null }> {
-  const main = await get(datUrl(def.dat, def.system))
+  const main = await get(datUrl(def.dat, def.datName ?? def.system))
   if (main === null) throw new Error(`DAT introuvable pour ${def.label}`)
   const games = parseDat(main)
   const optional = async (kind: string): Promise<DatGame[]> => {

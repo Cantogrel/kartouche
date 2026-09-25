@@ -13,7 +13,10 @@ export const MIGRATIONS: readonly string[] = [
   CREATE INDEX catalog_crc ON catalog_games (crc);
   CREATE TABLE catalog_sync (console TEXT PRIMARY KEY, version TEXT, synced_at INTEGER NOT NULL, count INTEGER NOT NULL);
   CREATE TABLE provider_usage (provider TEXT NOT NULL, day TEXT NOT NULL, count INTEGER NOT NULL, PRIMARY KEY (provider, day));
-  CREATE TABLE game_meta (game_id INTEGER NOT NULL, provider TEXT NOT NULL, json TEXT NOT NULL, fetched_at INTEGER NOT NULL, PRIMARY KEY (game_id, provider))`
+  CREATE TABLE game_meta (game_id INTEGER NOT NULL, provider TEXT NOT NULL, json TEXT NOT NULL, fetched_at INTEGER NOT NULL, PRIMARY KEY (game_id, provider))`,
+  // v3 : score de popularité (IGDB) par jeu
+  `ALTER TABLE catalog_games ADD COLUMN popularity REAL;
+  CREATE INDEX catalog_popularity ON catalog_games (popularity)`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

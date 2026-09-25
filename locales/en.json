@@ -78,5 +78,8 @@
   "settings.igdbHint": "IGDB is optional and adds descriptions. Create a free Twitch developer application and paste its Client ID and Secret. Keys stay in your local database.",
   "settings.igdbId": "IGDB / Twitch Client ID",
   "settings.igdbSecret": "IGDB / Twitch Client Secret",
-  "settings.quota": "{used} / {limit} requests today"
+  "settings.quota": "{used} / {limit} requests today",
+  "catalog.rating": "Ranking games by popularity… {n}/{total}",
+  "settings.tgdbKey": "TheGamesDB API key",
+  "settings.sgdbKey": "SteamGridDB API key"
 }

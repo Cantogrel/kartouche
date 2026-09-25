@@ -87,6 +87,6 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .thumb .cover-img { object-fit: contain; background: rgba(0,0,0,.35); }
 .thumb .badge { z-index: 1; }
-.hero .cover-img { object-fit: contain; filter: blur(0); opacity: .35; }
+.hero .cover-img { object-fit: cover; opacity: .55; }
 .hero > *:not(.cover-img) { position: relative; }
 .catalog-sync { margin-bottom: 12px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }

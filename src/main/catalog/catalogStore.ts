@@ -10,10 +10,12 @@ export interface CatalogRow {
 export function replaceConsole(db: DatabaseSync, consoleId: string, rows: CatalogRow[], version: string | null, now = Date.now()): void {
   db.exec('BEGIN')
   try {
+    // La popularité vient d'IGDB, pas des DAT : on la conserve à travers une resynchronisation.
+    const pop = new Map((db.prepare('SELECT title, popularity FROM catalog_games WHERE console = ? AND popularity IS NOT NULL').all(consoleId) as { title: string; popularity: number }[]).map((r) => [r.title, r.popularity]))
     db.prepare('DELETE FROM catalog_games WHERE console = ?').run(consoleId)
-    const ins = db.prepare(`INSERT OR IGNORE INTO catalog_games (console, title, region, year, genre, developer, crc, sha1, size, variant)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    for (const r of rows) ins.run(consoleId, r.title, r.region, r.year, r.genre, r.developer, r.crc, r.sha1, r.size, r.variant ? 1 : 0)
+    const ins = db.prepare(`INSERT OR IGNORE INTO catalog_games (console, title, region, year, genre, developer, crc, sha1, size, variant, popularity)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    for (const r of rows) ins.run(consoleId, r.title, r.region, r.year, r.genre, r.developer, r.crc, r.sha1, r.size, r.variant ? 1 : 0, pop.get(r.title) ?? null)
     db.prepare(`INSERT INTO catalog_sync (console, version, synced_at, count) VALUES (?, ?, ?, ?)
       ON CONFLICT(console) DO UPDATE SET version = excluded.version, synced_at = excluded.synced_at, count = excluded.count`)
       .run(consoleId, version, now, rows.length)
@@ -22,6 +24,13 @@ export function replaceConsole(db: DatabaseSync, consoleId: string, rows: Catalo
     db.exec('ROLLBACK')
     throw e
   }
+}
+
+/** Supprime les consoles qui ne sont plus au catalogue (ex. retirées de la liste des émulateurs pris en charge). */
+export function pruneUnknownConsoles(db: DatabaseSync, keep: string[]): void {
+  const marks = keep.map(() => '?').join(',')
+  db.prepare(`DELETE FROM catalog_games WHERE console NOT IN (${marks})`).run(...keep)
+  db.prepare(`DELETE FROM catalog_sync WHERE console NOT IN (${marks})`).run(...keep)
 }
 
 export const catalogCount = (db: DatabaseSync): number =>
@@ -45,8 +54,8 @@ function where(q: CatalogQuery, skip?: 'consoles' | 'genres'): { sql: string; ar
 const ORDER = {
   title: 'title COLLATE NOCASE',
   year: 'year IS NULL, year DESC, title COLLATE NOCASE',
-  // Pas de donnée de popularité hors ligne : on privilégie les sorties mondiales/US puis l'ordre alphabétique.
-  popularity: "(region LIKE '%USA%' OR region LIKE '%World%') DESC, title COLLATE NOCASE"
+  // Score IGDB quand il existe ; sans lui, on privilégie les jeux documentés (genre connu) puis les sorties US/monde.
+  popularity: "popularity IS NULL, popularity DESC, genre IS NULL, (region LIKE '%USA%' OR region LIKE '%World%') DESC, title COLLATE NOCASE"
 } as const
 
 /** Les facettes ignorent leur propre filtre pour que l'utilisateur voie les autres choix possibles. */
@@ -55,7 +64,7 @@ export function queryCatalog(db: DatabaseSync, q: CatalogQuery): CatalogPage {
   const limit = Math.min(Math.max(q.limit ?? 60, 1), 500)
   const offset = Math.max(q.offset ?? 0, 0)
   const total = (db.prepare(`SELECT COUNT(*) AS n FROM catalog_games ${w.sql}`).get(...w.args) as { n: number }).n
-  const games = db.prepare(`SELECT id, console, title, region, year, genre, developer, crc, sha1, size FROM catalog_games ${w.sql}
+  const games = db.prepare(`SELECT id, console, title, region, year, genre, developer, crc, sha1, size, popularity FROM catalog_games ${w.sql}
     ORDER BY ${ORDER[q.sort ?? 'popularity']} LIMIT ? OFFSET ?`).all(...w.args, limit, offset) as unknown as CatalogGame[]
   const wc = where(q, 'consoles')
   const consoles = db.prepare(`SELECT console AS id, COUNT(*) AS count FROM catalog_games ${wc.sql} GROUP BY console ORDER BY count DESC`).all(...wc.args) as { id: string; count: number }[]
@@ -66,5 +75,5 @@ export function queryCatalog(db: DatabaseSync, q: CatalogQuery): CatalogPage {
 }
 
 export function getGame(db: DatabaseSync, id: number): CatalogGame | null {
-  return (db.prepare('SELECT id, console, title, region, year, genre, developer, crc, sha1, size FROM catalog_games WHERE id = ?').get(id) as unknown as CatalogGame | undefined) ?? null
+  return (db.prepare('SELECT id, console, title, region, year, genre, developer, crc, sha1, size, popularity FROM catalog_games WHERE id = ?').get(id) as unknown as CatalogGame | undefined) ?? null
 }

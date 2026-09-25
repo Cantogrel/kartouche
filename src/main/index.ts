@@ -4,9 +4,9 @@ import { DatabaseSync } from 'node:sqlite'
 import { migrate } from './db/migrations'
 import { buildPaths, ensureDirs, resolveDataDir } from './paths'
 import { registerIpc } from './ipc'
-import { getThumbnail } from './catalog/thumbs'
+import { getHero, getThumbnail } from './catalog/thumbs'
 
-// Images du catalogue servies depuis le cache disque : rvimg://cover/<console>/<titre encodé>
+// Images du catalogue servies depuis le cache disque : rvimg://cover/<console>/<titre encodé> et rvimg://hero/<id du jeu>
 protocol.registerSchemesAsPrivileged([{ scheme: 'rvimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 
 function createWindow(): BrowserWindow {
@@ -29,9 +29,15 @@ app.whenReady().then(() => {
   migrate(db)
   const { v } = db.prepare('select sqlite_version() as v').get() as { v: string }
   protocol.handle('rvimg', async (req) => {
-    const [consoleId, ...rest] = new URL(req.url).pathname.split('/').filter(Boolean)
-    const buf = consoleId ? await getThumbnail(paths.cache, consoleId, decodeURIComponent(rest.join('/'))) : null
-    return buf ? new Response(new Uint8Array(buf), { headers: { 'content-type': 'image/png', 'cache-control': 'max-age=86400' } }) : new Response(null, { status: 404 })
+    const u = new URL(req.url)
+    const parts = u.pathname.split('/').filter(Boolean)
+    const png = (b: Buffer): Response => new Response(new Uint8Array(b), { headers: { 'content-type': 'image/png', 'cache-control': 'max-age=86400' } })
+    if (u.hostname === 'hero') {
+      const h = await getHero(db, paths.cache, Number(parts[0]))
+      return h ? new Response(new Uint8Array(h.data), { headers: { 'content-type': h.type, 'cache-control': 'max-age=86400' } }) : new Response(null, { status: 404 })
+    }
+    const buf = parts[0] ? await getThumbnail(paths.cache, parts[0], decodeURIComponent(parts.slice(1).join('/'))) : null
+    return buf ? png(buf) : new Response(null, { status: 404 })
   })
   registerIpc({ db, paths, sqliteVersion: v })
   createWindow()

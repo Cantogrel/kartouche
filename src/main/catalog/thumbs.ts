@@ -1,3 +1,4 @@
+import type { DatabaseSync } from 'node:sqlite'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { consoleById } from '@shared/consoles'
@@ -27,4 +28,23 @@ export async function getThumbnail(cacheDir: string, consoleId: string, title: s
   }
   await writeFile(miss, '')
   return null
+}
+
+/** Bannière SteamGridDB d'un jeu : téléchargée une fois dans cache/heroes, d'après l'URL retenue dans game_meta. */
+export async function getHero(db: DatabaseSync, cacheDir: string, gameId: number): Promise<{ data: Buffer; type: string } | null> {
+  const row = db.prepare("SELECT json FROM game_meta WHERE game_id = ? AND provider = 'sgdb'").get(gameId) as { json: string } | undefined
+  const url = row ? (JSON.parse(row.json) as { heroUrl?: string } | null)?.heroUrl : undefined
+  if (!url) return null
+  const ext = /\.(png|jpe?g|webp)(?:$|\?)/i.exec(url)?.[1].toLowerCase() ?? 'png'
+  const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+  const file = join(cacheDir, 'heroes', `${gameId}.${ext}`)
+  try { return { data: await readFile(file), type } } catch { /* pas en cache */ }
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+    if (!res.ok) return null
+    const data = Buffer.from(await res.arrayBuffer())
+    await mkdir(join(cacheDir, 'heroes'), { recursive: true })
+    await writeFile(file, data)
+    return { data, type }
+  } catch { return null }
 }

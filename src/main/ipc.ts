@@ -7,9 +7,12 @@ import { catalogCount, getGame, queryCatalog } from './catalog/catalogStore'
 import { syncCatalog } from './catalog/sync'
 import { getDetails, providerStatus, type MetadataProvider } from './catalog/providers'
 import { igdb } from './catalog/igdb'
+import { tgdb } from './catalog/tgdb'
+import { sgdb } from './catalog/sgdb'
+import { syncPopularity } from './catalog/popularity'
 
 /** Ordre de la cascade de fiches enrichies. */
-const PROVIDERS: MetadataProvider[] = [igdb]
+const PROVIDERS: MetadataProvider[] = [igdb, tgdb, sgdb]
 let syncing = false
 
 type Handler<C extends IpcChannel> = (req: IpcChannels[C]['req']) => IpcChannels[C]['res'] | Promise<IpcChannels[C]['res']>
@@ -46,9 +49,18 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
       return await syncCatalog(db, ids, (p) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', p)))
     } finally { syncing = false }
   })
+  handle('catalog:popularity', async () => {
+    const s = loadSettings(db)
+    if (!igdb.isConfigured(s) || syncing) return 0
+    syncing = true
+    try {
+      return await syncPopularity(db, s, (done, total) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', { console: 'popularity', done, total })))
+    } catch { return 0 } finally { syncing = false }
+  })
   handle('catalog:status', () => {
     const r = db.prepare('SELECT MAX(synced_at) AS at FROM catalog_sync').get() as { at: number | null }
-    return { total: catalogCount(db), syncedAt: r.at, syncing }
+    const rated = db.prepare('SELECT COUNT(*) AS n FROM catalog_games WHERE popularity IS NOT NULL').get() as { n: number }
+    return { total: catalogCount(db), syncedAt: r.at, syncing, rated: rated.n }
   })
   handle('providers:status', () => providerStatus(db, PROVIDERS, loadSettings(db)))
 

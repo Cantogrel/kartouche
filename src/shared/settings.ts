@@ -10,6 +10,8 @@ export interface Settings {
   /** Identifiants Twitch de l'utilisateur pour IGDB (jamais commités : stockés dans la base locale). */
   igdbClientId: string
   igdbClientSecret: string
+  tgdbApiKey: string
+  sgdbApiKey: string
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -18,7 +20,9 @@ export const DEFAULT_SETTINGS: Settings = {
   importDeleteSource: false,
   scanFolders: [],
   igdbClientId: '',
-  igdbClientSecret: ''
+  igdbClientSecret: '',
+  tgdbApiKey: '',
+  sgdbApiKey: ''
 }
 
 /** Fusionne une saisie partielle non fiable avec les valeurs actuelles : toute valeur invalide est ignorée. */
@@ -32,6 +36,8 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (Array.isArray(p.scanFolders) && p.scanFolders.every((x) => typeof x === 'string')) out.scanFolders = [...new Set(p.scanFolders as string[])]
   if (typeof p.igdbClientId === 'string') out.igdbClientId = p.igdbClientId.trim()
   if (typeof p.igdbClientSecret === 'string') out.igdbClientSecret = p.igdbClientSecret.trim()
+  if (typeof p.tgdbApiKey === 'string') out.tgdbApiKey = p.tgdbApiKey.trim()
+  if (typeof p.sgdbApiKey === 'string') out.sgdbApiKey = p.sgdbApiKey.trim()
   return out
 }
 

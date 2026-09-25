@@ -11,6 +11,8 @@ export interface CatalogGame {
   crc: string | null
   sha1: string | null
   size: number | null
+  /** Score de popularité (IGDB) ; null tant que non calculé. */
+  popularity: number | null
 }
 
 export interface CatalogQuery {
@@ -51,6 +53,8 @@ export interface GameDetails {
   developer?: string
   releaseYear?: number
   genres?: string[]
+  /** URL distante d'une bannière (SteamGridDB) ; l'affichage passe par le cache local rvimg://hero/<id>. */
+  heroUrl?: string
 }
 
 export interface ProviderStatus {

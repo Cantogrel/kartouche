@@ -13,8 +13,8 @@ export function Settings() {
   const { settings, info, update } = useSettings()
   const [restart, setRestart] = useState(false)
   const [providers, setProviders] = useState<ProviderStatus[]>([])
-  useEffect(() => { if (section === 'apiKeys') void window.api.invoke('providers:status').then(setProviders) }, [section, settings.igdbClientId, settings.igdbClientSecret])
-  const igdb = providers.find((p) => p.id === 'igdb')
+  useEffect(() => { if (section === 'apiKeys') void window.api.invoke('providers:status').then(setProviders) }, [section, settings.igdbClientId, settings.igdbClientSecret, settings.tgdbApiKey, settings.sgdbApiKey])
+  const quota = (id: string): string | null => { const p = providers.find((x) => x.id === id); return p?.configured ? t('settings.quota', { used: p.usedToday, limit: p.dailyLimit }) : null }
 
   const chooseDir = async (): Promise<void> => {
     const r = await window.api.invoke('paths:chooseDataDir')
@@ -78,7 +78,15 @@ export function Settings() {
             <label className="field">{t('settings.igdbSecret')}
               <input type="password" defaultValue={settings.igdbClientSecret} onBlur={(e) => update({ igdbClientSecret: e.target.value })} autoComplete="off" />
             </label>
-            {igdb?.configured && <p className="muted">{t('settings.quota', { used: igdb.usedToday, limit: igdb.dailyLimit })}</p>}
+            <p className="muted">{quota('igdb')}</p>
+            <label className="field">{t('settings.tgdbKey')}
+              <input type="password" defaultValue={settings.tgdbApiKey} onBlur={(e) => update({ tgdbApiKey: e.target.value })} autoComplete="off" />
+            </label>
+            <p className="muted">{quota('tgdb')}</p>
+            <label className="field">{t('settings.sgdbKey')}
+              <input type="password" defaultValue={settings.sgdbApiKey} onBlur={(e) => update({ sgdbApiKey: e.target.value })} autoComplete="off" />
+            </label>
+            <p className="muted">{quota('sgdb')}</p>
           </>
         )}
 

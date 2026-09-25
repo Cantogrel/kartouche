@@ -17,7 +17,7 @@ export function Catalog({ query }: { query: string }) {
   const [variants, setVariants] = useState(false)
   const [page, setPage] = useState<CatalogPage | null>(null)
   const [limit, setLimit] = useState(PAGE)
-  const [status, setStatus] = useState<{ total: number; syncing: boolean } | null>(null)
+  const [status, setStatus] = useState<{ total: number; syncing: boolean; rated: number } | null>(null)
   const [progress, setProgress] = useState<SyncProgress | null>(null)
   const reqId = useRef(0)
 
@@ -37,8 +37,9 @@ export function Catalog({ query }: { query: string }) {
   useEffect(() => setLimit(PAGE), [query, consoles, genres, sort, variants])
 
   const sync = async (): Promise<void> => {
-    setStatus((s) => ({ total: s?.total ?? 0, syncing: true }))
+    setStatus((s) => ({ total: s?.total ?? 0, syncing: true, rated: s?.rated ?? 0 }))
     await window.api.invoke('catalog:sync', undefined)
+    await window.api.invoke('catalog:popularity')
     setProgress(null)
     await refreshStatus()
   }
@@ -49,13 +50,22 @@ export function Catalog({ query }: { query: string }) {
     if (status && status.total === 0 && !status.syncing && !auto.current) { auto.current = true; void sync() }
   }, [status])
 
+  // Catalogue présent mais sans scores (clé IGDB ajoutée après coup) : on calcule la popularité.
+  const rating = useRef(false)
+  useEffect(() => {
+    if (status && status.total > 0 && status.rated === 0 && !status.syncing && !rating.current) {
+      rating.current = true
+      void window.api.invoke('catalog:popularity').then(refreshStatus)
+    }
+  }, [status, refreshStatus])
+
   const games = page?.games ?? []
   const consoleOpts = CONSOLES.map((c) => c.id)
   return (
     <div className="content catalog">
       <div className="catalog-list">
         {(status?.syncing || progress) && (
-          <div className="panel catalog-sync"><span>{t('catalog.syncing', { n: progress?.done ?? 0, total: progress?.total ?? CONSOLES.length })}</span></div>
+          <div className="panel catalog-sync"><span>{progress?.console === 'popularity' ? t('catalog.rating', { n: progress.done, total: progress.total }) : t('catalog.syncing', { n: progress?.done ?? 0, total: progress?.total ?? CONSOLES.length })}</span></div>
         )}
         <div className="toolbar">
           <div>
