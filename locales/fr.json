@@ -1,5 +1,21 @@
 {
   "nav.home": "Accueil", "nav.catalog": "Catalogue", "nav.library": "Bibliothèque",
   "nav.emulators": "Émulateurs", "nav.settings": "Paramètres", "bigpicture": "Big Picture",
-  "search": "Rechercher", "library.empty": "Votre bibliothèque est vide", "play": "Jouer", "addToLibrary": "Ajouter à la bibliothèque"
+  "search": "Rechercher", "searchLibrary": "Filtrer la bibliothèque", "back": "Retour",
+  "play": "Jouer", "options": "Options", "favorite": "Favori", "pin": "Épingler",
+  "addToLibrary": "Ajouter à la bibliothèque", "inLibrary": "Dans la bibliothèque", "linkRom": "Associer une ROM", "addGame": "Ajouter un jeu",
+  "library.empty": "Votre bibliothèque est vide", "results": "résultats", "refine": "Utilisez la barre latérale pour affiner votre recherche",
+  "sortBy": "Trier par", "sort.popularity": "Popularité", "sort.title": "Titre (A-Z)", "sort.year": "Année de sortie",
+  "filter.console": "Console", "filter.genre": "Genres", "filter.year": "Année de sortie", "filter.filter": "Filtrer...",
+  "tab.all": "Tout", "tab.ready": "Prêt", "tab.missing": "Sans fichier",
+  "game.playtime": "{n} minutes de temps de jeu", "game.lastPlayed": "Dernière partie il y a {n} jours", "game.neverPlayed": "Jamais joué",
+  "game.released": "Sorti le {d}", "game.publishedBy": "Publié par {p}", "game.developedBy": "Développé par {p}",
+  "game.about": "À propos", "game.noFile": "Aucune ROM associée à ce jeu",
+  "home.continue": "Continuer à jouer", "home.recent": "Ajoutés récemment", "home.shortcuts": "Raccourcis",
+  "status.ready": "Prêt", "status.installed": "Installé", "status.notInstalled": "Non installé", "status.setup": "Configuration nécessaire",
+  "emu.install": "Installer", "emu.configure": "Configurer", "emu.subtitle": "Choisissez une console pour configurer l'émulation, les dossiers ROM et consulter votre bibliothèque.",
+  "settings.general": "Général", "settings.emulation": "Émulation", "settings.import": "Import", "settings.controller": "Manette",
+  "settings.appearance": "Apparence", "settings.apiKeys": "Clés API", "settings.about": "À propos",
+  "settings.dataFolder": "Dossier de données", "settings.language": "Langue", "settings.update": "Mettre à jour",
+  "footer.noJob": "Aucune tâche en cours"
 }

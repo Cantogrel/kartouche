@@ -1,23 +1,35 @@
 import { useEffect, useState } from 'react'
 import { t, setLang } from '@/i18n'
 import { useApp, type Route } from '@/store/app'
+import { PageHead } from '@/ui'
+import { DEMO_GAMES } from '@/data/demo'
 import { Library } from '@/pages/Library'
+import { Catalog } from '@/pages/Catalog'
+import { GameDetail } from '@/pages/GameDetail'
+import { Home } from '@/pages/Home'
+import { Emulators } from '@/pages/Emulators'
+import { Settings } from '@/pages/Settings'
 
-const NAV: Route[] = ['home', 'catalog', 'library', 'emulators', 'settings']
+const NAV: Exclude<Route, 'game'>[] = ['home', 'catalog', 'library', 'emulators', 'settings']
+const ICON: Record<string, string> = { home: '⌂', catalog: '▦', library: '▤', emulators: '⚙', settings: '☰' }
 
 export default function App() {
-  const { route, go } = useApp()
+  const { route, gameId, go, back, history, librarySearch, setLibrarySearch } = useApp()
   const [, force] = useState(0)
-  const [info, setInfo] = useState('')
+  const [catalogQuery, setCatalogQuery] = useState('')
   useEffect(() => {
-    window.api.ping().then((r) => { setLang(r.locale); setInfo(`sqlite ${r.sqlite}`); force((n) => n + 1) })
+    window.api.ping().then((r) => { setLang(r.locale); force((n) => n + 1) })
   }, [])
+
+  const game = route === 'game' ? DEMO_GAMES.find((g) => g.id === gameId) : undefined
+  const title = game ? game.title : t(`nav.${route}`)
+  const activeNav = route === 'game' ? 'library' : route
   return (
     <div className="app">
       <div className="titlebar">
-        <span>RomVault <small style={{ fontWeight: 400, color: 'var(--text-muted)' }}>{info}</small></span>
+        <span>RomVault</span>
         <div className="right">
-          <button className="pill" style={{ height: 22, padding: '0 10px', marginRight: 12 }}>{t('bigpicture')}</button>
+          <button className="bp" onClick={() => undefined}>▶ {t('bigpicture')}</button>
           <button onClick={() => window.api.window.minimize()}>–</button>
           <button onClick={() => window.api.window.maximize()}>▢</button>
           <button onClick={() => window.api.window.close()}>✕</button>
@@ -26,14 +38,32 @@ export default function App() {
       <div className="body">
         <nav className="sidebar">
           {NAV.map((r) => (
-            <button key={r} className={`nav-item${route === r ? ' active' : ''}`} onClick={() => go(r)}>{t(`nav.${r}`)}</button>
+            <button key={r} className={`nav-item${activeNav === r ? ' active' : ''}`} onClick={() => go(r)}>
+              <span className="ico">{ICON[r]}</span>{t(`nav.${r}`)}
+            </button>
           ))}
+          <input className="search side" placeholder={t('searchLibrary')} value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} />
+          <div className="side-games">
+            {DEMO_GAMES.filter((g) => g.inLibrary && (!librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase()))).map((g) => (
+              <button key={g.id} className={`nav-item small${gameId === g.id && route === 'game' ? ' active' : ''}${g.hasFile ? '' : ' dim'}`} onClick={() => go('game', g.id)}>
+                {g.title}
+              </button>
+            ))}
+          </div>
         </nav>
         <main className="main">
-          <div className="pagehead"><h1>{t(`nav.${route}`)}</h1><input className="search" placeholder={t('search')} /></div>
-          {route === 'library' ? <Library /> : <div className="content"><p className="empty">{t(`nav.${route}`)}</p></div>}
+          <PageHead title={title} onBack={history.length ? back : undefined}>
+            {route === 'catalog' && <input className="search" placeholder={t('search')} value={catalogQuery} onChange={(e) => setCatalogQuery(e.target.value)} />}
+          </PageHead>
+          {route === 'home' && <Home />}
+          {route === 'catalog' && <Catalog query={catalogQuery} />}
+          {route === 'library' && <Library />}
+          {route === 'game' && <GameDetail gameId={gameId} />}
+          {route === 'emulators' && <Emulators />}
+          {route === 'settings' && <Settings />}
         </main>
       </div>
+      <div className="statusbar">{t('footer.noJob')}</div>
     </div>
   )
 }

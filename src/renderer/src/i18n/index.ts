@@ -9,4 +9,10 @@ export function setLang(osLocale: string): Lang {
   current = osLocale.toLowerCase().startsWith('fr') ? 'fr' : 'en'
   return current
 }
-export const t = (key: string): string => dicts[current][key] ?? dicts.en[key] ?? key
+export const getLang = (): Lang => current
+
+/** Traduit une clé ; `{name}` est remplacé par params.name. */
+export function t(key: string, params?: Record<string, string | number>): string {
+  const raw = dicts[current][key] ?? dicts.en[key] ?? key
+  return params ? raw.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? '')) : raw
+}
