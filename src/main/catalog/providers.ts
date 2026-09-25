@@ -44,27 +44,30 @@ export async function getDetails(db: DatabaseSync, game: CatalogGame, providers:
   const select = db.prepare('SELECT json, fetched_at FROM game_meta WHERE game_id = ? AND provider = ?')
   const store = db.prepare(`INSERT INTO game_meta (game_id, provider, json, fetched_at) VALUES (?, ?, ?, ?)
     ON CONFLICT(game_id, provider) DO UPDATE SET json = excluded.json, fetched_at = excluded.fetched_at`)
-  for (const p of providers) {
-    if (!p.isConfigured(settings)) continue
-    let d: Partial<GameDetails> | null | undefined
+  // Tous les fournisseurs sont interrogés en même temps (la fiche attend le plus lent, pas la somme) ; la fusion respecte l'ordre de la cascade.
+  const results = await Promise.all(providers.map(async (p): Promise<Partial<GameDetails> | null> => {
+    if (!p.isConfigured(settings)) return null
     const hit = opts.refresh ? undefined : select.get(game.id, p.id) as { json: string; fetched_at: number } | undefined
     if (hit) {
       const cached = JSON.parse(hit.json) as Partial<GameDetails> | null
-      if (now - hit.fetched_at < (cached ? CACHE_TTL_MS : MISS_TTL_MS)) d = cached
+      if (now - hit.fetched_at < (cached ? CACHE_TTL_MS : MISS_TTL_MS)) return cached
     }
-    if (d === undefined) {
-      if (usedToday(db, p.id, now) >= p.dailyLimit) continue
-      recordUse(db, p.id, now)
-      try { d = await p.fetchDetails(game, settings) } catch { continue }
-      store.run(game.id, p.id, JSON.stringify(d), now)
-    }
-    if (!d) continue
+    if (usedToday(db, p.id, now) >= p.dailyLimit) return null
+    recordUse(db, p.id, now)
+    let d: Partial<GameDetails> | null
+    try { d = await p.fetchDetails(game, settings) } catch { return null }
+    store.run(game.id, p.id, JSON.stringify(d), now)
+    return d
+  }))
+  providers.forEach((p, i) => {
+    const d = results[i]
+    if (!d) return
     let used = false
     for (const f of FIELDS) {
       const v = d[f]
       if (v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0) && merged[f] === undefined) { merged[f] = v; used = true }
     }
     if (used) sources.push(p.id)
-  }
+  })
   return sources.length ? { ...merged, provider: sources.join('+') } : null
 }

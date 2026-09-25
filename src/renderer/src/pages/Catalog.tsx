@@ -21,6 +21,13 @@ export function Catalog({ query }: { query: string }) {
   const [status, setStatus] = useState<{ total: number; syncing: boolean; enriched: boolean } | null>(null)
   const [progress, setProgress] = useState<SyncProgress | null>(null)
   const reqId = useRef(0)
+  // Survol d'une carte : la fiche est préparée (mise en cache côté principal) pour que le clic soit instantané.
+  const prefetched = useRef(new Set<number>())
+  const prefetch = (id: number): void => {
+    if (prefetched.current.has(id)) return
+    prefetched.current.add(id)
+    void window.api.invoke('catalog:details', { id })
+  }
 
   const refreshStatus = useCallback(() => window.api.invoke('catalog:status').then(setStatus), [])
   useEffect(() => { void refreshStatus() }, [refreshStatus])
@@ -93,7 +100,7 @@ export function Catalog({ query }: { query: string }) {
         </div>
         {status && status.total === 0 && !status.syncing && <p className="muted">{t('catalog.empty')}</p>}
         {games.map((g) => (
-          <div key={g.id} className="row-card" tabIndex={0} onClick={() => go('game', String(g.id))} onKeyDown={(e) => e.key === 'Enter' && go('game', String(g.id))}>
+          <div key={g.id} className="row-card" tabIndex={0} onMouseEnter={() => prefetch(g.id)} onFocus={() => prefetch(g.id)} onClick={() => go('game', String(g.id))} onKeyDown={(e) => e.key === 'Enter' && go('game', String(g.id))}>
             <Cover className="thumb" gameId={g.id} title={g.name}><Badge>{labelOf(g.console)}</Badge></Cover>
             <div>
               <div className="title">{g.name}</div>
@@ -105,10 +112,9 @@ export function Catalog({ query }: { query: string }) {
         {page && page.total > games.length && <Button onClick={() => setCatalog({ limit: limit + PAGE })}>{t('catalog.more')}</Button>}
       </div>
       <aside className="filters">
-        {MAKERS.map((m) => (
-          <FilterGroup key={m} title={m} options={CONSOLES.filter((c) => c.maker === m).map((c) => c.id)} selected={consoles}
-            format={(id) => `${labelOf(id)} (${page?.consoles.find((c) => c.id === id)?.count ?? 0})`} onToggle={(o) => setCatalog({ consoles: toggle(consoles, o) })} />
-        ))}
+        <FilterGroup title={t('filter.console')} count={CONSOLES.length} selected={consoles}
+          groups={MAKERS.map((m) => ({ title: m, options: CONSOLES.filter((c) => c.maker === m).map((c) => c.id) }))}
+          format={(id) => `${labelOf(id)} (${page?.consoles.find((c) => c.id === id)?.count ?? 0})`} onToggle={(o) => setCatalog({ consoles: toggle(consoles, o) })} />
         <FilterGroup title={t('filter.genre')} count={page?.genres.length ?? 0} options={(page?.genres ?? []).map((g) => g.name)} selected={genres}
           format={(n) => `${genreLabel(n, lang)} (${page?.genres.find((g) => g.name === n)?.count ?? 0})`} onToggle={(o) => setCatalog({ genres: toggle(genres, o) })} />
         <label className="check"><input type="checkbox" checked={variants} onChange={(e) => setCatalog({ variants: e.target.checked })} /> {t('catalog.variants')}</label>

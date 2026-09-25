@@ -43,27 +43,26 @@ export function chunkText(text: string, max = 450): string[] {
 
 /** Traduction automatique (MyMemory, gratuite, sans clé). null si le quota du jour est épuisé ou en cas d'échec. */
 export async function machineTranslate(text: string, lang: string, get: Json = getJson): Promise<string | null> {
-  const parts: string[] = []
   let budget = 1800 // caractères traduits au maximum par fiche : le quota anonyme est de quelques milliers par jour
-  for (const chunk of chunkText(text)) {
-    if (budget <= 0) break
-    budget -= chunk.length
+  const chunks = chunkText(text).filter((c) => (budget -= c.length) + c.length > 0)
+  // Les morceaux sont traduits en parallèle : la fiche attend le plus lent, pas la somme.
+  const parts = await Promise.all(chunks.map(async (chunk) => {
     const r = await get(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|${lang}`) as
       { responseStatus?: number | string; quotaFinished?: boolean; responseData?: { translatedText?: string } } | null
     const t = r?.responseData?.translatedText
-    if (!r || r.quotaFinished || Number(r.responseStatus) !== 200 || !t || /MYMEMORY WARNING/i.test(t)) return null
-    parts.push(t)
-  }
-  return parts.length ? parts.join(' ') : null
+    return !r || r.quotaFinished || Number(r.responseStatus) !== 200 || !t || /MYMEMORY WARNING/i.test(t) ? null : t
+  }))
+  return parts.length && parts.every((x): x is string => x !== null) ? parts.join(' ') : null
 }
 
 /**
  * Description dans la langue de l'interface : Wikipédia d'abord (rédigée par des humains), sinon traduction automatique du texte
- * source. Résultat mis en cache (y compris l'échec, 24 h). Renvoie la fiche inchangée si la langue est l'anglais ou en cas d'échec.
+ * source. `base` (fiche des fournisseurs) est attendue EN PARALLÈLE de la recherche Wikipédia. Résultat mis en cache, échec compris (24 h).
+ * Sans traduction possible, la fiche reste dans sa langue d'origine ; null si on n'a rien du tout.
  */
-export async function localizeDetails(db: DatabaseSync, game: CatalogGame, details: GameDetails, lang: string,
-  io: { get?: Json } = {}): Promise<GameDetails> {
-  if (lang === 'en') return details
+export async function localizeDetails(db: DatabaseSync, game: CatalogGame, base: Promise<GameDetails | null>, lang: string,
+  io: { get?: Json } = {}): Promise<GameDetails | null> {
+  if (lang === 'en') return base
   const key = `l10n-${lang}`
   const row = db.prepare('SELECT json, fetched_at FROM game_meta WHERE game_id = ? AND provider = ?').get(game.id, key) as { json: string; fetched_at: number } | undefined
   let hit: { text: string; source: 'wikipedia' | 'machine' } | null | undefined
@@ -71,12 +70,15 @@ export async function localizeDetails(db: DatabaseSync, game: CatalogGame, detai
     const cached = JSON.parse(row.json) as typeof hit
     if (Date.now() - row.fetched_at < (cached ? TTL_MS : MISS_TTL_MS)) hit = cached
   }
+  const wikiP = hit === undefined ? wikipediaSummary(game.name, lang, io.get).catch(() => null) : null
+  const details = await base
   if (hit === undefined) {
-    const wiki = await wikipediaSummary(game.name, lang, io.get).catch(() => null)
-    const text = wiki ?? (details.summary ? await machineTranslate(details.summary, lang, io.get).catch(() => null) : null)
+    const wiki = await wikiP
+    const text = wiki ?? (details?.summary ? await machineTranslate(details.summary, lang, io.get).catch(() => null) : null)
     hit = text ? { text, source: wiki ? 'wikipedia' : 'machine' } : null
     db.prepare('INSERT INTO game_meta (game_id, provider, json, fetched_at) VALUES (?, ?, ?, ?) ON CONFLICT(game_id, provider) DO UPDATE SET json = excluded.json, fetched_at = excluded.fetched_at')
       .run(game.id, key, JSON.stringify(hit), Date.now())
   }
-  return hit ? { ...details, summary: hit.text, summaryLang: lang, summarySource: hit.source } : details
+  if (!hit) return details
+  return { ...(details ?? { provider: hit.source }), summary: hit.text, summaryLang: lang, summarySource: hit.source }
 }

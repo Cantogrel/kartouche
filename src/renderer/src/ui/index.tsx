@@ -1,4 +1,4 @@
-import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 /** Dégradé déterministe servant de jaquette tant qu'aucune image n'est disponible. */
 export function artStyle(seed: string): { background: string } {
@@ -38,16 +38,25 @@ export const Section = ({ title, children }: { title: string; children: ReactNod
   <section className="section"><h2>{title}</h2>{children}</section>
 )
 
-export function FilterGroup({ title, count, options, selected, onToggle, format }: {
-  title: string; count?: number; options: string[]; selected: string[]; onToggle: (o: string) => void; format?: (o: string) => string
+export function FilterGroup({ title, count, options, groups, selected, onToggle, format }: {
+  title: string; count?: number; selected: string[]; onToggle: (o: string) => void; format?: (o: string) => string
+  /** Liste plate… */ options?: string[]
+  /** …ou sous-catégories (ex. consoles par constructeur). */ groups?: { title: string; options: string[] }[]
 }) {
+  const box = (o: string) => (
+    <label key={o} className="check">
+      <input type="checkbox" checked={selected.includes(o)} onChange={() => onToggle(o)} /> {format ? format(o) : o}
+    </label>
+  )
   return (
     <div className="fgroup">
       <h3>{title} {count !== undefined && <span className="count">{count}</span>}</h3>
-      {options.map((o) => (
-        <label key={o} className="check">
-          <input type="checkbox" checked={selected.includes(o)} onChange={() => onToggle(o)} /> {format ? format(o) : o}
-        </label>
+      {options?.map(box)}
+      {groups?.map((g) => (
+        <div key={g.title} className="fsub">
+          <h4>{g.title}</h4>
+          {g.options.map(box)}
+        </div>
       ))}
     </div>
   )
@@ -72,15 +81,20 @@ export const GameCard = ({ title, console: cons, hasFile, progress, minutes, onC
  * Sans image, le dégradé déterministe reste visible.
  */
 export function Cover({ gameId, title, kind = 'card', className, children }: { gameId: number; title: string; kind?: 'card' | 'hero'; className?: string; children?: ReactNode }) {
-  const [state, setState] = useState<'loading' | 'wide' | 'tall' | 'none'>('loading')
-  useEffect(() => setState('loading'), [gameId, kind])
   const src = `rvimg://${kind}/${gameId}`
+  // L'état est rattaché à l'URL : quand la liste est refiltrée et que le composant est réutilisé pour un autre jeu, on repart de « chargement »
+  // sans effet différé (un effet remettait « chargement » APRÈS l'événement load d'une image en cache, et l'image restait invisible).
+  const [res, setRes] = useState<{ src: string; v: 'wide' | 'tall' | 'none' } | null>(null)
+  const state = res && res.src === src ? res.v : 'loading'
+  const settle = (img: HTMLImageElement | null): void => {
+    if (img && img.complete && img.naturalWidth > 0 && !(res && res.src === src)) setRes({ src, v: img.naturalHeight > img.naturalWidth ? 'tall' : 'wide' })
+  }
   return (
     <div className={className} style={artStyle(title)}>
       {state === 'tall' && <img className="cover-img blur" alt="" src={src} />}
       {state !== 'none' && (
-        <img className={`cover-img${state === 'tall' ? ' tall' : ''}`} style={{ opacity: state === 'loading' ? 0 : undefined }} loading="lazy" alt="" src={src}
-          onLoad={(e) => setState(e.currentTarget.naturalHeight > e.currentTarget.naturalWidth ? 'tall' : 'wide')} onError={() => setState('none')} />
+        <img key={src} ref={settle} className={`cover-img${state === 'tall' ? ' tall' : ''}`} style={{ opacity: state === 'loading' ? 0 : undefined }} loading="lazy" alt="" src={src}
+          onLoad={(e) => setRes({ src, v: e.currentTarget.naturalHeight > e.currentTarget.naturalWidth ? 'tall' : 'wide' })} onError={() => setRes({ src, v: 'none' })} />
       )}
       {children}
     </div>

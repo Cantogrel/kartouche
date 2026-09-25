@@ -55,6 +55,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .searchbox.side .clear { top: calc(50% + 2px); }
 .searchbox .clear:hover { color: var(--text-strong); background: var(--active); }
 .fgroup + .fgroup { margin-top: 14px; }
+.fsub { margin: 6px 0 0 4px; padding-left: 10px; border-left: 1px solid var(--border); }
+.fsub h4 { margin: 8px 0 4px; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.skeleton { display: block; height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--active), var(--bg-elevated), var(--active)); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; margin: 10px 0; }
+@keyframes shimmer { to { background-position: -200% 0; } }
 .sortdir { padding: 7px 10px; min-width: 38px; }
 .side-games { display: flex; flex-direction: column; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }

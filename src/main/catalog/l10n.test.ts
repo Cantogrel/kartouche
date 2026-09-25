@@ -35,24 +35,24 @@ describe('localizeDetails', () => {
   const setup = (): DatabaseSync => { const db = new DatabaseSync(':memory:'); migrate(db); return db }
   it('laisse l’anglais tel quel', async () => {
     const d = { provider: 'igdb', summary: 'Hello.' }
-    expect(await localizeDetails(setup(), game, d, 'en')).toBe(d)
+    expect(await localizeDetails(setup(), game, Promise.resolve(d), 'en')).toBe(d)
   })
   it('préfère Wikipédia et met en cache', async () => {
     const db = setup()
     let calls = 0
     const get = async (url: string): Promise<unknown> => { calls++; return wiki('The Witcher 3 : Wild Hunt', 'Un jeu vidéo.')(url) }
-    const d = await localizeDetails(db, game, { provider: 'igdb', summary: 'English.' }, 'fr', { get })
+    const d = await localizeDetails(db, game, Promise.resolve({ provider: 'igdb', summary: 'English.' }), 'fr', { get })
     expect(d).toMatchObject({ summary: 'Un jeu vidéo.', summarySource: 'wikipedia', summaryLang: 'fr' })
     const n = calls
-    await localizeDetails(db, game, { provider: 'igdb', summary: 'English.' }, 'fr', { get })
+    await localizeDetails(db, game, Promise.resolve({ provider: 'igdb', summary: 'English.' }), 'fr', { get })
     expect(calls).toBe(n)
   })
   it('se rabat sur la traduction automatique, sinon garde l’anglais', async () => {
     const db = setup()
     const get = async (url: string): Promise<unknown> => url.includes('mymemory') ? { responseStatus: 200, responseData: { translatedText: 'Traduit.' } } : { query: { search: [] } }
-    expect(await localizeDetails(db, game, { provider: 'igdb', summary: 'English.' }, 'fr', { get })).toMatchObject({ summary: 'Traduit.', summarySource: 'machine' })
+    expect(await localizeDetails(db, game, Promise.resolve({ provider: 'igdb', summary: 'English.' }), 'fr', { get })).toMatchObject({ summary: 'Traduit.', summarySource: 'machine' })
     const db2 = setup()
     const fail = async (): Promise<unknown> => null
-    expect((await localizeDetails(db2, { ...game, id: 2 }, { provider: 'igdb', summary: 'English.' }, 'fr', { get: fail })).summary).toBe('English.')
+    expect((await localizeDetails(db2, { ...game, id: 2 }, Promise.resolve({ provider: 'igdb', summary: 'English.' }), 'fr', { get: fail }))?.summary).toBe('English.')
   })
 })

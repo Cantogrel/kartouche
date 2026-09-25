@@ -11,12 +11,13 @@ import type { CatalogGame, GameDetails } from '@shared/catalog'
 export function CatalogGameDetail({ id }: { id: number }) {
   const [game, setGame] = useState<CatalogGame | null | undefined>(undefined)
   const [details, setDetails] = useState<GameDetails | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState(true)
   const setPageTitle = useApp((s) => s.setPageTitle)
   const lang = useSettings((s) => s.lang)
   useEffect(() => {
-    setGame(undefined); setDetails(null)
+    setGame(undefined); setDetails(null); setLoadingDetails(true)
     void window.api.invoke('catalog:get', id).then((g) => { setGame(g); setPageTitle(g?.name ?? null) })
-    void window.api.invoke('catalog:details', { id }).then(setDetails)
+    void window.api.invoke('catalog:details', { id }).then(setDetails).finally(() => setLoadingDetails(false))
   }, [id, setPageTitle])
   if (game === undefined) return null
   if (game === null) return <div className="content"><p className="muted">{t('game.notFound')}</p></div>
@@ -39,6 +40,7 @@ export function CatalogGameDetail({ id }: { id: number }) {
           {year && <div><strong>{t('game.released', { d: String(year) })}</strong></div>}
           <div className="muted">{[details?.publisher && t('game.publishedBy', { p: details.publisher }), developer && t('game.developedBy', { p: developer })].filter(Boolean).join(' · ')}</div>
           <div className="tags">{genres.map((x) => <Tag key={x}>{x}</Tag>)}<Tag>{consoleById(game.console)?.label ?? game.console}</Tag></div>
+          {loadingDetails && !details && <><span className="skeleton" style={{ width: '90%' }} /><span className="skeleton" style={{ width: '80%' }} /><span className="skeleton" style={{ width: '55%' }} /></>}
           {details?.summary && (<><h3>{t('game.about')}</h3><p>{details.summary}</p><p className="muted">{details.summarySource === 'wikipedia' ? t('game.summaryWikipedia') : details.summarySource === 'machine' ? t('game.summaryMachine') : t('game.source', { p: details.provider.split('+')[0].toUpperCase() })}</p></>)}
         </div>
       </div>

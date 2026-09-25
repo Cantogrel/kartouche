@@ -45,10 +45,8 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     const game = getGame(db, req.id)
     if (!game) return null
     const s = loadSettings(db)
-    const base = await getDetails(db, game, PROVIDERS, s, { refresh: req.refresh })
-    // Description dans la langue de l'interface (Wikipédia, sinon traduction automatique).
-    const d = await localizeDetails(db, game, base ?? { provider: 'wikipedia' }, resolveLanguage(s.language, app.getLocale()))
-    return d.summary || base ? d : null
+    // Description dans la langue de l'interface (Wikipédia, sinon traduction automatique), recherchée en même temps que les fournisseurs.
+    return localizeDetails(db, game, getDetails(db, game, PROVIDERS, s, { refresh: req.refresh }), resolveLanguage(s.language, app.getLocale()))
   })
   handle('catalog:sync', async (ids) => {
     if (syncing) return { synced: 0, failed: [] }
