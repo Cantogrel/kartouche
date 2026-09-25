@@ -31,7 +31,8 @@ export const useApp = create<AppState>((set, get) => ({
   catalog: { consoles: [], genres: [], sort: 'popularity', dir: null, variants: false, limit: 60 },
   setCatalog: (patch) => set({ catalog: { ...get().catalog, ...patch } }),
   setPageTitle: (pageTitle) => set({ pageTitle }),
-  go: (route, gameId) => set({ pageTitle: null, history: [...get().history, { route: get().route, gameId: get().gameId }], route, gameId }),
+  // D'une fiche à une autre (liste latérale) on remplace au lieu d'empiler : « retour » ramène à la page d'origine, pas à la fiche précédente.
+  go: (route, gameId) => set({ pageTitle: null, history: route === 'game' && get().route === 'game' ? get().history : [...get().history, { route: get().route, gameId: get().gameId }], route, gameId }),
   back: () => {
     const h = get().history
     const prev = h[h.length - 1]

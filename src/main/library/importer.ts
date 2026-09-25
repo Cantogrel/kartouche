@@ -26,7 +26,7 @@ async function walk(dir: string, out: string[]): Promise<void> {
 }
 
 /** Fichiers référencés par une feuille .cue (pistes .bin), résolus par rapport à son dossier. */
-async function cueFiles(cue: string): Promise<string[]> {
+export async function cueFiles(cue: string): Promise<string[]> {
   const text = await readFile(cue, 'latin1')
   const files = [...text.matchAll(/^\s*FILE\s+"([^"]+)"/gim)].map((m) => resolve(dirname(cue), m[1]))
   return files.filter((f) => existsSync(f))
@@ -85,7 +85,9 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
   }
   const queue = files.filter((f) => !consumed.has(resolve(f).toLowerCase()))
 
-  const exists = db.prepare('SELECT id FROM library WHERE path = ? OR (console = ? AND crc = ? AND size = ?)')
+  const sameRom = db.prepare('SELECT id, path FROM library WHERE path = ? OR (console = ? AND crc = ? AND size = ?)')
+  const byGame = db.prepare('SELECT id, path FROM library WHERE game_id = ? AND console = ?')
+  const relink = db.prepare('UPDATE library SET path = ?, size = ?, crc = ?, sha1 = ?, match = ?, missing = 0 WHERE id = ?')
   const insert = db.prepare('INSERT INTO library (game_id, console, title, path, size, crc, sha1, match, added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
   let done = 0
   for (const file of queue) {
@@ -99,8 +101,10 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
       if (!cons) { items.push({ file, status: 'ambiguous', error: id.candidates.join(', ') }); continue }
       const title = id.title ?? prep.name
       const inRoms = resolve(file).toLowerCase().startsWith(resolve(opt.romsDir).toLowerCase())
-      const dup = exists.get(file, cons, prep.crc ?? '', prep.size)
-      if (dup) { items.push({ file, status: 'duplicate', console: cons, title, match: id.match }); continue }
+      const same = sameRom.all(file, cons, prep.crc ?? '', prep.size) as { id: number; path: string }[]
+      if (same.some((r) => existsSync(r.path))) { items.push({ file, status: 'duplicate', console: cons, title, match: id.match }); continue }
+      // Entrée du même jeu dont le fichier a disparu (ou jamais existé : jeu ajouté depuis le catalogue) : la ROM s'y rattache.
+      const target = same[0] ?? (id.gameId !== null ? (byGame.all(id.gameId, cons) as { id: number; path: string }[]).find((r) => !existsSync(r.path)) : undefined)
 
       let dest = file
       if (opt.copy && !inRoms) {
@@ -114,7 +118,8 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
         if ((await stat(dest)).size !== (await stat(file)).size) { await rm(dest, { force: true }); throw new Error('copie incomplète') }
         if (opt.deleteSource) for (const f of [file, ...refs]) await rm(f, { force: true })
       }
-      insert.run(id.gameId, cons, title, dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, Date.now())
+      if (target) relink.run(dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, target.id)
+      else insert.run(id.gameId, cons, title, dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, Date.now())
       items.push({ file, status: 'added', console: cons, title, match: id.match })
     } catch (e) {
       items.push({ file, status: 'error', error: (e as Error).message })

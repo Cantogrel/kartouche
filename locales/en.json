@@ -90,7 +90,6 @@
   "library.scan": "Scan folders",
   "library.noMatch": "No game matches",
   "library.dropHint": "Drop ROM files or folders here, or use “Add a game”.",
-  "library.remove": "Remove from library",
   "import.files": "Choose ROM files…",
   "import.folder": "Choose a folder…",
   "import.running": "Importing…",
@@ -107,5 +106,15 @@
   "game.fileMissing": "File missing",
   "settings.scanFolders": "Watched folders",
   "settings.scanHint": "“Scan folders” in the library adds the ROMs found here without copying them.",
-  "settings.addFolder": "Add a folder"
+  "settings.addFolder": "Add a folder",
+  "action.link": "Link a ROM…",
+  "action.reveal": "Show in folder",
+  "action.deleteFile": "Delete the game file",
+  "action.deleteSave": "Delete the save",
+  "action.removeEntry": "Remove from library",
+  "action.deleteAll": "Delete all files",
+  "confirm.file": "Delete the ROM file of “{title}”? The game stays in your library without a file.",
+  "confirm.save": "Delete the saves of “{title}”?",
+  "confirm.entry": "Remove “{title}” from your library? Its ROM file is kept.",
+  "confirm.all": "Delete the ROM file AND the saves of “{title}”, and remove it from your library?"
 }

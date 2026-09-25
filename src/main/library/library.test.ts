@@ -8,7 +8,7 @@ import { migrate } from '../db/migrations'
 import { hashFile, readZip } from './hash'
 import { identify } from './identify'
 import { importPaths } from './importer'
-import { listLibrary } from './libraryStore'
+import { addCatalogGame, listLibrary, removeEntry, saveDir } from './libraryStore'
 
 const hex = (n: number): string => (n >>> 0).toString(16).padStart(8, '0')
 let dir: string
@@ -108,5 +108,49 @@ describe('import', () => {
     expect(r.items).toHaveLength(1)
     expect(r.items[0].file).toBe(cue) // console ambiguë ps1/ps2 → non importée, mais une seule entrée (la piste est absorbée)
     expect(r.items[0].status).toBe('ambiguous')
+  })
+})
+
+describe('bibliothèque', () => {
+  const opt = () => ({ copy: true, deleteSource: false, romsDir: join(dir, 'roms') })
+  const rom = (name: string, content: string): string => { const f = join(dir, 'src', name); mkdirSync(join(dir, 'src'), { recursive: true }); writeFileSync(f, content); return f }
+
+  it('un jeu ajouté depuis le catalogue est sans fichier ; la ROM importée s’y rattache', async () => {
+    const id = addGame('nes', 'Test (Europe)', 'test', 'cbf43926', 9)
+    const e = addCatalogGame(db, id)!
+    expect(e).toMatchObject({ gameId: id, missing: true })
+    expect(addCatalogGame(db, id)!.id).toBe(e.id) // pas de doublon
+    const r = await importPaths(db, [rom('Test.nes', '123456789')], opt())
+    expect(r.items[0].status).toBe('added')
+    const list = listLibrary(db)
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({ id: e.id, missing: false, match: 'hash' })
+  })
+  it('supprimer le fichier garde le jeu (sans fichier) ; le réimporter le rattache de nouveau', async () => {
+    addGame('nes', 'Test', 'test', 'cbf43926', 9)
+    const f = rom('Test.nes', '123456789')
+    await importPaths(db, [f], opt())
+    const [e] = listLibrary(db)
+    await removeEntry(db, e.id, 'file', join(dir, 'saves'))
+    expect(existsSync(e.path)).toBe(false)
+    expect(listLibrary(db)).toHaveLength(1); expect(listLibrary(db)[0].missing).toBe(true)
+    expect((await importPaths(db, [f], opt())).items[0].status).toBe('added')
+    expect(listLibrary(db)).toHaveLength(1); expect(listLibrary(db)[0].missing).toBe(false)
+  })
+  it('retirer de la bibliothèque garde la ROM ; « tout supprimer » enlève ROM, sauvegardes et entrée', async () => {
+    addGame('nes', 'Test', 'test', 'cbf43926', 9)
+    await importPaths(db, [rom('Test.nes', '123456789')], opt())
+    const saves = join(dir, 'saves')
+    const [e] = listLibrary(db)
+    mkdirSync(saveDir(saves, e), { recursive: true }); writeFileSync(join(saveDir(saves, e), 'a.sav'), 'x')
+    await removeEntry(db, e.id, 'save', saves)
+    expect(existsSync(saveDir(saves, e))).toBe(false); expect(existsSync(e.path)).toBe(true)
+    await removeEntry(db, e.id, 'entry', saves)
+    expect(listLibrary(db)).toHaveLength(0); expect(existsSync(e.path)).toBe(true)
+    await importPaths(db, [rom('Test.nes', '123456789')], { ...opt(), copy: false })
+    const [e2] = listLibrary(db)
+    mkdirSync(saveDir(saves, e2), { recursive: true })
+    await removeEntry(db, e2.id, 'all', saves)
+    expect(listLibrary(db)).toHaveLength(0); expect(existsSync(e2.path)).toBe(false); expect(existsSync(saveDir(saves, e2))).toBe(false)
   })
 })

@@ -4,6 +4,7 @@ import { t } from '@/i18n'
 import { useApp } from '@/store/app'
 import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
+import { onEntryContext } from '@/ui/EntryMenu'
 import { consoleById } from '@shared/consoles'
 import type { ImportItem } from '@shared/library'
 
@@ -68,9 +69,9 @@ export function Library() {
             const label = consoleById(g.console)?.label ?? g.console
             const open = (): void => go('game', `lib:${g.id}`)
             return g.gameId === null ? (
-              <GameCard key={g.id} title={g.title} console={label} hasFile={!g.missing} onClick={open} />
+              <div key={g.id} onContextMenu={onEntryContext(g.id)}><GameCard title={g.title} console={label} hasFile={!g.missing} onClick={open} /></div>
             ) : (
-              <div key={g.id} className={`card${g.missing ? ' nofile' : ''}`} tabIndex={0} onClick={open} onKeyDown={(e) => e.key === 'Enter' && open()}>
+              <div key={g.id} className={`card${g.missing ? ' nofile' : ''}`} tabIndex={0} onClick={open} onContextMenu={onEntryContext(g.id)} onKeyDown={(e) => e.key === 'Enter' && open()}>
                 <Cover className="cover-fill" gameId={g.gameId} title={g.title} kind="card"><span className="card-title">{g.title}</span><Badge>{label}</Badge></Cover>
               </div>
             )

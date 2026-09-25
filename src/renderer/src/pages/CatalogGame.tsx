@@ -8,6 +8,7 @@ import { useSettings } from '@/store/settings'
 import type { CatalogGame, GameDetails } from '@shared/catalog'
 import type { LibraryEntry } from '@shared/library'
 import { useLibrary } from '@/store/library'
+import { openEntryMenuAt } from '@/ui/EntryMenu'
 
 /** Fiche d'un jeu du catalogue : données du DAT + description enrichie si un fournisseur (IGDB) est configuré. */
 export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEntry }) {
@@ -17,7 +18,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
   const [details, setDetails] = useState<GameDetails | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(true)
   const setPageTitle = useApp((s) => s.setPageTitle)
-  const go = useApp((s) => s.go)
+  const { add: addToLibrary, link } = useLibrary.getState()
   useEffect(() => { void useLibrary.getState().refresh() }, [])
   const lang = useSettings((s) => s.lang)
   useEffect(() => {
@@ -38,7 +39,12 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
         <div className="hero-title">{game.name}</div>
         <div className="hero-bar">
           <strong>{consoleById(game.console)?.label ?? game.console}</strong>
-          <div className="row">{owned ? <Button variant="primary" disabled>{owned.missing ? t('game.fileMissing') : `✓ ${t('inLibrary')}`}</Button> : <Button variant="primary" onClick={() => go('library')}>{t('addToLibrary')}</Button>}</div>
+          <div className="row">
+            {!owned && <Button variant="primary" onClick={() => void addToLibrary(game.id)}>{t('addToLibrary')}</Button>}
+            {owned?.missing && <Button variant="primary" onClick={() => void link()}>{t('linkRom')}</Button>}
+            {owned && !owned.missing && <Button variant="primary" disabled>✓ {t('inLibrary')}</Button>}
+            {owned && <Button onClick={(e) => openEntryMenuAt(e, owned.id)}>⚙ {t('options')}</Button>}
+          </div>
         </div>
       </Cover>
       <div className="detail">
@@ -55,15 +61,13 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
   )
 }
 
-/** Fichier associé à un jeu de la bibliothèque : emplacement, reconnaissance, retrait. */
+/** Fichier associé à un jeu de la bibliothèque : emplacement et mode de reconnaissance. */
 export function LibraryFile({ entry }: { entry: LibraryEntry }) {
-  const remove = useLibrary((s) => s.remove)
-  const back = useApp((s) => s.back)
   return (
     <div className="lib-file">
-      <div className="muted">{entry.path}</div>
-      <div className="muted">{t(`match.${entry.match}`)} · {(entry.size / 1048576).toFixed(entry.size > 10485760 ? 0 : 1)} MB{entry.missing ? ` · ${t('game.fileMissing')}` : ''}</div>
-      <div className="row"><Button onClick={() => void remove(entry.id, false).then(back)}>{t('library.remove')}</Button></div>
+      {entry.missing
+        ? <div className="muted">{t('game.noFile')}</div>
+        : <><div className="muted">{entry.path}</div><div className="muted">{t(`match.${entry.match}`)} · {(entry.size / 1048576).toFixed(entry.size > 10485760 ? 0 : 1)} MB</div></>}
     </div>
   )
 }

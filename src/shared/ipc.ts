@@ -43,7 +43,11 @@ export interface IpcChannels {
   'library:pick': { req: 'files' | 'folder'; res: string[] }
   /** Réimporte (en référence, sans copie) les dossiers surveillés des réglages et met à jour les fichiers manquants. */
   'library:scan': { req: void; res: ImportResult }
-  'library:remove': { req: { id: number; deleteFile: boolean }; res: void }
+  'library:remove': { req: { id: number; action: 'file' | 'entry' | 'save' | 'all' }; res: void }
+  /** Ajoute un jeu du catalogue à la bibliothèque, sans fichier. */
+  'library:add': { req: number; res: LibraryEntry | null }
+  /** Affiche la ROM dans l'Explorateur. */
+  'library:reveal': { req: number; res: void }
   'providers:status': { req: void; res: ProviderStatus[] }
 }
 

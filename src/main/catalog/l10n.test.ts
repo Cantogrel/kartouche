@@ -13,6 +13,12 @@ describe('Wikipédia', () => {
     const text = await wikipediaSummary('The Witcher 3: Wild Hunt', 'fr', wiki('The Witcher 3 : Wild Hunt', 'The Witcher 3 est un jeu vidéo de rôle.'))
     expect(text).toContain('jeu vidéo')
   })
+  it('préfère l’article principal à sa variante entre parenthèses et accepte « jeu d’action-aventure »', async () => {
+    const get = async (url: string): Promise<unknown> => url.includes('list=search')
+      ? { query: { search: [{ title: 'The Wind Waker (jeu vidéo, 2026)' }, { title: 'The Wind Waker' }] } }
+      : { query: { pages: { 1: { extract: url.includes(encodeURIComponent('The Wind Waker (jeu')) ? 'Remake, jeu vidéo.' : 'The Wind Waker est un jeu d’action-aventure.' } } } }
+    expect(await wikipediaSummary('The Wind Waker', 'fr', get)).toBe('The Wind Waker est un jeu d’action-aventure.')
+  })
   it('refuse un article au titre différent ou qui n’est pas un jeu', async () => {
     expect(await wikipediaSummary('The Witcher 3: Wild Hunt', 'fr', wiki('Wild Hunt', 'Chasse sauvage, jeu vidéo.'))).toBeNull()
     expect(await wikipediaSummary('The Witcher 3: Wild Hunt', 'fr', wiki('The Witcher 3 : Wild Hunt', 'Page d’homonymie.'))).toBeNull()

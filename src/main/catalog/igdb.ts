@@ -2,6 +2,7 @@ import type { GameDetails } from '@shared/catalog'
 import type { Settings } from '@shared/settings'
 import { consoleById } from '@shared/consoles'
 import type { MetadataProvider } from './providers'
+import { matchKey } from './popularity'
 
 /** Retire régions, révisions et tags du nom No-Intro : « Zelda (USA) (Rev 1) » → « Zelda ». */
 export const searchTerm = (title: string): string => title.replace(/\s*[([].*$/, '').replace(/, (The|A|An)$/, '').trim()
@@ -63,7 +64,10 @@ export const igdb: MetadataProvider = {
     if (!term) return null
     const platform = consoleById(game.console)?.igdb
     const where = platform ? `where platforms = (${platform}); ` : ''
-    const [g] = await igdbQuery<IgdbRow>(s, await igdbToken(s), `search "${term}"; ${where}fields summary,${IGDB_FIELDS}; limit 1;`)
+    const rows = await igdbQuery<IgdbRow>(s, await igdbToken(s), `search "${term}"; ${where}fields summary,${IGDB_FIELDS}; limit 10;`)
+    // Le premier résultat peut être un mod ou un DLC : on préfère le jeu de même titre le plus évalué.
+    const want = matchKey(term)
+    const g = rows.filter((r) => matchKey(r.name) === want).sort((a, b) => (b.total_rating_count ?? 0) - (a.total_rating_count ?? 0))[0] ?? rows[0]
     if (!g) return null
     const role = (r: 'developer' | 'publisher'): string | undefined => g.involved_companies?.find((c) => c[r])?.company.name
     return {

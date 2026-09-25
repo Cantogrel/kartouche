@@ -37,6 +37,11 @@ app.whenReady().then(() => {
     rebuildDerived(db)
     db.prepare("INSERT INTO settings (key, value) VALUES ('_derived', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(DERIVED)
   }
+  // Les fiches mises en cache avant la correction du choix de jeu IGDB (un mod pouvait remplacer le jeu) sont refaites une fois.
+  if ((db.prepare("SELECT value FROM settings WHERE key = '_meta'").get() as { value: string } | undefined)?.value !== '2') {
+    db.exec("DELETE FROM game_meta WHERE provider IN ('igdb') OR provider LIKE 'l10n-%'")
+    db.prepare("INSERT INTO settings (key, value) VALUES ('_meta', '2') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run()
+  }
   protocol.handle('rvimg', async (req) => {
     const u = new URL(req.url)
     const game = getGame(db, Number(u.pathname.split('/').filter(Boolean)[0]))

@@ -90,7 +90,6 @@
   "library.scan": "Analyser les dossiers",
   "library.noMatch": "Aucun jeu ne correspond",
   "library.dropHint": "Déposez des ROMs ou des dossiers ici, ou utilisez « Ajouter un jeu ».",
-  "library.remove": "Retirer de la bibliothèque",
   "import.files": "Choisir des ROMs…",
   "import.folder": "Choisir un dossier…",
   "import.running": "Import en cours…",
@@ -107,5 +106,15 @@
   "game.fileMissing": "Fichier introuvable",
   "settings.scanFolders": "Dossiers surveillés",
   "settings.scanHint": "« Analyser les dossiers » dans la bibliothèque ajoute les ROMs trouvées ici, sans les copier.",
-  "settings.addFolder": "Ajouter un dossier"
+  "settings.addFolder": "Ajouter un dossier",
+  "action.link": "Associer une ROM…",
+  "action.reveal": "Afficher dans le dossier",
+  "action.deleteFile": "Supprimer le fichier du jeu",
+  "action.deleteSave": "Supprimer la sauvegarde",
+  "action.removeEntry": "Supprimer de la bibliothèque",
+  "action.deleteAll": "Supprimer tous les fichiers",
+  "confirm.file": "Supprimer le fichier ROM de « {title} » ? Le jeu reste dans la bibliothèque, sans fichier.",
+  "confirm.save": "Supprimer les sauvegardes de « {title} » ?",
+  "confirm.entry": "Retirer « {title} » de la bibliothèque ? Son fichier ROM est conservé.",
+  "confirm.all": "Supprimer le fichier ROM ET les sauvegardes de « {title} », et le retirer de la bibliothèque ?"
 }

@@ -11,7 +11,8 @@ import { tgdb } from './catalog/tgdb'
 import { syncPopularity } from './catalog/popularity'
 import { localizeDetails } from './catalog/l10n'
 import { importPaths } from './library/importer'
-import { listLibrary, refreshMissing, removeEntry } from './library/libraryStore'
+import { addCatalogGame, entryPath, listLibrary, refreshMissing, removeEntry } from './library/libraryStore'
+import { ROM_EXTENSIONS } from '@shared/library'
 import { resolveLanguage } from '@shared/settings'
 
 /** Ordre de la cascade de fiches enrichies. */
@@ -80,7 +81,11 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   })
   handle('library:pick', async (kind) => {
     const win = BrowserWindow.getFocusedWindow()
-    const opts = { properties: [kind === 'folder' ? 'openDirectory' : 'openFile', 'multiSelections'] as ('openDirectory' | 'openFile' | 'multiSelections')[] }
+    // Filtre « ROMs » (extensions connues + zip) en premier, « Tous les fichiers » en repli pour une extension inhabituelle.
+    const opts = {
+      properties: [kind === 'folder' ? 'openDirectory' : 'openFile', 'multiSelections'] as ('openDirectory' | 'openFile' | 'multiSelections')[],
+      filters: kind === 'folder' ? [] : [{ name: 'ROMs', extensions: [...Object.keys(ROM_EXTENSIONS), 'zip'] }, { name: 'All files', extensions: ['*'] }]
+    }
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return res.canceled ? [] : res.filePaths
   })
@@ -89,7 +94,9 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     refreshMissing(db)
     return r
   })
-  handle('library:remove', (req) => removeEntry(db, req.id, req.deleteFile))
+  handle('library:remove', (req) => removeEntry(db, req.id, req.action, paths.saves))
+  handle('library:add', (gameId) => addCatalogGame(db, gameId))
+  handle('library:reveal', (id) => { const p = entryPath(db, id); if (p) shell.showItemInFolder(p) })
   handle('providers:status', () => providerStatus(db, PROVIDERS, loadSettings(db)))
 
   ipcMain.on('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize())

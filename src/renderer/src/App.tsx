@@ -5,6 +5,8 @@ import { useApp, type Route } from '@/store/app'
 import { PageHead } from '@/ui'
 import { DEMO_GAMES } from '@/data/demo'
 import { useLibrary } from '@/store/library'
+import { Cover } from '@/ui'
+import { EntryMenu, onEntryContext } from '@/ui/EntryMenu'
 import { Library } from '@/pages/Library'
 import { SearchBox } from '@/ui'
 import { Catalog } from '@/pages/Catalog'
@@ -48,8 +50,9 @@ export default function App() {
           <SearchBox className="side" placeholder={t('searchLibrary')} value={librarySearch} onChange={setLibrarySearch} clearLabel={t('search.clear')} />
           <div className="side-games">
             {libEntries.filter((g) => !librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase())).map((g) => (
-              <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} onClick={() => go('game', `lib:${g.id}`)}>
-                {g.title}
+              <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} onClick={() => go('game', `lib:${g.id}`)} onContextMenu={onEntryContext(g.id)}>
+                <Cover className="side-thumb" gameId={g.gameId ?? 0} title={g.title} />
+                <span className="side-name">{g.title}</span>
               </button>
             ))}
           </div>
@@ -66,6 +69,7 @@ export default function App() {
           {route === 'settings' && <Settings />}
         </main>
       </div>
+      <EntryMenu />
       <div className="statusbar">{t('footer.noJob')}</div>
     </div>
   )
