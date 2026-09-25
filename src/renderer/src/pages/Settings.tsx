@@ -66,6 +66,12 @@ export function Settings() {
             <label className="check">
               <input type="checkbox" checked={settings.importDeleteSource} onChange={(e) => update({ importDeleteSource: e.target.checked })} /> {t('settings.importDeleteSource')}
             </label>
+            <h3>{t('settings.scanFolders')}</h3>
+            <p className="muted">{t('settings.scanHint')}</p>
+            {settings.scanFolders.map((f) => (
+              <div key={f} className="row"><span style={{ flex: 1, wordBreak: 'break-all' }}>{f}</span><Button onClick={() => void update({ scanFolders: settings.scanFolders.filter((x) => x !== f) })}>✕</Button></div>
+            ))}
+            <div><Button onClick={async () => { const p = await window.api.invoke('library:pick', 'folder'); if (p.length) await update({ scanFolders: [...settings.scanFolders, ...p] }) }}>+ {t('settings.addFolder')}</Button></div>
           </>
         )}
 

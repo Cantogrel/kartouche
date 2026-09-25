@@ -107,3 +107,16 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 45%, rgba(14,14,14,.85)); pointer-events: none; }
 .hero > *:not(.cover-img) { position: relative; z-index: 1; }
 .catalog-sync { margin-bottom: 12px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+
+/* Bibliothèque : dépôt de fichiers, menu d'ajout, cartes avec jaquette */
+.dropzone { position: relative; min-height: 100%; }
+.dropzone.over { outline: 2px dashed var(--accent); outline-offset: -8px; }
+.drop-hint { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; font-size: 22px; font-weight: 700; background: rgba(0,0,0,.55); color: var(--text-strong); }
+.menu-wrap { position: relative; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; display: flex; flex-direction: column; min-width: 200px; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; }
+.menu button { text-align: left; padding: 10px 14px; background: transparent; color: var(--text-strong); border: 0; cursor: pointer; } .menu button:hover { background: var(--bg-card); }
+.cover-fill { position: absolute; inset: 0; }
+.card-title { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 10px 8px; font-weight: 700; font-size: 13px; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.8)); }
+.import-result { margin-bottom: 16px; }
+.panel { margin-bottom: 16px; }
+.lib-file { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; word-break: break-all; }

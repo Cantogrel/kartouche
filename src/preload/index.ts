@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { RomVaultApi } from '@shared/ipc'
 
 const api: RomVaultApi = {
@@ -9,6 +9,7 @@ const api: RomVaultApi = {
     ipcRenderer.on(event, l)
     return () => { ipcRenderer.removeListener(event, l) }
   },
+  pathOf: (file) => webUtils.getPathForFile(file),
   window: {
     minimize: () => ipcRenderer.send('win:minimize'),
     maximize: () => ipcRenderer.send('win:maximize'),

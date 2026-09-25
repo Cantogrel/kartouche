@@ -4,6 +4,7 @@ import { useSettings } from '@/store/settings'
 import { useApp, type Route } from '@/store/app'
 import { PageHead } from '@/ui'
 import { DEMO_GAMES } from '@/data/demo'
+import { useLibrary } from '@/store/library'
 import { Library } from '@/pages/Library'
 import { SearchBox } from '@/ui'
 import { Catalog } from '@/pages/Catalog'
@@ -19,12 +20,13 @@ export default function App() {
   const { route, gameId, go, back, history, librarySearch, setLibrarySearch, pageTitle } = useApp()
   const { ready, load } = useSettings()
   const [catalogQuery, setCatalogQuery] = useState('')
-  useEffect(() => { void load() }, [load])
+  const libEntries = useLibrary((s) => s.entries)
+  useEffect(() => { void load(); void useLibrary.getState().refresh() }, [load])
 
   if (!ready) return null
   const game = route === 'game' ? DEMO_GAMES.find((g) => g.id === gameId) : undefined
   const title = game ? game.title : route === 'game' && pageTitle ? pageTitle : t(`nav.${route === 'game' ? 'catalog' : route}`)
-  const activeNav = route === 'game' ? (game ? 'library' : 'catalog') : route
+  const activeNav = route === 'game' ? (game || gameId?.startsWith('lib:') ? 'library' : 'catalog') : route
   return (
     <div className="app">
       <div className="titlebar">
@@ -45,8 +47,8 @@ export default function App() {
           ))}
           <SearchBox className="side" placeholder={t('searchLibrary')} value={librarySearch} onChange={setLibrarySearch} clearLabel={t('search.clear')} />
           <div className="side-games">
-            {DEMO_GAMES.filter((g) => g.inLibrary && (!librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase()))).map((g) => (
-              <button key={g.id} className={`nav-item small${gameId === g.id && route === 'game' ? ' active' : ''}${g.hasFile ? '' : ' dim'}`} onClick={() => go('game', g.id)}>
+            {libEntries.filter((g) => !librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase())).map((g) => (
+              <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} onClick={() => go('game', `lib:${g.id}`)}>
                 {g.title}
               </button>
             ))}

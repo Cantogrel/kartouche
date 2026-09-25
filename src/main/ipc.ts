@@ -10,6 +10,8 @@ import { igdb } from './catalog/igdb'
 import { tgdb } from './catalog/tgdb'
 import { syncPopularity } from './catalog/popularity'
 import { localizeDetails } from './catalog/l10n'
+import { importPaths } from './library/importer'
+import { listLibrary, refreshMissing, removeEntry } from './library/libraryStore'
 import { resolveLanguage } from '@shared/settings'
 
 /** Ordre de la cascade de fiches enrichies. */
@@ -70,6 +72,24 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     const e = db.prepare("SELECT value FROM settings WHERE key = '_enrich'").get() as { value: string } | undefined
     return { total: catalogCount(db), syncedAt: r.at, syncing, enriched: e?.value === ENRICH_VERSION }
   })
+  const sendLibProgress = (p: unknown): void => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('library:progress', p))
+  handle('library:list', () => listLibrary(db))
+  handle('library:import', (req) => {
+    const s = loadSettings(db)
+    return importPaths(db, req.paths, { copy: s.importCopy, deleteSource: req.deleteSource ?? s.importDeleteSource, romsDir: paths.roms }, sendLibProgress)
+  })
+  handle('library:pick', async (kind) => {
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = { properties: [kind === 'folder' ? 'openDirectory' : 'openFile', 'multiSelections'] as ('openDirectory' | 'openFile' | 'multiSelections')[] }
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return res.canceled ? [] : res.filePaths
+  })
+  handle('library:scan', async () => {
+    const r = await importPaths(db, loadSettings(db).scanFolders, { copy: false, deleteSource: false, romsDir: paths.roms }, sendLibProgress)
+    refreshMissing(db)
+    return r
+  })
+  handle('library:remove', (req) => removeEntry(db, req.id, req.deleteFile))
   handle('providers:status', () => providerStatus(db, PROVIDERS, loadSettings(db)))
 
   ipcMain.on('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize())

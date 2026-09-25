@@ -24,7 +24,15 @@ export const MIGRATIONS: readonly string[] = [
   // v5 : img = identifiant d'image IGDB (Switch : catalogue issu d'IGDB) ; name = titre lisible (affichage, recherche, tri)
   `ALTER TABLE catalog_games ADD COLUMN img TEXT;
   ALTER TABLE catalog_games ADD COLUMN name TEXT;
-  CREATE INDEX catalog_name ON catalog_games (name COLLATE NOCASE)`
+  CREATE INDEX catalog_name ON catalog_games (name COLLATE NOCASE)`,
+  // v6 : bibliothèque de l'utilisateur (ROMs importées ou scannées) ; game_id = jeu du catalogue reconnu, match = hash | name | none
+  `CREATE TABLE library (
+    id INTEGER PRIMARY KEY, game_id INTEGER, console TEXT NOT NULL, title TEXT NOT NULL, path TEXT NOT NULL UNIQUE,
+    size INTEGER NOT NULL, crc TEXT, sha1 TEXT, match TEXT NOT NULL DEFAULT 'none', missing INTEGER NOT NULL DEFAULT 0,
+    added_at INTEGER NOT NULL, play_minutes INTEGER NOT NULL DEFAULT 0, last_played INTEGER
+  );
+  CREATE INDEX library_game ON library (game_id);
+  CREATE INDEX library_crc ON library (console, crc)`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {
