@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { CatalogGame, CatalogPage, CatalogQuery } from '@shared/catalog'
+import { matchKey } from './popularity'
 
 export interface CatalogRow {
   title: string; region: string; year: number | null; genre: string | null; developer: string | null
@@ -13,17 +14,35 @@ export function replaceConsole(db: DatabaseSync, consoleId: string, rows: Catalo
     // La popularité vient d'IGDB, pas des DAT : on la conserve à travers une resynchronisation.
     const pop = new Map((db.prepare('SELECT title, popularity FROM catalog_games WHERE console = ? AND popularity IS NOT NULL').all(consoleId) as { title: string; popularity: number }[]).map((r) => [r.title, r.popularity]))
     db.prepare('DELETE FROM catalog_games WHERE console = ?').run(consoleId)
-    const ins = db.prepare(`INSERT OR IGNORE INTO catalog_games (console, title, region, year, genre, developer, crc, sha1, size, variant, popularity)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    for (const r of rows) ins.run(consoleId, r.title, r.region, r.year, r.genre, r.developer, r.crc, r.sha1, r.size, r.variant ? 1 : 0, pop.get(r.title) ?? null)
+    const ins = db.prepare(`INSERT OR IGNORE INTO catalog_games (console, title, region, year, genre, developer, crc, sha1, size, variant, popularity, base)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    for (const r of rows) ins.run(consoleId, r.title, r.region, r.year, r.genre, r.developer, r.crc, r.sha1, r.size, r.variant ? 1 : 0, pop.get(r.title) ?? null, matchKey(r.title))
     db.prepare(`INSERT INTO catalog_sync (console, version, synced_at, count) VALUES (?, ?, ?, ?)
       ON CONFLICT(console) DO UPDATE SET version = excluded.version, synced_at = excluded.synced_at, count = excluded.count`)
       .run(consoleId, version, now, rows.length)
+    markDuplicates(db, consoleId)
     db.exec('COMMIT')
   } catch (e) {
     db.exec('ROLLBACK')
     throw e
   }
+}
+
+const regionRank = (r: string): number => (/USA/.test(r) ? 0 : /World/.test(r) ? 1 : /Europe/.test(r) ? 2 : 3)
+
+/** Garde une seule entrée par jeu et par console (base de titre identique) : non-variante, USA/Monde d'abord, titre le plus court. Les autres passent en `dup`. */
+export function markDuplicates(db: DatabaseSync, consoleId: string): void {
+  const rows = db.prepare('SELECT id, title, region, variant, base FROM catalog_games WHERE console = ?').all(consoleId) as { id: number; title: string; region: string; variant: number; base: string | null }[]
+  const best = new Map<string, typeof rows[number]>()
+  const better = (a: typeof rows[number], b: typeof rows[number]): boolean =>
+    a.variant !== b.variant ? a.variant < b.variant : regionRank(a.region) !== regionRank(b.region) ? regionRank(a.region) < regionRank(b.region) : a.title.length < b.title.length
+  for (const r of rows) {
+    if (!r.base) continue
+    const cur = best.get(r.base)
+    if (!cur || better(r, cur)) best.set(r.base, r)
+  }
+  const upd = db.prepare('UPDATE catalog_games SET dup = ? WHERE id = ?')
+  for (const r of rows) upd.run(r.base && best.get(r.base)!.id !== r.id ? 1 : 0, r.id)
 }
 
 /** Supprime les consoles qui ne sont plus au catalogue (ex. retirées de la liste des émulateurs pris en charge). */
@@ -41,7 +60,7 @@ const escapeLike = (s: string): string => s.replace(/[\\%_]/g, (c) => '\\' + c)
 function where(q: CatalogQuery, skip?: 'consoles' | 'genres'): { sql: string; args: (string | number)[] } {
   const parts: string[] = []
   const args: (string | number)[] = []
-  if (!q.includeVariants) parts.push('variant = 0')
+  if (!q.includeVariants) parts.push('variant = 0 AND dup = 0')
   const text = q.q?.trim()
   if (text) {
     for (const w of text.split(/\s+/)) { parts.push("title LIKE ? ESCAPE '\\'"); args.push(`%${escapeLike(w)}%`) }

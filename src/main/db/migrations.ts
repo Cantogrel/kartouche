@@ -16,7 +16,11 @@ export const MIGRATIONS: readonly string[] = [
   CREATE TABLE game_meta (game_id INTEGER NOT NULL, provider TEXT NOT NULL, json TEXT NOT NULL, fetched_at INTEGER NOT NULL, PRIMARY KEY (game_id, provider))`,
   // v3 : score de popularité (IGDB) par jeu
   `ALTER TABLE catalog_games ADD COLUMN popularity REAL;
-  CREATE INDEX catalog_popularity ON catalog_games (popularity)`
+  CREATE INDEX catalog_popularity ON catalog_games (popularity)`,
+  // v4 : regroupement des versions d'un même jeu (régions, révisions) ; dup = 1 pour les doublons, masqués par défaut
+  `ALTER TABLE catalog_games ADD COLUMN base TEXT;
+  ALTER TABLE catalog_games ADD COLUMN dup INTEGER NOT NULL DEFAULT 0;
+  CREATE INDEX catalog_base ON catalog_games (console, base)`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

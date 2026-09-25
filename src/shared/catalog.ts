@@ -22,7 +22,7 @@ export interface CatalogQuery {
   sort?: CatalogSort
   offset?: number
   limit?: number
-  /** Inclure bêtas, prototypes, démos, pirates… (masqués par défaut). */
+  /** Inclure bêtas, prototypes, démos, pirates et les autres versions/régions d'un même jeu (masqués par défaut). */
   includeVariants?: boolean
 }
 

@@ -5,18 +5,26 @@ import { catalogCount, getGame, queryCatalog } from './catalogStore'
 import { syncCatalog } from './sync'
 
 const setup = (): DatabaseSync => { const db = new DatabaseSync(':memory:'); migrate(db); return db }
+const entry = (name: string, region: string, crc: number): string => `game (\n\tname "${name}"\n\tregion "${region}"\n\trom ( crc ${crc} )\n)\n`
+const noMeta = (dat: string) => async (url: string): Promise<string | null> => (/genre|year|developer/.test(url) ? null : dat)
 
 describe('catalogue', () => {
   it('filtre, trie et calcule les facettes', async () => {
     const db = setup()
-    await syncCatalog(db, ['snes', 'nes'], () => undefined, async (url) => (url.includes('genre') || url.includes('year') || url.includes('developer'))
-      ? null : 'game (\n\tname "Alpha (USA)"\n\tregion "USA"\n\trom ( crc 1 )\n)\ngame (\n\tname "Beta (Europe) (Beta)"\n\trom ( crc 2 )\n)\n')
+    await syncCatalog(db, ['snes', 'nes'], () => undefined, noMeta(entry('Alpha (USA)', 'USA', 1) + entry('Beta (Europe) (Beta)', 'Europe', 2)))
     expect(catalogCount(db)).toBe(4)
     const all = queryCatalog(db, {})
     expect(all.total).toBe(2) // variantes masquées
     expect(queryCatalog(db, { includeVariants: true }).total).toBe(4)
     expect(queryCatalog(db, { consoles: ['nes'] }).total).toBe(1)
     expect(all.consoles).toHaveLength(2)
+  })
+  it('regroupe régions et révisions : une seule entrée par jeu, USA d’abord', async () => {
+    const db = setup()
+    await syncCatalog(db, ['snes'], () => undefined,
+      noMeta(entry('Zelda, The (Europe)', 'Europe', 1) + entry('Zelda, The (USA)', 'USA', 2) + entry('Zelda, The (USA) (Rev 1)', 'USA', 3)))
+    expect(queryCatalog(db, {}).games.map((x) => x.title)).toEqual(['Zelda, The (USA)'])
+    expect(queryCatalog(db, { includeVariants: true }).total).toBe(3)
   })
   it('cherche par mots et échappe les jokers LIKE', () => {
     const db = setup()
