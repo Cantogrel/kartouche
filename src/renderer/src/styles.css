@@ -48,6 +48,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .nav-item.small { padding: 6px 10px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .nav-item.dim { opacity: .5; }
 .search.side { width: 100%; margin: 12px 0 8px; }
+.searchbox { position: relative; display: inline-block; }
+.searchbox.side { display: block; width: 100%; }
+.searchbox .search { padding-right: 30px; }
+.searchbox .clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: var(--text-muted); font-size: 13px; padding: 4px 6px; border-radius: 4px; }
+.searchbox.side .clear { top: calc(50% + 2px); }
+.searchbox .clear:hover { color: var(--text-strong); background: var(--active); }
+.fgroup + .fgroup { margin-top: 14px; }
+.sortdir { padding: 7px 10px; min-width: 38px; }
 .side-games { display: flex; flex-direction: column; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
 .row { display: flex; align-items: center; gap: 8px; }

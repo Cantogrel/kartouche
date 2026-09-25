@@ -31,7 +31,7 @@ app.whenReady().then(() => {
   migrate(db)
   const { v } = db.prepare('select sqlite_version() as v').get() as { v: string }
   // Colonnes dérivées (titre lisible, regroupement Europe d'abord) : recalculées quand la règle change.
-  const DERIVED = '2'
+  const DERIVED = '3'
   const cur = db.prepare("SELECT value FROM settings WHERE key = '_derived'").get() as { value: string } | undefined
   if (cur?.value !== DERIVED) {
     rebuildDerived(db)

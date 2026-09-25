@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { CatalogGame, CatalogPage, CatalogQuery } from '@shared/catalog'
 import { displayTitle } from '@shared/catalog'
+import { canonicalGenre } from '@shared/genres'
 import { matchKey } from './popularity'
 
 export interface CatalogRow {
@@ -14,12 +15,17 @@ export interface CatalogRow {
 export function replaceConsole(db: DatabaseSync, consoleId: string, rows: CatalogRow[], version: string | null, now = Date.now()): void {
   db.exec('BEGIN')
   try {
-    // La popularité vient d'IGDB, pas des DAT : on la conserve à travers une resynchronisation.
-    const pop = new Map((db.prepare('SELECT title, popularity FROM catalog_games WHERE console = ? AND popularity IS NOT NULL').all(consoleId) as { title: string; popularity: number }[]).map((r) => [r.title, r.popularity]))
+    // Popularité, genre, développeur et année viennent en partie d'IGDB, pas des DAT : on les conserve à travers une resynchronisation.
+    type Prev = { popularity: number | null; genre: string | null; developer: string | null; year: number | null }
+    const prev = new Map((db.prepare('SELECT title, popularity, genre, developer, year FROM catalog_games WHERE console = ?').all(consoleId) as (Prev & { title: string })[]).map((r) => [r.title, r]))
     db.prepare('DELETE FROM catalog_games WHERE console = ?').run(consoleId)
     const ins = db.prepare(`INSERT OR IGNORE INTO catalog_games (console, title, name, region, year, genre, developer, crc, sha1, size, variant, popularity, base, img)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    for (const r of rows) ins.run(consoleId, r.title, displayTitle(r.title), r.region, r.year, r.genre, r.developer, r.crc, r.sha1, r.size, r.variant ? 1 : 0, r.popularity ?? pop.get(r.title) ?? null, matchKey(r.title), r.img ?? null)
+    for (const r of rows) {
+      const p = prev.get(r.title)
+      ins.run(consoleId, r.title, displayTitle(r.title), r.region, r.year ?? p?.year ?? null, canonicalGenre(r.genre) ?? p?.genre ?? null, r.developer ?? p?.developer ?? null,
+        r.crc, r.sha1, r.size, r.variant ? 1 : 0, r.popularity ?? p?.popularity ?? null, matchKey(r.title), r.img ?? null)
+    }
     db.prepare(`INSERT INTO catalog_sync (console, version, synced_at, count) VALUES (?, ?, ?, ?)
       ON CONFLICT(console) DO UPDATE SET version = excluded.version, synced_at = excluded.synced_at, count = excluded.count`)
       .run(consoleId, version, now, rows.length)
@@ -54,8 +60,10 @@ export function rebuildDerived(db: DatabaseSync): void {
   db.exec('BEGIN')
   try {
     const rows = db.prepare('SELECT id, title FROM catalog_games').all() as { id: number; title: string }[]
-    const upd = db.prepare('UPDATE catalog_games SET name = ?, base = ? WHERE id = ?')
-    for (const r of rows) upd.run(displayTitle(r.title), matchKey(r.title), r.id)
+    const upd = db.prepare('UPDATE catalog_games SET name = ?, base = ?, genre = ? WHERE id = ?')
+    const genres = db.prepare('SELECT id, genre FROM catalog_games').all() as { id: number; genre: string | null }[]
+    const genreOf = new Map(genres.map((g) => [g.id, g.genre]))
+    for (const r of rows) upd.run(displayTitle(r.title), matchKey(r.title), canonicalGenre(genreOf.get(r.id)), r.id)
     for (const c of db.prepare('SELECT DISTINCT console FROM catalog_games').all() as { console: string }[]) markDuplicates(db, c.console)
     db.exec('COMMIT')
   } catch (e) { db.exec('ROLLBACK'); throw e }
@@ -86,12 +94,16 @@ function where(q: CatalogQuery, skip?: 'consoles' | 'genres'): { sql: string; ar
   return { sql: parts.length ? `WHERE ${parts.join(' AND ')}` : '', args }
 }
 
-const ORDER = {
-  title: 'name COLLATE NOCASE',
-  year: 'year IS NULL, year DESC, name COLLATE NOCASE',
-  // Score IGDB quand il existe ; sans lui, on privilégie les jeux documentés (genre connu) puis les sorties US/monde.
-  popularity: "popularity IS NULL, popularity DESC, genre IS NULL, name COLLATE NOCASE"
-} as const
+/** Tri par défaut de chaque critère : les plus populaires et les plus récents d'abord, le titre de A à Z. Les valeurs inconnues passent toujours en dernier. */
+export const DEFAULT_DIR = { popularity: 'desc', year: 'desc', title: 'asc' } as const
+
+function orderBy(sort: CatalogQuery['sort'] = 'popularity', dir?: 'asc' | 'desc'): string {
+  const d = (dir ?? DEFAULT_DIR[sort]) === 'asc' ? 'ASC' : 'DESC'
+  if (sort === 'title') return `name COLLATE NOCASE ${d}`
+  if (sort === 'year') return `year IS NULL, year ${d}, name COLLATE NOCASE`
+  // Sans score de popularité, on privilégie les jeux documentés (genre connu).
+  return `popularity IS NULL, popularity ${d}, genre IS NULL, name COLLATE NOCASE`
+}
 
 /** Les facettes ignorent leur propre filtre pour que l'utilisateur voie les autres choix possibles. */
 export function queryCatalog(db: DatabaseSync, q: CatalogQuery): CatalogPage {
@@ -100,7 +112,7 @@ export function queryCatalog(db: DatabaseSync, q: CatalogQuery): CatalogPage {
   const offset = Math.max(q.offset ?? 0, 0)
   const total = (db.prepare(`SELECT COUNT(*) AS n FROM catalog_games ${w.sql}`).get(...w.args) as { n: number }).n
   const games = db.prepare(`SELECT id, console, title, name, region, year, genre, developer, crc, sha1, size, popularity, img FROM catalog_games ${w.sql}
-    ORDER BY ${ORDER[q.sort ?? 'popularity']} LIMIT ? OFFSET ?`).all(...w.args, limit, offset) as unknown as CatalogGame[]
+    ORDER BY ${orderBy(q.sort, q.dir)} LIMIT ? OFFSET ?`).all(...w.args, limit, offset) as unknown as CatalogGame[]
   const wc = where(q, 'consoles')
   const consoles = db.prepare(`SELECT console AS id, COUNT(*) AS count FROM catalog_games ${wc.sql} GROUP BY console ORDER BY count DESC`).all(...wc.args) as { id: string; count: number }[]
   const wg = where(q, 'genres')

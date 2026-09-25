@@ -81,5 +81,10 @@
   "settings.quota": "{used} / {limit} requests today",
   "catalog.rating": "Ranking games by popularity… {n}/{total}",
   "settings.tgdbKey": "TheGamesDB API key",
-  "settings.sgdbKey": "SteamGridDB API key"
+  "settings.sgdbKey": "SteamGridDB API key",
+  "search.clear": "Clear search",
+  "sort.asc": "Ascending",
+  "sort.desc": "Descending",
+  "game.summaryWikipedia": "Description from Wikipedia",
+  "game.summaryMachine": "Machine translation of the original description"
 }

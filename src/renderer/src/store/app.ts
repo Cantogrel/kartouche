@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { CatalogSort } from '@shared/catalog'
 
 /** Filtres du catalogue, conservés quand on ouvre une fiche puis qu'on revient. */
-export interface CatalogView { consoles: string[]; genres: string[]; sort: CatalogSort; variants: boolean; limit: number }
+export interface CatalogView { consoles: string[]; genres: string[]; sort: CatalogSort; /** null = sens par défaut du critère */ dir: 'asc' | 'desc' | null; variants: boolean; limit: number }
 
 export type Route = 'home' | 'catalog' | 'library' | 'emulators' | 'settings' | 'game'
 interface Loc { route: Route; gameId?: string }
@@ -28,7 +28,7 @@ function initialLoc(): Loc {
 
 export const useApp = create<AppState>((set, get) => ({
   ...initialLoc(), history: [], librarySearch: '', pageTitle: null,
-  catalog: { consoles: [], genres: [], sort: 'popularity', variants: false, limit: 60 },
+  catalog: { consoles: [], genres: [], sort: 'popularity', dir: null, variants: false, limit: 60 },
   setCatalog: (patch) => set({ catalog: { ...get().catalog, ...patch } }),
   setPageTitle: (pageTitle) => set({ pageTitle }),
   go: (route, gameId) => set({ pageTitle: null, history: [...get().history, { route: get().route, gameId: get().gameId }], route, gameId }),

@@ -33,7 +33,7 @@
   "game.playtime": "{n} minutes de temps de jeu",
   "game.lastPlayed": "Dernière partie il y a {n} jours",
   "game.neverPlayed": "Jamais joué",
-  "game.released": "Sorti le {d}",
+  "game.released": "Sorti en {d}",
   "game.publishedBy": "Publié par {p}",
   "game.developedBy": "Développé par {p}",
   "game.about": "À propos",
@@ -81,5 +81,10 @@
   "settings.quota": "{used} / {limit} requêtes aujourd'hui",
   "catalog.rating": "Classement des jeux par popularité… {n}/{total}",
   "settings.tgdbKey": "Clé API TheGamesDB",
-  "settings.sgdbKey": "Clé API SteamGridDB"
+  "settings.sgdbKey": "Clé API SteamGridDB",
+  "search.clear": "Effacer la recherche",
+  "sort.asc": "Croissant",
+  "sort.desc": "Décroissant",
+  "game.summaryWikipedia": "Description issue de Wikipédia",
+  "game.summaryMachine": "Traduction automatique de la description d’origine"
 }

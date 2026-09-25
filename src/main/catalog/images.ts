@@ -5,7 +5,6 @@ import { consoleById } from '@shared/consoles'
 import type { CatalogGame } from '@shared/catalog'
 import type { Settings } from '@shared/settings'
 import { thumbnailUrl } from './libretro'
-import { IGDB_PLATFORMS } from './popularity'
 import { igdbQuery, igdbToken, searchTerm } from './igdb'
 import { recordUse, usedToday } from './providers'
 
@@ -101,7 +100,7 @@ const igdbUrl = (imageId: string, size: 't_screenshot_big' | 't_1080p'): string 
 /** Illustration IGDB : celle mémorisée au moment de la synchro (Switch), sinon recherche par nom sur la plateforme du jeu. */
 const igdbSource = (db: DatabaseSync, game: CatalogGame, s: Settings, size: 't_screenshot_big' | 't_1080p'): ImageSource => async () => {
   if (game.img) return fetchImage(igdbUrl(game.img, size))
-  const platform = IGDB_PLATFORMS[game.console]
+  const platform = consoleById(game.console)?.igdb
   if (!s.igdbClientId || !s.igdbClientSecret || !platform || usedToday(db, 'igdb-img') >= IMG_LIMIT) return null
   recordUse(db, 'igdb-img', Date.now())
   const term = searchTerm(game.name).replace(/["\\]/g, ' ')

@@ -1,9 +1,32 @@
 import type { GameDetails } from '@shared/catalog'
 import type { Settings } from '@shared/settings'
+import { consoleById } from '@shared/consoles'
 import type { MetadataProvider } from './providers'
 
 /** Retire régions, révisions et tags du nom No-Intro : « Zelda (USA) (Rev 1) » → « Zelda ». */
 export const searchTerm = (title: string): string => title.replace(/\s*[([].*$/, '').replace(/, (The|A|An)$/, '').trim()
+
+/** Champs communs aux requêtes IGDB qui décrivent un jeu (catalogue, enrichissement, fiche). */
+export const IGDB_FIELDS = 'name,total_rating_count,genres.name,involved_companies.developer,involved_companies.publisher,involved_companies.company.name,release_dates.platform,release_dates.date'
+
+export interface IgdbRow {
+  name: string; total_rating_count?: number; summary?: string
+  genres?: { name: string }[]
+  involved_companies?: { developer: boolean; publisher: boolean; company: { name: string } }[]
+  release_dates?: { platform: number; date?: number }[]
+}
+
+/** Année de sortie sur CETTE plateforme (first_release_date d'IGDB est la sortie la plus ancienne, souvent sur PC). */
+export function platformYear(g: IgdbRow, platform: number): number | null {
+  const dates = (g.release_dates ?? []).filter((d) => d.platform === platform && d.date).map((d) => d.date as number)
+  return dates.length ? new Date(Math.min(...dates) * 1000).getUTCFullYear() : null
+}
+
+/** Développeur, à défaut éditeur. */
+export function companyOf(g: IgdbRow): string | null {
+  const c = g.involved_companies
+  return (c?.find((x) => x.developer) ?? c?.find((x) => x.publisher))?.company.name ?? null
+}
 
 let token: { clientId: string; value: string; expires: number } | null = null
 
@@ -31,26 +54,22 @@ export async function igdbQuery<T>(s: Settings, bearer: string, body: string): P
   return await res.json() as T[]
 }
 
-interface IgdbGame {
-  summary?: string; first_release_date?: number
-  genres?: { name: string }[]
-  involved_companies?: { developer: boolean; publisher: boolean; company: { name: string } }[]
-}
-
 export const igdb: MetadataProvider = {
   id: 'igdb',
   dailyLimit: 2000,
   isConfigured: (s) => s.igdbClientId !== '' && s.igdbClientSecret !== '',
   async fetchDetails(game, s): Promise<Partial<GameDetails> | null> {
-    const term = searchTerm(game.title).replace(/["\\]/g, ' ')
+    const term = searchTerm(game.name).replace(/["\\]/g, ' ')
     if (!term) return null
-    const [g] = await igdbQuery<IgdbGame>(s, await igdbToken(s),
-      `search "${term}"; fields summary,first_release_date,genres.name,involved_companies.developer,involved_companies.publisher,involved_companies.company.name; limit 1;`)
+    const platform = consoleById(game.console)?.igdb
+    const where = platform ? `where platforms = (${platform}); ` : ''
+    const [g] = await igdbQuery<IgdbRow>(s, await igdbToken(s), `search "${term}"; ${where}fields summary,${IGDB_FIELDS}; limit 1;`)
     if (!g) return null
-    const company = (role: 'developer' | 'publisher'): string | undefined => g.involved_companies?.find((c) => c[role])?.company.name
+    const role = (r: 'developer' | 'publisher'): string | undefined => g.involved_companies?.find((c) => c[r])?.company.name
     return {
-      provider: 'igdb', summary: g.summary, developer: company('developer'), publisher: company('publisher'),
-      releaseYear: g.first_release_date ? new Date(g.first_release_date * 1000).getUTCFullYear() : undefined,
+      provider: 'igdb', summary: g.summary, developer: role('developer'), publisher: role('publisher'),
+      // Année propre à la plateforme ; sans elle on laisse la main à TheGamesDB plutôt que d'afficher la sortie PC.
+      releaseYear: (platform ? platformYear(g, platform) : null) ?? undefined,
       genres: g.genres?.map((x) => x.name)
     }
   }

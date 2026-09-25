@@ -86,3 +86,13 @@ export function Cover({ gameId, title, kind = 'card', className, children }: { g
     </div>
   )
 }
+
+/** Champ de recherche avec une croix pour l'effacer. */
+export function SearchBox({ value, onChange, placeholder, className = '', clearLabel }: { value: string; onChange: (v: string) => void; placeholder: string; className?: string; clearLabel: string }) {
+  return (
+    <span className={`searchbox ${className}`}>
+      <input className="search" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && onChange('')} />
+      {value && <button className="clear" aria-label={clearLabel} title={clearLabel} onClick={() => onChange('')}>✕</button>}
+    </span>
+  )
+}

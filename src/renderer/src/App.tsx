@@ -5,6 +5,7 @@ import { useApp, type Route } from '@/store/app'
 import { PageHead } from '@/ui'
 import { DEMO_GAMES } from '@/data/demo'
 import { Library } from '@/pages/Library'
+import { SearchBox } from '@/ui'
 import { Catalog } from '@/pages/Catalog'
 import { GameDetail } from '@/pages/GameDetail'
 import { Home } from '@/pages/Home'
@@ -42,7 +43,7 @@ export default function App() {
               <span className="ico">{ICON[r]}</span>{t(`nav.${r}`)}
             </button>
           ))}
-          <input className="search side" placeholder={t('searchLibrary')} value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} />
+          <SearchBox className="side" placeholder={t('searchLibrary')} value={librarySearch} onChange={setLibrarySearch} clearLabel={t('search.clear')} />
           <div className="side-games">
             {DEMO_GAMES.filter((g) => g.inLibrary && (!librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase()))).map((g) => (
               <button key={g.id} className={`nav-item small${gameId === g.id && route === 'game' ? ' active' : ''}${g.hasFile ? '' : ' dim'}`} onClick={() => go('game', g.id)}>
@@ -53,7 +54,7 @@ export default function App() {
         </nav>
         <main className="main">
           <PageHead title={title} onBack={history.length ? back : undefined}>
-            {route === 'catalog' && <input className="search" placeholder={t('search')} value={catalogQuery} onChange={(e) => setCatalogQuery(e.target.value)} />}
+            {route === 'catalog' && <SearchBox placeholder={t('search')} value={catalogQuery} onChange={setCatalogQuery} clearLabel={t('search.clear')} />}
           </PageHead>
           {route === 'home' && <Home />}
           {route === 'catalog' && <Catalog query={catalogQuery} />}

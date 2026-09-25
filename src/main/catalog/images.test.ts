@@ -44,13 +44,13 @@ describe('cachedImage', () => {
 
 describe('catalogue Switch (IGDB)', () => {
   const fake = (async () => [
-    { name: 'Zelda Breath', first_release_date: 1488499200, total_rating_count: 900, genres: [{ name: 'Adventure' }], involved_companies: [{ developer: true, company: { name: 'Nintendo' } }], artworks: [{ image_id: 'art1' }] },
+    { name: 'Zelda Breath', release_dates: [{ platform: 6, date: 1300000000 }, { platform: 130, date: 1488499200 }], total_rating_count: 900, genres: [{ name: 'Adventure' }, { name: 'Role-playing (RPG)' }], involved_companies: [{ developer: true, company: { name: 'Nintendo' } }], artworks: [{ image_id: 'art1' }] },
     { name: 'Zelda Breath', total_rating_count: 5 }
   ]) as never
   it('construit les lignes avec score et image, sans doublon de nom', async () => {
     const rows = await fetchSwitchCatalog({ ...DEFAULT_SETTINGS, igdbClientId: 'i', igdbClientSecret: 's' }, fake, 't')
     expect(rows).toHaveLength(1)
-    expect(rows[0]).toMatchObject({ title: 'Zelda Breath', year: 2017, genre: 'Adventure', developer: 'Nintendo', popularity: 900, img: 'art1' })
+    expect(rows[0]).toMatchObject({ title: 'Zelda Breath', year: 2017, genre: 'rpg', developer: 'Nintendo', popularity: 900, img: 'art1' })
   })
   it('est sauté sans clé IGDB, inclus avec', async () => {
     const db = new DatabaseSync(':memory:'); migrate(db)

@@ -9,10 +9,14 @@ import { getDetails, providerStatus, type MetadataProvider } from './catalog/pro
 import { igdb } from './catalog/igdb'
 import { tgdb } from './catalog/tgdb'
 import { syncPopularity } from './catalog/popularity'
+import { localizeDetails } from './catalog/l10n'
+import { resolveLanguage } from '@shared/settings'
 
 /** Ordre de la cascade de fiches enrichies. */
 const PROVIDERS: MetadataProvider[] = [igdb, tgdb]
 let syncing = false
+/** À incrémenter quand la passe IGDB (popularité, genre, développeur, année) change : elle est alors relancée une fois. */
+const ENRICH_VERSION = '2'
 
 type Handler<C extends IpcChannel> = (req: IpcChannels[C]['req']) => IpcChannels[C]['res'] | Promise<IpcChannels[C]['res']>
 function handle<C extends IpcChannel>(channel: C, fn: Handler<C>): void {
@@ -37,9 +41,14 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
 
   handle('catalog:search', (q) => queryCatalog(db, q ?? {}))
   handle('catalog:get', (id) => getGame(db, id))
-  handle('catalog:details', (req) => {
+  handle('catalog:details', async (req) => {
     const game = getGame(db, req.id)
-    return game ? getDetails(db, game, PROVIDERS, loadSettings(db), { refresh: req.refresh }) : null
+    if (!game) return null
+    const s = loadSettings(db)
+    const base = await getDetails(db, game, PROVIDERS, s, { refresh: req.refresh })
+    // Description dans la langue de l'interface (Wikipédia, sinon traduction automatique).
+    const d = await localizeDetails(db, game, base ?? { provider: 'wikipedia' }, resolveLanguage(s.language, app.getLocale()))
+    return d.summary || base ? d : null
   })
   handle('catalog:sync', async (ids) => {
     if (syncing) return { synced: 0, failed: [] }
@@ -53,13 +62,15 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     if (!igdb.isConfigured(s) || syncing) return 0
     syncing = true
     try {
-      return await syncPopularity(db, s, (done, total) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', { console: 'popularity', done, total })))
+      const n = await syncPopularity(db, s, (done, total) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', { console: 'popularity', done, total })))
+      db.prepare("INSERT INTO settings (key, value) VALUES ('_enrich', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(ENRICH_VERSION)
+      return n
     } catch { return 0 } finally { syncing = false }
   })
   handle('catalog:status', () => {
     const r = db.prepare('SELECT MAX(synced_at) AS at FROM catalog_sync').get() as { at: number | null }
-    const rated = db.prepare('SELECT COUNT(*) AS n FROM catalog_games WHERE popularity IS NOT NULL').get() as { n: number }
-    return { total: catalogCount(db), syncedAt: r.at, syncing, rated: rated.n }
+    const e = db.prepare("SELECT value FROM settings WHERE key = '_enrich'").get() as { value: string } | undefined
+    return { total: catalogCount(db), syncedAt: r.at, syncing, enriched: e?.value === ENRICH_VERSION }
   })
   handle('providers:status', () => providerStatus(db, PROVIDERS, loadSettings(db)))
 

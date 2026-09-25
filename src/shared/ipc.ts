@@ -32,8 +32,8 @@ export interface IpcChannels {
   'catalog:get': { req: number; res: CatalogGame | null }
   'catalog:details': { req: { id: number; refresh?: boolean }; res: GameDetails | null }
   'catalog:sync': { req: string[] | undefined; res: SyncResult }
-  'catalog:status': { req: void; res: { total: number; syncedAt: number | null; syncing: boolean; rated: number } }
-  /** Calcule les scores de popularité via IGDB (si configuré) ; renvoie le nombre de jeux notés. */
+  'catalog:status': { req: void; res: { total: number; syncedAt: number | null; syncing: boolean; enriched: boolean } }
+  /** Passe IGDB (si configuré) : popularité, genre, développeur, année ; renvoie le nombre de jeux rapprochés. */
   'catalog:popularity': { req: void; res: number }
   'providers:status': { req: void; res: ProviderStatus[] }
 }

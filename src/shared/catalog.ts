@@ -25,6 +25,8 @@ export interface CatalogQuery {
   genres?: string[]
   sort?: CatalogSort
   offset?: number
+  /** Sens du tri ; par défaut : décroissant pour la popularité et l'année, croissant pour le titre. */
+  dir?: 'asc' | 'desc'
   limit?: number
   /** Inclure bêtas, prototypes, démos, pirates et les autres versions/régions d'un même jeu (masqués par défaut). */
   includeVariants?: boolean
@@ -57,6 +59,9 @@ export interface GameDetails {
   developer?: string
   releaseYear?: number
   genres?: string[]
+  /** Langue et origine de `summary` (traduit, Wikipédia…) ; absent = texte source en anglais. */
+  summaryLang?: string
+  summarySource?: 'wikipedia' | 'machine'
   /** URL distante d'une bannière (SteamGridDB) ; l'affichage passe par le cache local rvimg://hero/<id>. */
   heroUrl?: string
 }
