@@ -3,10 +3,10 @@
 Bibliothèque de jeux d'émulation pour Windows, look Hydra Launcher. Spéc complète : vault `projects/romvault/SUMMARY`.
 
 ## Stack
-Electron + React + TypeScript, Vite, Zustand, better-sqlite3. i18n EN/FR (fichiers de traduction, aucune chaîne en dur).
+Electron 44 + React 19 + TS via electron-vite (vite 7 épinglé), Zustand, SQLite via `node:sqlite` (pas better-sqlite3). Pas d installateur avant la fin du projet : on teste sur les sources.
 
 ## Commandes
-À renseigner après le prototype (Phase 1) : `npm run dev`, `npm run build`, `npm test`, `npm run typecheck`.
+`npm run dev` (electron-vite dev), `npm run build`, `npm run typecheck`, `npm test` (vitest). Première install : `node node_modules/electron/install.js` si le binaire manque.
 
 ## Conventions
 - Jamais de téléchargement de ROMs ; BIOS/firmware : import guidé par l'utilisateur uniquement.
