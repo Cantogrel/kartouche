@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { t, setLang } from '@/i18n'
+import { t } from '@/i18n'
+import { useSettings } from '@/store/settings'
 import { useApp, type Route } from '@/store/app'
 import { PageHead } from '@/ui'
 import { DEMO_GAMES } from '@/data/demo'
@@ -15,12 +16,11 @@ const ICON: Record<string, string> = { home: '⌂', catalog: '▦', library: '�
 
 export default function App() {
   const { route, gameId, go, back, history, librarySearch, setLibrarySearch } = useApp()
-  const [, force] = useState(0)
+  const { ready, load } = useSettings()
   const [catalogQuery, setCatalogQuery] = useState('')
-  useEffect(() => {
-    window.api.ping().then((r) => { setLang(r.locale); force((n) => n + 1) })
-  }, [])
+  useEffect(() => { void load() }, [load])
 
+  if (!ready) return null
   const game = route === 'game' ? DEMO_GAMES.find((g) => g.id === gameId) : undefined
   const title = game ? game.title : t(`nav.${route}`)
   const activeNav = route === 'game' ? 'library' : route

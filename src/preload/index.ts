@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { RomVaultApi } from '@shared/ipc'
 
 const api: RomVaultApi = {
-  ping: () => ipcRenderer.invoke('ping'),
+  invoke: (channel, req) => ipcRenderer.invoke(channel, req),
   window: {
     minimize: () => ipcRenderer.send('win:minimize'),
     maximize: () => ipcRenderer.send('win:maximize'),

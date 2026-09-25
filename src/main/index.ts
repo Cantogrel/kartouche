@@ -1,6 +1,9 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { migrate } from './db/migrations'
+import { buildPaths, ensureDirs, resolveDataDir } from './paths'
+import { registerIpc } from './ipc'
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -15,18 +18,13 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
-  ipcMain.handle('ping', () => {
-    const db = new DatabaseSync(':memory:')
-    const row = db.prepare('select sqlite_version() as v').get() as { v: string }
-    db.close()
-    return { ok: true, sqlite: row.v, locale: app.getLocale() }
-  })
-  ipcMain.on('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize())
-  ipcMain.on('win:maximize', (e) => {
-    const w = BrowserWindow.fromWebContents(e.sender)
-    if (w) w.isMaximized() ? w.unmaximize() : w.maximize()
-  })
-  ipcMain.on('win:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close())
+  const paths = buildPaths(resolveDataDir())
+  ensureDirs(paths)
+  const db = new DatabaseSync(join(paths.dataDir, 'romvault.db'))
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON')
+  migrate(db)
+  const { v } = db.prepare('select sqlite_version() as v').get() as { v: string }
+  registerIpc({ db, paths, sqliteVersion: v })
   createWindow()
 })
 app.on('window-all-closed', () => app.quit())

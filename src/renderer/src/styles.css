@@ -83,3 +83,4 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .settings { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; }
 .settings-nav { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 8px; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; max-width: 520px; }
+.notice { margin-top: 8px; padding: 8px 12px; background: var(--bg-elevated); border: 1px solid var(--warn); border-radius: var(--radius); justify-content: space-between; }
