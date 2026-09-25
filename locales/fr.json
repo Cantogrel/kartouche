@@ -1,0 +1,5 @@
+{
+  "nav.home": "Accueil", "nav.catalog": "Catalogue", "nav.library": "Bibliothèque",
+  "nav.emulators": "Émulateurs", "nav.settings": "Paramètres", "bigpicture": "Big Picture",
+  "search": "Rechercher", "library.empty": "Votre bibliothèque est vide", "play": "Jouer", "addToLibrary": "Ajouter à la bibliothèque"
+}

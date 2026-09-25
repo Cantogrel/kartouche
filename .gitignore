@@ -1,0 +1,16 @@
+node_modules/
+dist/
+out/
+release/
+*.log
+.env
+.env.*
+!.env.example
+# user data / API keys
+userdata/
+data/
+*.local.json
+secrets.json
+.DS_Store
+Thumbs.db
+graphify-out/

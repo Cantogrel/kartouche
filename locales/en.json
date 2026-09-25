@@ -1,0 +1,5 @@
+{
+  "nav.home": "Home", "nav.catalog": "Catalog", "nav.library": "Library",
+  "nav.emulators": "Emulators", "nav.settings": "Settings", "bigpicture": "Big Picture",
+  "search": "Search", "library.empty": "Your library is empty", "play": "Play", "addToLibrary": "Add to library"
+}
