@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { ProviderStatus } from '@shared/catalog'
 import { t } from '@/i18n'
 import { Button } from '@/ui'
 import { useSettings } from '@/store/settings'
@@ -11,6 +12,9 @@ export function Settings() {
   const [section, setSection] = useState<Section>('general')
   const { settings, info, update } = useSettings()
   const [restart, setRestart] = useState(false)
+  const [providers, setProviders] = useState<ProviderStatus[]>([])
+  useEffect(() => { if (section === 'apiKeys') void window.api.invoke('providers:status').then(setProviders) }, [section, settings.igdbClientId, settings.igdbClientSecret])
+  const igdb = providers.find((p) => p.id === 'igdb')
 
   const chooseDir = async (): Promise<void> => {
     const r = await window.api.invoke('paths:chooseDataDir')
@@ -62,6 +66,19 @@ export function Settings() {
             <label className="check">
               <input type="checkbox" checked={settings.importDeleteSource} onChange={(e) => update({ importDeleteSource: e.target.checked })} /> {t('settings.importDeleteSource')}
             </label>
+          </>
+        )}
+
+        {section === 'apiKeys' && (
+          <>
+            <p className="muted">{t('settings.igdbHint')}</p>
+            <label className="field">{t('settings.igdbId')}
+              <input defaultValue={settings.igdbClientId} onBlur={(e) => update({ igdbClientId: e.target.value })} autoComplete="off" />
+            </label>
+            <label className="field">{t('settings.igdbSecret')}
+              <input type="password" defaultValue={settings.igdbClientSecret} onBlur={(e) => update({ igdbClientSecret: e.target.value })} autoComplete="off" />
+            </label>
+            {igdb?.configured && <p className="muted">{t('settings.quota', { used: igdb.usedToday, limit: igdb.dailyLimit })}</p>}
           </>
         )}
 

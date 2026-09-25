@@ -3,6 +3,14 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { IpcChannel, IpcChannels, AppPaths } from '@shared/ipc'
 import { loadSettings, saveSettings } from './db/settingsStore'
 import { setDataDir } from './paths'
+import { catalogCount, getGame, queryCatalog } from './catalog/catalogStore'
+import { syncCatalog } from './catalog/sync'
+import { getDetails, providerStatus, type MetadataProvider } from './catalog/providers'
+import { igdb } from './catalog/igdb'
+
+/** Ordre de la cascade de fiches enrichies. */
+const PROVIDERS: MetadataProvider[] = [igdb]
+let syncing = false
 
 type Handler<C extends IpcChannel> = (req: IpcChannels[C]['req']) => IpcChannels[C]['res'] | Promise<IpcChannels[C]['res']>
 function handle<C extends IpcChannel>(channel: C, fn: Handler<C>): void {
@@ -24,6 +32,25 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   })
   handle('paths:openDataDir', async () => { await shell.openPath(paths.dataDir) })
   handle('app:relaunch', () => { app.relaunch(); app.exit(0) })
+
+  handle('catalog:search', (q) => queryCatalog(db, q ?? {}))
+  handle('catalog:get', (id) => getGame(db, id))
+  handle('catalog:details', (req) => {
+    const game = getGame(db, req.id)
+    return game ? getDetails(db, game, PROVIDERS, loadSettings(db), { refresh: req.refresh }) : null
+  })
+  handle('catalog:sync', async (ids) => {
+    if (syncing) return { synced: 0, failed: [] }
+    syncing = true
+    try {
+      return await syncCatalog(db, ids, (p) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', p)))
+    } finally { syncing = false }
+  })
+  handle('catalog:status', () => {
+    const r = db.prepare('SELECT MAX(synced_at) AS at FROM catalog_sync').get() as { at: number | null }
+    return { total: catalogCount(db), syncedAt: r.at, syncing }
+  })
+  handle('providers:status', () => providerStatus(db, PROVIDERS, loadSettings(db)))
 
   ipcMain.on('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize())
   ipcMain.on('win:maximize', (e) => {

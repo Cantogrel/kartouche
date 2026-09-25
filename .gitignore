@@ -8,7 +8,7 @@ release/
 !.env.example
 # user data / API keys
 userdata/
-data/
+/data/
 *.local.json
 secrets.json
 .DS_Store

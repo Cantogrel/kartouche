@@ -1,9 +1,13 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, protocol } from 'electron'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { migrate } from './db/migrations'
 import { buildPaths, ensureDirs, resolveDataDir } from './paths'
 import { registerIpc } from './ipc'
+import { getThumbnail } from './catalog/thumbs'
+
+// Images du catalogue servies depuis le cache disque : rvimg://cover/<console>/<titre encodé>
+protocol.registerSchemesAsPrivileged([{ scheme: 'rvimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -24,6 +28,11 @@ app.whenReady().then(() => {
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON')
   migrate(db)
   const { v } = db.prepare('select sqlite_version() as v').get() as { v: string }
+  protocol.handle('rvimg', async (req) => {
+    const [consoleId, ...rest] = new URL(req.url).pathname.split('/').filter(Boolean)
+    const buf = consoleId ? await getThumbnail(paths.cache, consoleId, decodeURIComponent(rest.join('/'))) : null
+    return buf ? new Response(new Uint8Array(buf), { headers: { 'content-type': 'image/png', 'cache-control': 'max-age=86400' } }) : new Response(null, { status: 404 })
+  })
   registerIpc({ db, paths, sqliteVersion: v })
   createWindow()
 })

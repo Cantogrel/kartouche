@@ -2,8 +2,15 @@ import { useState } from 'react'
 import { Button, Tag, artStyle } from '@/ui'
 import { t } from '@/i18n'
 import { DEMO_GAMES } from '@/data/demo'
+import { CatalogGameDetail } from './CatalogGame'
 
+/** Les ids numériques viennent du catalogue ; les autres sont des jeux de démonstration (bibliothèque, Phase 4). */
 export function GameDetail({ gameId }: { gameId?: string }) {
+  if (gameId && /^d+$/.test(gameId)) return <CatalogGameDetail id={Number(gameId)} />
+  return <DemoGameDetail gameId={gameId} />
+}
+
+function DemoGameDetail({ gameId }: { gameId?: string }) {
   const game = DEMO_GAMES.find((g) => g.id === gameId)
   const [inLib, setInLib] = useState(game?.inLibrary ?? false)
   const [fav, setFav] = useState(false)

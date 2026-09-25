@@ -65,5 +65,18 @@
   "settings.restart": "Restart",
   "settings.langAuto": "Automatic (system)",
   "settings.importCopy": "Copy imported ROMs into the RomVault folder",
-  "settings.importDeleteSource": "Delete the original file after import by default"
+  "settings.importDeleteSource": "Delete the original file after import by default",
+  "catalog.syncing": "Downloading catalog… {n}/{total} consoles",
+  "catalog.refresh": "Refresh catalog",
+  "catalog.empty": "The catalog is empty. It downloads from Libretro databases (internet required).",
+  "catalog.more": "Show more",
+  "catalog.variants": "Include betas, demos and prototypes",
+  "game.regionLabel": "Region",
+  "game.source": "Details from {p}",
+  "game.refreshDetails": "Refresh details",
+  "game.notFound": "Game not found",
+  "settings.igdbHint": "IGDB is optional and adds descriptions. Create a free Twitch developer application and paste its Client ID and Secret. Keys stay in your local database.",
+  "settings.igdbId": "IGDB / Twitch Client ID",
+  "settings.igdbSecret": "IGDB / Twitch Client Secret",
+  "settings.quota": "{used} / {limit} requests today"
 }

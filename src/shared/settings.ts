@@ -7,13 +7,18 @@ export interface Settings {
   /** Proposer par défaut la suppression du fichier d'origine après import. */
   importDeleteSource: boolean
   scanFolders: string[]
+  /** Identifiants Twitch de l'utilisateur pour IGDB (jamais commités : stockés dans la base locale). */
+  igdbClientId: string
+  igdbClientSecret: string
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
   importCopy: true,
   importDeleteSource: false,
-  scanFolders: []
+  scanFolders: [],
+  igdbClientId: '',
+  igdbClientSecret: ''
 }
 
 /** Fusionne une saisie partielle non fiable avec les valeurs actuelles : toute valeur invalide est ignorée. */
@@ -25,6 +30,8 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (typeof p.importCopy === 'boolean') out.importCopy = p.importCopy
   if (typeof p.importDeleteSource === 'boolean') out.importDeleteSource = p.importDeleteSource
   if (Array.isArray(p.scanFolders) && p.scanFolders.every((x) => typeof x === 'string')) out.scanFolders = [...new Set(p.scanFolders as string[])]
+  if (typeof p.igdbClientId === 'string') out.igdbClientId = p.igdbClientId.trim()
+  if (typeof p.igdbClientSecret === 'string') out.igdbClientSecret = p.igdbClientSecret.trim()
   return out
 }
 

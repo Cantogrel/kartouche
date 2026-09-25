@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 /** Dégradé déterministe servant de jaquette tant qu'aucune image n'est disponible. */
 export function artStyle(seed: string): { background: string } {
@@ -38,15 +38,15 @@ export const Section = ({ title, children }: { title: string; children: ReactNod
   <section className="section"><h2>{title}</h2>{children}</section>
 )
 
-export function FilterGroup({ title, count, options, selected, onToggle }: {
-  title: string; count?: number; options: string[]; selected: string[]; onToggle: (o: string) => void
+export function FilterGroup({ title, count, options, selected, onToggle, format }: {
+  title: string; count?: number; options: string[]; selected: string[]; onToggle: (o: string) => void; format?: (o: string) => string
 }) {
   return (
     <div className="fgroup">
       <h3>{title} {count !== undefined && <span className="count">{count}</span>}</h3>
       {options.map((o) => (
         <label key={o} className="check">
-          <input type="checkbox" checked={selected.includes(o)} onChange={() => onToggle(o)} /> {o}
+          <input type="checkbox" checked={selected.includes(o)} onChange={() => onToggle(o)} /> {format ? format(o) : o}
         </label>
       ))}
     </div>
@@ -65,3 +65,15 @@ export const GameCard = ({ title, console: cons, hasFile, progress, minutes, onC
     {minutes !== undefined && hasFile && <span className="mins">{minutes} min</span>}
   </div>
 )
+
+/** Jaquette du catalogue (cache local via rvimg://) ; repli sur le dégradé si l'image n'existe pas. */
+export function Cover({ consoleId, title, className, children }: { consoleId: string; title: string; className?: string; children?: ReactNode }) {
+  const [failed, setFailed] = useState(false)
+  useEffect(() => setFailed(false), [consoleId, title])
+  return (
+    <div className={className} style={artStyle(title)}>
+      {!failed && <img className="cover-img" loading="lazy" alt="" src={`rvimg://cover/${consoleId}/${encodeURIComponent(title)}`} onError={() => setFailed(true)} />}
+      {children}
+    </div>
+  )
+}
