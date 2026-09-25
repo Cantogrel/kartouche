@@ -10,13 +10,9 @@ const toggle = (arr: string[], v: string): string[] => (arr.includes(v) ? arr.fi
 const labelOf = (id: string): string => consoleById(id)?.label ?? id
 
 export function Catalog({ query }: { query: string }) {
-  const { go } = useApp()
-  const [consoles, setConsoles] = useState<string[]>([])
-  const [genres, setGenres] = useState<string[]>([])
-  const [sort, setSort] = useState<CatalogSort>('popularity')
-  const [variants, setVariants] = useState(false)
+  const { go, catalog: view, setCatalog } = useApp()
+  const { consoles, genres, sort, variants, limit } = view
   const [page, setPage] = useState<CatalogPage | null>(null)
-  const [limit, setLimit] = useState(PAGE)
   const [status, setStatus] = useState<{ total: number; syncing: boolean; rated: number } | null>(null)
   const [progress, setProgress] = useState<SyncProgress | null>(null)
   const reqId = useRef(0)
@@ -34,7 +30,13 @@ export function Catalog({ query }: { query: string }) {
     }, 150)
     return () => clearTimeout(h)
   }, [query, consoles, genres, sort, limit, variants, status?.total])
-  useEffect(() => setLimit(PAGE), [query, consoles, genres, sort, variants])
+
+  // Tout changement de filtre ou de recherche (après le premier rendu) revient à la première page.
+  const first = useRef(true)
+  useEffect(() => {
+    if (first.current) { first.current = false; return }
+    setCatalog({ limit: PAGE })
+  }, [query, consoles, genres, sort, variants, setCatalog])
 
   const sync = async (): Promise<void> => {
     setStatus((s) => ({ total: s?.total ?? 0, syncing: true, rated: s?.rated ?? 0 }))
@@ -75,7 +77,7 @@ export function Catalog({ query }: { query: string }) {
           <div className="row">
             <Button onClick={sync} disabled={status?.syncing}>{t('catalog.refresh')}</Button>
             <label className="row">{t('sortBy')}
-              <select value={sort} onChange={(e) => setSort(e.target.value as CatalogSort)}>
+              <select value={sort} onChange={(e) => setCatalog({ sort: e.target.value as CatalogSort })}>
                 <option value="popularity">{t('sort.popularity')}</option>
                 <option value="title">{t('sort.title')}</option>
                 <option value="year">{t('sort.year')}</option>
@@ -86,22 +88,22 @@ export function Catalog({ query }: { query: string }) {
         {status && status.total === 0 && !status.syncing && <p className="muted">{t('catalog.empty')}</p>}
         {games.map((g) => (
           <div key={g.id} className="row-card" tabIndex={0} onClick={() => go('game', String(g.id))} onKeyDown={(e) => e.key === 'Enter' && go('game', String(g.id))}>
-            <Cover className="thumb" consoleId={g.console} title={g.title}><Badge>{labelOf(g.console)}</Badge></Cover>
+            <Cover className="thumb" gameId={g.id} title={g.name}><Badge>{labelOf(g.console)}</Badge></Cover>
             <div>
-              <div className="title">{g.title}</div>
-              <div className="muted">{[g.genre, g.year, g.developer].filter(Boolean).join(' · ')}</div>
-              <div className="tags">{g.region && <Tag>{g.region}</Tag>}</div>
+              <div className="title">{g.name}</div>
+              <div className="muted">{[g.developer, g.year].filter(Boolean).join(' · ')}</div>
+              <div className="tags">{g.genre && <Tag>{g.genre}</Tag>}</div>
             </div>
           </div>
         ))}
-        {page && page.total > games.length && <Button onClick={() => setLimit(limit + PAGE)}>{t('catalog.more')}</Button>}
+        {page && page.total > games.length && <Button onClick={() => setCatalog({ limit: limit + PAGE })}>{t('catalog.more')}</Button>}
       </div>
       <aside className="filters">
         <FilterGroup title={t('filter.console')} count={consoleOpts.length} options={consoleOpts} selected={consoles}
-          format={(id) => `${labelOf(id)} (${page?.consoles.find((c) => c.id === id)?.count ?? 0})`} onToggle={(o) => setConsoles(toggle(consoles, o))} />
+          format={(id) => `${labelOf(id)} (${page?.consoles.find((c) => c.id === id)?.count ?? 0})`} onToggle={(o) => setCatalog({ consoles: toggle(consoles, o) })} />
         <FilterGroup title={t('filter.genre')} count={page?.genres.length ?? 0} options={(page?.genres ?? []).map((g) => g.name)} selected={genres}
-          format={(n) => `${n} (${page?.genres.find((g) => g.name === n)?.count ?? 0})`} onToggle={(o) => setGenres(toggle(genres, o))} />
-        <label className="check"><input type="checkbox" checked={variants} onChange={(e) => setVariants(e.target.checked)} /> {t('catalog.variants')}</label>
+          format={(n) => `${n} (${page?.genres.find((g) => g.name === n)?.count ?? 0})`} onToggle={(o) => setCatalog({ genres: toggle(genres, o) })} />
+        <label className="check"><input type="checkbox" checked={variants} onChange={(e) => setCatalog({ variants: e.target.checked })} /> {t('catalog.variants')}</label>
       </aside>
     </div>
   )

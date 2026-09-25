@@ -20,7 +20,11 @@ export const MIGRATIONS: readonly string[] = [
   // v4 : regroupement des versions d'un même jeu (régions, révisions) ; dup = 1 pour les doublons, masqués par défaut
   `ALTER TABLE catalog_games ADD COLUMN base TEXT;
   ALTER TABLE catalog_games ADD COLUMN dup INTEGER NOT NULL DEFAULT 0;
-  CREATE INDEX catalog_base ON catalog_games (console, base)`
+  CREATE INDEX catalog_base ON catalog_games (console, base)`,
+  // v5 : img = identifiant d'image IGDB (Switch : catalogue issu d'IGDB) ; name = titre lisible (affichage, recherche, tri)
+  `ALTER TABLE catalog_games ADD COLUMN img TEXT;
+  ALTER TABLE catalog_games ADD COLUMN name TEXT;
+  CREATE INDEX catalog_name ON catalog_games (name COLLATE NOCASE)`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

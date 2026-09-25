@@ -6,7 +6,7 @@ import { CatalogGameDetail } from './CatalogGame'
 
 /** Les ids numériques viennent du catalogue ; les autres sont des jeux de démonstration (bibliothèque, Phase 4). */
 export function GameDetail({ gameId }: { gameId?: string }) {
-  if (gameId && /^d+$/.test(gameId)) return <CatalogGameDetail id={Number(gameId)} />
+  if (gameId && /^[0-9]+$/.test(gameId)) return <CatalogGameDetail id={Number(gameId)} />
   return <DemoGameDetail gameId={gameId} />
 }
 

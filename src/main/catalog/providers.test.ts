@@ -6,7 +6,7 @@ import type { CatalogGame } from '@shared/catalog'
 import { getDetails, usedToday, type MetadataProvider } from './providers'
 import { searchTerm } from './igdb'
 
-const game: CatalogGame = { id: 1, console: 'snes', title: 'Zelda (USA)', region: 'USA', year: 1991, genre: null, developer: null, crc: null, sha1: null, size: null, popularity: null }
+const game: CatalogGame = { id: 1, console: 'snes', title: 'Zelda (USA)', region: 'USA', year: 1991, genre: null, developer: null, crc: null, sha1: null, size: null, popularity: null, name: 'Zelda', img: null }
 const setup = (): DatabaseSync => { const db = new DatabaseSync(':memory:'); migrate(db); return db }
 const provider = (id: string, impl: MetadataProvider['fetchDetails'], limit = 10): MetadataProvider & { calls: number } => {
   const p = { id, dailyLimit: limit, calls: 0, isConfigured: () => true, fetchDetails: async (g: CatalogGame, s: typeof DEFAULT_SETTINGS) => { p.calls++; return impl(g, s) } }

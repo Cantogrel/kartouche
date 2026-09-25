@@ -66,13 +66,22 @@ export const GameCard = ({ title, console: cons, hasFile, progress, minutes, onC
   </div>
 )
 
-/** Jaquette du catalogue (cache local via rvimg://) ; repli sur le dégradé si l'image n'existe pas. */
-export function Cover({ consoleId, title, className, children, heroId }: { consoleId: string; title: string; className?: string; children?: ReactNode; heroId?: number }) {
-  const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [consoleId, title, heroId])
+/**
+ * Illustration d'un jeu du catalogue, résolue et mise en cache par le processus principal (rvimg://).
+ * Format horizontal : l'image remplit le cadre ; une jaquette verticale est affichée entière sur fond flouté.
+ * Sans image, le dégradé déterministe reste visible.
+ */
+export function Cover({ gameId, title, kind = 'card', className, children }: { gameId: number; title: string; kind?: 'card' | 'hero'; className?: string; children?: ReactNode }) {
+  const [state, setState] = useState<'loading' | 'wide' | 'tall' | 'none'>('loading')
+  useEffect(() => setState('loading'), [gameId, kind])
+  const src = `rvimg://${kind}/${gameId}`
   return (
     <div className={className} style={artStyle(title)}>
-      {!failed && <img className="cover-img" loading="lazy" alt="" src={heroId !== undefined ? `rvimg://hero/${heroId}` : `rvimg://cover/${consoleId}/${encodeURIComponent(title)}`} onError={() => setFailed(true)} />}
+      {state === 'tall' && <img className="cover-img blur" alt="" src={src} />}
+      {state !== 'none' && (
+        <img className={`cover-img${state === 'tall' ? ' tall' : ''}`} style={{ opacity: state === 'loading' ? 0 : undefined }} loading="lazy" alt="" src={src}
+          onLoad={(e) => setState(e.currentTarget.naturalHeight > e.currentTarget.naturalWidth ? 'tall' : 'wide')} onError={() => setState('none')} />
+      )}
       {children}
     </div>
   )

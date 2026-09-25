@@ -15,15 +15,15 @@ const NAV: Exclude<Route, 'game'>[] = ['home', 'catalog', 'library', 'emulators'
 const ICON: Record<string, string> = { home: '⌂', catalog: '▦', library: '▤', emulators: '⚙', settings: '☰' }
 
 export default function App() {
-  const { route, gameId, go, back, history, librarySearch, setLibrarySearch } = useApp()
+  const { route, gameId, go, back, history, librarySearch, setLibrarySearch, pageTitle } = useApp()
   const { ready, load } = useSettings()
   const [catalogQuery, setCatalogQuery] = useState('')
   useEffect(() => { void load() }, [load])
 
   if (!ready) return null
   const game = route === 'game' ? DEMO_GAMES.find((g) => g.id === gameId) : undefined
-  const title = game ? game.title : t(`nav.${route}`)
-  const activeNav = route === 'game' ? 'library' : route
+  const title = game ? game.title : route === 'game' && pageTitle ? pageTitle : t(`nav.${route === 'game' ? 'catalog' : route}`)
+  const activeNav = route === 'game' ? (game ? 'library' : 'catalog') : route
   return (
     <div className="app">
       <div className="titlebar">

@@ -4,6 +4,8 @@ export interface CatalogGame {
   id: number
   console: string
   title: string
+  /** Titre lisible (sans région ni révision) : c'est celui qu'on affiche, cherche et trie. */
+  name: string
   region: string
   year: number | null
   genre: string | null
@@ -13,6 +15,8 @@ export interface CatalogGame {
   size: number | null
   /** Score de popularité (IGDB) ; null tant que non calculé. */
   popularity: number | null
+  /** Identifiant d'image IGDB, si le catalogue en fournit (Switch). */
+  img: string | null
 }
 
 export interface CatalogQuery {
@@ -62,4 +66,13 @@ export interface ProviderStatus {
   configured: boolean
   usedToday: number
   dailyLimit: number
+}
+
+/**
+ * Titre lisible d'un nom No-Intro/Redump : sans région, langues ni révision, article remis devant.
+ * « Legend of Zelda, The - A Link to the Past (USA) (Rev 1) » → « The Legend of Zelda - A Link to the Past ».
+ */
+export function displayTitle(raw: string): string {
+  const s = raw.replace(/\s*[(\[][^)\]]*[)\]]/g, '').trim()
+  return s.replace(/^(.*?), (The|A|An)(?= - |: |$)/, '$2 $1').trim() || raw
 }

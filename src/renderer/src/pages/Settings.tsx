@@ -86,7 +86,6 @@ export function Settings() {
             <label className="field">{t('settings.sgdbKey')}
               <input type="password" defaultValue={settings.sgdbApiKey} onBlur={(e) => update({ sgdbApiKey: e.target.value })} autoComplete="off" />
             </label>
-            <p className="muted">{quota('sgdb')}</p>
           </>
         )}
 

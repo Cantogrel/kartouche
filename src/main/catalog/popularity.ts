@@ -4,7 +4,7 @@ import { igdbToken, igdbQuery } from './igdb'
 
 /** Identifiants de plateforme IGDB par console du catalogue. */
 export const IGDB_PLATFORMS: Record<string, number> = {
-  nes: 18, snes: 19, n64: 4, gb: 33, gbc: 22, gba: 24, nds: 20, n3ds: 37, gc: 21, wii: 5, wiiu: 41, ps1: 7, ps2: 8, ps3: 9, psp: 38, vita: 46
+  nes: 18, snes: 19, n64: 4, gb: 33, gbc: 22, gba: 24, nds: 20, n3ds: 37, gc: 21, wii: 5, wiiu: 41, switch: 130, ps1: 7, ps2: 8, ps3: 9, psp: 38, vita: 46
 }
 
 /** Clé de rapprochement entre un titre No-Intro/Redump et un nom IGDB : « Legend of Zelda, The - Link (USA) » ≈ « The Legend of Zelda: Link ». */
@@ -22,7 +22,8 @@ const MAX_PAGES = 4 // top 2000 par plateforme : au-delà, les jeux sont peu con
 export async function syncPopularity(db: DatabaseSync, settings: Settings, onStep: (done: number, total: number) => void = () => undefined,
   query: typeof igdbQuery = igdbQuery): Promise<number> {
   const token = await igdbToken(settings)
-  const consoles = Object.keys(IGDB_PLATFORMS)
+  // La Switch est déjà classée : son catalogue vient d'IGDB avec le score.
+  const consoles = Object.keys(IGDB_PLATFORMS).filter((c) => c !== 'switch')
   const upd = db.prepare('UPDATE catalog_games SET popularity = ? WHERE id = ?')
   let rated = 0
   let done = 0

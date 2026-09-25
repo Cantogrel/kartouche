@@ -4,7 +4,7 @@ import { searchTerm } from './igdb'
 
 /** Identifiants de plateforme TheGamesDB par console du catalogue. */
 export const TGDB_PLATFORMS: Record<string, number> = {
-  nes: 7, snes: 6, n64: 3, gb: 4, gbc: 41, gba: 5, nds: 8, n3ds: 4912, gc: 2, wii: 9, wiiu: 38, ps1: 10, ps2: 11, ps3: 12, psp: 13, vita: 39
+  nes: 7, snes: 6, n64: 3, gb: 4, gbc: 41, gba: 5, nds: 8, n3ds: 4912, gc: 2, wii: 9, wiiu: 38, switch: 4971, ps1: 10, ps2: 11, ps3: 12, psp: 13, vita: 39
 }
 
 const BASE = 'https://api.thegamesdb.net'

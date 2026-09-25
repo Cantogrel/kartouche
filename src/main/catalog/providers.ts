@@ -20,7 +20,7 @@ export function usedToday(db: DatabaseSync, provider: string, now = Date.now()):
   return r?.count ?? 0
 }
 
-function recordUse(db: DatabaseSync, provider: string, now: number): void {
+export function recordUse(db: DatabaseSync, provider: string, now: number): void {
   db.prepare(`INSERT INTO provider_usage (provider, day, count) VALUES (?, ?, 1)
     ON CONFLICT(provider, day) DO UPDATE SET count = count + 1`).run(provider, DAY(now))
 }

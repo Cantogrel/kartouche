@@ -8,11 +8,10 @@ import { syncCatalog } from './catalog/sync'
 import { getDetails, providerStatus, type MetadataProvider } from './catalog/providers'
 import { igdb } from './catalog/igdb'
 import { tgdb } from './catalog/tgdb'
-import { sgdb } from './catalog/sgdb'
 import { syncPopularity } from './catalog/popularity'
 
 /** Ordre de la cascade de fiches enrichies. */
-const PROVIDERS: MetadataProvider[] = [igdb, tgdb, sgdb]
+const PROVIDERS: MetadataProvider[] = [igdb, tgdb]
 let syncing = false
 
 type Handler<C extends IpcChannel> = (req: IpcChannels[C]['req']) => IpcChannels[C]['res'] | Promise<IpcChannels[C]['res']>
@@ -46,7 +45,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     if (syncing) return { synced: 0, failed: [] }
     syncing = true
     try {
-      return await syncCatalog(db, ids, (p) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', p)))
+      return await syncCatalog(db, ids, (p) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', p)), undefined, loadSettings(db))
     } finally { syncing = false }
   })
   handle('catalog:popularity', async () => {

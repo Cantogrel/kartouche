@@ -1,13 +1,14 @@
 /**
  * Consoles du catalogue = celles prises en charge par un émulateur prévu (voir SUMMARY du projet).
- * Switch en est absente : Libretro n'a aucun DAT pour elle. PS4 est exclue.
+ * `dat` : source du catalogue. Libretro (no-intro/redump) ; « igdb » pour la Switch, absente de Libretro (nécessite une clé IGDB).
+ * PS4 est exclue.
  */
-/** Consoles du catalogue. `system` = nom Libretro (dossier des DAT et des vignettes). */
 export interface ConsoleDef {
   id: string
   label: string
+  /** Nom Libretro du système (dossier des DAT et des vignettes). */
   system: string
-  dat: 'no-intro' | 'redump'
+  dat: 'no-intro' | 'redump' | 'igdb'
   /** Nom du DAT principal s'il diffère de `system` (ex. Wii U : seul le DAT « Digital » existe). */
   datName?: string
 }
@@ -24,6 +25,7 @@ export const CONSOLES: readonly ConsoleDef[] = [
   { id: 'gc', label: 'GameCube', system: 'Nintendo - GameCube', dat: 'redump' },
   { id: 'wii', label: 'Wii', system: 'Nintendo - Wii', dat: 'redump' },
   { id: 'wiiu', label: 'Wii U', system: 'Nintendo - Wii U', dat: 'no-intro', datName: 'Nintendo - Wii U (Digital)' },
+  { id: 'switch', label: 'Switch', system: 'Nintendo - Switch', dat: 'igdb' },
   { id: 'ps1', label: 'PS1', system: 'Sony - PlayStation', dat: 'redump' },
   { id: 'ps2', label: 'PS2', system: 'Sony - PlayStation 2', dat: 'redump' },
   { id: 'ps3', label: 'PS3', system: 'Sony - PlayStation 3', dat: 'redump' },

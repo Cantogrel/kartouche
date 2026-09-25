@@ -4,9 +4,11 @@ import { DatabaseSync } from 'node:sqlite'
 import { migrate } from './db/migrations'
 import { buildPaths, ensureDirs, resolveDataDir } from './paths'
 import { registerIpc } from './ipc'
-import { getHero, getThumbnail } from './catalog/thumbs'
+import { getImage } from './catalog/images'
+import { getGame, rebuildDerived } from './catalog/catalogStore'
+import { loadSettings } from './db/settingsStore'
 
-// Images du catalogue servies depuis le cache disque : rvimg://cover/<console>/<titre encodé> et rvimg://hero/<id du jeu>
+// Images du catalogue servies depuis le cache disque : rvimg://card/<id du jeu> (vignette) et rvimg://hero/<id du jeu> (bannière)
 protocol.registerSchemesAsPrivileged([{ scheme: 'rvimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 
 function createWindow(): BrowserWindow {
@@ -28,16 +30,19 @@ app.whenReady().then(() => {
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON')
   migrate(db)
   const { v } = db.prepare('select sqlite_version() as v').get() as { v: string }
+  // Colonnes dérivées (titre lisible, regroupement Europe d'abord) : recalculées quand la règle change.
+  const DERIVED = '2'
+  const cur = db.prepare("SELECT value FROM settings WHERE key = '_derived'").get() as { value: string } | undefined
+  if (cur?.value !== DERIVED) {
+    rebuildDerived(db)
+    db.prepare("INSERT INTO settings (key, value) VALUES ('_derived', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(DERIVED)
+  }
   protocol.handle('rvimg', async (req) => {
     const u = new URL(req.url)
-    const parts = u.pathname.split('/').filter(Boolean)
-    const png = (b: Buffer): Response => new Response(new Uint8Array(b), { headers: { 'content-type': 'image/png', 'cache-control': 'max-age=86400' } })
-    if (u.hostname === 'hero') {
-      const h = await getHero(db, paths.cache, Number(parts[0]))
-      return h ? new Response(new Uint8Array(h.data), { headers: { 'content-type': h.type, 'cache-control': 'max-age=86400' } }) : new Response(null, { status: 404 })
-    }
-    const buf = parts[0] ? await getThumbnail(paths.cache, parts[0], decodeURIComponent(parts.slice(1).join('/'))) : null
-    return buf ? png(buf) : new Response(null, { status: 404 })
+    const game = getGame(db, Number(u.pathname.split('/').filter(Boolean)[0]))
+    const kind = u.hostname === 'hero' ? 'hero' : 'card'
+    const img = game ? await getImage(db, paths.cache, game, kind, loadSettings(db)) : null
+    return img ? new Response(new Uint8Array(img.data), { headers: { 'content-type': img.type, 'cache-control': 'max-age=86400' } }) : new Response(null, { status: 404 })
   })
   registerIpc({ db, paths, sqliteVersion: v })
   createWindow()
