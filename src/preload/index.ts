@@ -13,7 +13,8 @@ const api: RomVaultApi = {
   window: {
     minimize: () => ipcRenderer.send('win:minimize'),
     maximize: () => ipcRenderer.send('win:maximize'),
-    close: () => ipcRenderer.send('win:close')
+    close: () => ipcRenderer.send('win:close'),
+    fullscreen: (on) => ipcRenderer.send('win:fullscreen', on)
   }
 }
 contextBridge.exposeInMainWorld('api', api)

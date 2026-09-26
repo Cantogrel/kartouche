@@ -89,7 +89,7 @@ export type IpcChannel = keyof IpcChannels
 export interface RomVaultApi {
   invoke<C extends IpcChannel>(channel: C, req?: IpcChannels[C]['req']): Promise<IpcChannels[C]['res']>
   on<E extends keyof IpcEvents>(event: E, cb: (payload: IpcEvents[E]) => void): () => void
-  window: { minimize(): void; maximize(): void; close(): void }
+  window: { minimize(): void; maximize(): void; close(): void; fullscreen(on: boolean): void }
   /** Chemin réel d'un fichier déposé (File.path n'existe plus dans Electron récent). */
   pathOf(file: File): string
 }

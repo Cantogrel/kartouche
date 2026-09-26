@@ -177,4 +177,5 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     if (w) w.isMaximized() ? w.unmaximize() : w.maximize()
   })
   ipcMain.on('win:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close())
+  ipcMain.on('win:fullscreen', (e, on: boolean) => BrowserWindow.fromWebContents(e.sender)?.setFullScreen(!!on))
 }

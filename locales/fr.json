@@ -171,5 +171,18 @@
   "bios.downloading": "Téléchargement du firmware {done} / {total} Mo",
   "bios.installing": "Installation du firmware dans l'émulateur… (quelques minutes)",
   "bios.remove": "Retirer",
-  "bios.confirmRemove": "Retirer {slot} ? L'émulateur en aura de nouveau besoin pour lancer ces jeux."
+  "bios.confirmRemove": "Retirer {slot} ? L'émulateur en aura de nouveau besoin pour lancer ces jeux.",
+  "bp.all": "Tous",
+  "bp.searchHint": "Rechercher…",
+  "bp.space": "Espace",
+  "bp.clear": "Effacer",
+  "bp.ok": "OK",
+  "bp.select": "Choisir",
+  "bp.back": "Retour",
+  "bp.search": "Recherche",
+  "bp.console": "Console",
+  "bp.exit": "Quitter",
+  "bp.played": "{n} min jouées",
+  "bp.empty": "Votre bibliothèque est vide. Ajoutez des jeux depuis le mode classique.",
+  "bp.inGame": "En jeu : {title}"
 }

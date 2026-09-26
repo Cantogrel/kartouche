@@ -12,6 +12,9 @@ interface AppState extends Loc {
   catalog: CatalogView
   /** Titre de la page quand il ne vient pas de la navigation (fiche d'un jeu du catalogue). */
   pageTitle: string | null
+  /** Mode Big Picture (plein écran, manette). */
+  bigPicture: boolean
+  setBigPicture: (on: boolean) => void
   setCatalog: (patch: Partial<CatalogView>) => void
   setPageTitle: (t: string | null) => void
   go: (r: Route, gameId?: string) => void
@@ -27,7 +30,8 @@ function initialLoc(): Loc {
 }
 
 export const useApp = create<AppState>((set, get) => ({
-  ...initialLoc(), history: [], librarySearch: '', pageTitle: null,
+  ...initialLoc(), history: [], librarySearch: '', pageTitle: null, bigPicture: location.hash === '#bigpicture',
+  setBigPicture: (bigPicture) => set({ bigPicture }),
   catalog: { consoles: [], genres: [], sort: 'popularity', dir: null, variants: false, limit: 60 },
   setCatalog: (patch) => set({ catalog: { ...get().catalog, ...patch } }),
   setPageTitle: (pageTitle) => set({ pageTitle }),

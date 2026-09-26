@@ -171,5 +171,18 @@
   "bios.downloading": "Downloading firmware {done} / {total} MB",
   "bios.installing": "Installing the firmware in the emulator… (can take a few minutes)",
   "bios.remove": "Remove",
-  "bios.confirmRemove": "Remove {slot}? The emulator will need it again to run these games."
+  "bios.confirmRemove": "Remove {slot}? The emulator will need it again to run these games.",
+  "bp.all": "All",
+  "bp.searchHint": "Search…",
+  "bp.space": "Space",
+  "bp.clear": "Clear",
+  "bp.ok": "OK",
+  "bp.select": "Select",
+  "bp.back": "Back",
+  "bp.search": "Search",
+  "bp.console": "Console",
+  "bp.exit": "Exit",
+  "bp.played": "{n} min played",
+  "bp.empty": "Your library is empty. Add games from the classic mode.",
+  "bp.inGame": "Playing {title}"
 }

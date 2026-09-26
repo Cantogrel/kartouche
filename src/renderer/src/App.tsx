@@ -15,18 +15,20 @@ import { GameDetail } from '@/pages/GameDetail'
 import { Home } from '@/pages/Home'
 import { Emulators } from '@/pages/Emulators'
 import { Settings } from '@/pages/Settings'
+import { BigPicture } from '@/bigpicture/BigPicture'
 
 const NAV: Exclude<Route, 'game'>[] = ['home', 'catalog', 'library', 'emulators', 'settings']
 const ICON: Record<string, string> = { home: '⌂', catalog: '▦', library: '▤', emulators: '⚙', settings: '☰' }
 
 export default function App() {
-  const { route, gameId, go, back, history, librarySearch, setLibrarySearch, pageTitle } = useApp()
+  const { route, gameId, go, back, history, librarySearch, setLibrarySearch, pageTitle, bigPicture, setBigPicture } = useApp()
   const { ready, load } = useSettings()
   const [catalogQuery, setCatalogQuery] = useState('')
   const libEntries = useLibrary((s) => s.entries)
   useEffect(() => { void load(); void useLibrary.getState().refresh(); void useEmulators.getState().refresh(); return useEmulators.getState().listen() }, [load])
 
   if (!ready) return null
+  if (bigPicture) return <BigPicture onExit={() => setBigPicture(false)} />
   const game = route === 'game' ? DEMO_GAMES.find((g) => g.id === gameId) : undefined
   const title = game ? game.title : route === 'game' && pageTitle ? pageTitle : t(`nav.${route === 'game' ? 'catalog' : route}`)
   const activeNav = route === 'game' ? (game || gameId?.startsWith('lib:') ? 'library' : 'catalog') : route
@@ -35,7 +37,7 @@ export default function App() {
       <div className="titlebar">
         <span>RomVault</span>
         <div className="right">
-          <button className="bp" onClick={() => undefined}>▶ {t('bigpicture')}</button>
+          <button className="bp" onClick={() => setBigPicture(true)}>▶ {t('bigpicture')}</button>
           <button onClick={() => window.api.window.minimize()}>–</button>
           <button onClick={() => window.api.window.maximize()}>▢</button>
           <button onClick={() => window.api.window.close()}>✕</button>
