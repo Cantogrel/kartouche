@@ -79,6 +79,15 @@ export function Settings() {
           </>
         )}
 
+        {section === 'emulation' && (
+          <>
+            <label className="check">
+              <input type="checkbox" checked={settings.autoBackupSaves} onChange={(e) => update({ autoBackupSaves: e.target.checked })} /> {t('settings.autoBackup')}
+            </label>
+            <p className="muted">{t('settings.autoBackupHint')}</p>
+          </>
+        )}
+
         {section === 'apiKeys' && (
           <>
             <p className="muted">{t('settings.igdbHint')}</p>
@@ -95,6 +104,13 @@ export function Settings() {
             <p className="muted">{quota('tgdb')}</p>
             <label className="field">{t('settings.sgdbKey')}
               <input type="password" defaultValue={settings.sgdbApiKey} onBlur={(e) => update({ sgdbApiKey: e.target.value })} autoComplete="off" />
+            </label>
+            <p className="muted">{t('settings.raHint')}</p>
+            <label className="field">{t('settings.raUser')}
+              <input defaultValue={settings.raUsername} onBlur={(e) => update({ raUsername: e.target.value })} autoComplete="off" />
+            </label>
+            <label className="field">{t('settings.raKey')}
+              <input type="password" defaultValue={settings.raApiKey} onBlur={(e) => update({ raApiKey: e.target.value })} autoComplete="off" />
             </label>
           </>
         )}

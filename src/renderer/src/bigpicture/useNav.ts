@@ -41,7 +41,7 @@ export function moveFocus(dir: Dir): void {
  * La manette est lue à chaque image ; les directions se répètent en maintien. Le bouton A clique l'élément ciblé.
  * `enabled` à false (jeu en cours) suspend tout : l'émulateur a alors la main.
  */
-export function useNav(onAction: (a: PadAction) => void, enabled: boolean): void {
+export function useNav(onAction: (a: PadAction, fromKeyboard: boolean) => void, enabled: boolean): void {
   const cb = useRef(onAction)
   cb.current = onAction
   useEffect(() => {
@@ -55,13 +55,13 @@ export function useNav(onAction: (a: PadAction) => void, enabled: boolean): void
     }
     // Un bouton déjà maintenu au montage (celui qui a ouvert cet écran) ne compte pas comme un nouvel appui.
     rep.update(heldNow(), performance.now())
-    const fire = (a: PadAction): void => {
+    const fire = (a: PadAction, kb = false): void => {
       if (a === 'up' || a === 'down' || a === 'left' || a === 'right') moveFocus(a)
       else if (a === 'accept') (document.activeElement as HTMLElement | null)?.click()
-      cb.current(a)
+      cb.current(a, kb)
     }
     const tick = (now: number): void => {
-      rep.update(heldNow(), now).forEach(fire)
+      rep.update(heldNow(), now).forEach((a) => fire(a))
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -69,7 +69,7 @@ export function useNav(onAction: (a: PadAction) => void, enabled: boolean): void
       const a = KEYS[e.key]
       if (!a) return
       e.preventDefault()
-      fire(a)
+      fire(a, true)
     }
     window.addEventListener('keydown', key)
     return () => { cancelAnimationFrame(raf); window.removeEventListener('keydown', key) }

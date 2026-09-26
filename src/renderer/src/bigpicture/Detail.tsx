@@ -62,6 +62,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
               ? <button data-nav className="bp-btn primary" onClick={() => void window.api.invoke('game:stop', owned.id)}>■ {t('play.stop')}</button>
               : <button data-nav className="bp-btn primary" onClick={() => void launch()}>▶ {t('play')}</button>)}
             {!owned && gameId !== null && <button data-nav className="bp-btn primary" onClick={() => void useLibrary.getState().add(gameId)}>+ {t('addToLibrary')}</button>}
+            {owned && <button data-nav className="bp-btn" onClick={() => void useLibrary.getState().setFlag(owned.id, { favorite: !owned.favorite })}>{owned.favorite ? '♥' : '♡'} {t(owned.favorite ? 'fav.remove' : 'fav.add')}</button>}
             {owned?.missing && <span className="muted">{t('game.noFile')}</span>}
             <button data-nav className="bp-btn" onClick={onClose}>{t('bp.back')}</button>
           </div>

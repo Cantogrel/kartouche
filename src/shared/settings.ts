@@ -14,6 +14,11 @@ export interface Settings {
   igdbClientSecret: string
   tgdbApiKey: string
   sgdbApiKey: string
+  /** RetroAchievements : nom d'utilisateur et clé d'API Web (succès). */
+  raUsername: string
+  raApiKey: string
+  /** Copie automatique des sauvegardes à la fin de chaque partie. */
+  autoBackupSaves: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -25,7 +30,10 @@ export const DEFAULT_SETTINGS: Settings = {
   igdbClientId: '',
   igdbClientSecret: '',
   tgdbApiKey: '',
-  sgdbApiKey: ''
+  sgdbApiKey: '',
+  raUsername: '',
+  raApiKey: '',
+  autoBackupSaves: true
 }
 
 /** Fusionne une saisie partielle non fiable avec les valeurs actuelles : toute valeur invalide est ignorée. */
@@ -42,6 +50,9 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (typeof p.igdbClientSecret === 'string') out.igdbClientSecret = p.igdbClientSecret.trim()
   if (typeof p.tgdbApiKey === 'string') out.tgdbApiKey = p.tgdbApiKey.trim()
   if (typeof p.sgdbApiKey === 'string') out.sgdbApiKey = p.sgdbApiKey.trim()
+  if (typeof p.raUsername === 'string') out.raUsername = p.raUsername.trim()
+  if (typeof p.raApiKey === 'string') out.raApiKey = p.raApiKey.trim()
+  if (typeof p.autoBackupSaves === 'boolean') out.autoBackupSaves = p.autoBackupSaves
   return out
 }
 

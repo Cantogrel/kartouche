@@ -3,11 +3,11 @@ import { t } from '@/i18n'
 import { useSettings } from '@/store/settings'
 import { useApp, type Route } from '@/store/app'
 import { PageHead } from '@/ui'
-import { DEMO_GAMES } from '@/data/demo'
 import { useLibrary } from '@/store/library'
 import { useEmulators } from '@/store/emulators'
 import { GameIcon } from '@/ui/ConsoleTile'
 import { EntryMenu, onEntryContext } from '@/ui/EntryMenu'
+import { Dialogs } from '@/ui/CollectionDialogs'
 import { Library } from '@/pages/Library'
 import { SearchBox } from '@/ui'
 import { Catalog } from '@/pages/Catalog'
@@ -33,9 +33,8 @@ export default function App() {
 
   if (!ready) return null
   if (bigPicture) return <BigPicture onExit={() => setBigPicture(false)} />
-  const game = route === 'game' ? DEMO_GAMES.find((g) => g.id === gameId) : undefined
-  const title = game ? game.title : route === 'game' && pageTitle ? pageTitle : t(`nav.${route === 'game' ? 'catalog' : route}`)
-  const activeNav = route === 'game' ? (game || gameId?.startsWith('lib:') ? 'library' : 'catalog') : route
+  const title = route === 'game' && pageTitle ? pageTitle : t(`nav.${route === 'game' ? 'catalog' : route}`)
+  const activeNav = route === 'game' ? (gameId?.startsWith('lib:') ? 'library' : 'catalog') : route
   return (
     <div className="app">
       <div className="titlebar">
@@ -57,10 +56,10 @@ export default function App() {
           <div className="side-lib">
           <SearchBox className="side" placeholder={t('searchLibrary')} value={librarySearch} onChange={setLibrarySearch} clearLabel={t('search.clear')} />
           <div className="side-games">
-            {libEntries.filter((g) => !librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase())).map((g) => (
+            {libEntries.filter((g) => !librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase())).sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((g) => (
               <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} onClick={() => go('game', `lib:${g.id}`)} onContextMenu={onEntryContext(g.id)}>
                 <GameIcon gameId={g.gameId} console={g.console} />
-                <span className="side-name">{g.title}</span>
+                <span className="side-name">{g.title}</span>{g.pinned && <span className="side-pin">★</span>}
               </button>
             ))}
           </div>
@@ -79,6 +78,7 @@ export default function App() {
         </main>
       </div>
       <EntryMenu />
+      <Dialogs />
       <div className="statusbar">{t('footer.noJob')}</div>
     </div>
   )

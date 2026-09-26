@@ -28,7 +28,14 @@ export interface LibraryEntry {
   addedAt: number
   playMinutes: number
   lastPlayed: number | null
+  favorite: boolean
+  /** Épinglé en tête de la liste latérale. */
+  pinned: boolean
+  /** Ids des collections auxquelles le jeu appartient. */
+  collections: number[]
 }
+
+export interface Collection { id: number; name: string; count: number }
 
 export type ImportStatus = 'added' | 'duplicate' | 'ambiguous' | 'error'
 

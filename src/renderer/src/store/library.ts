@@ -1,10 +1,13 @@
 import { create } from 'zustand'
-import type { ImportResult, LibraryEntry, LibraryProgress } from '@shared/library'
+import type { Collection, ImportResult, LibraryEntry, LibraryProgress } from '@shared/library'
 
 type RemoveAction = 'file' | 'entry' | 'save' | 'all'
 
 interface LibraryState {
   entries: LibraryEntry[]
+  collections: Collection[]
+  /** Incrémenté quand les sauvegardes d'un jeu changent hors du panneau (suppression) : le panneau se recharge. */
+  savesRev: number
   loaded: boolean
   busy: boolean
   progress: LibraryProgress | null
@@ -17,6 +20,13 @@ interface LibraryState {
   scan: () => Promise<void>
   add: (gameId: number) => Promise<void>
   removeEntry: (id: number, action: RemoveAction) => Promise<void>
+  setFlag: (id: number, flags: { favorite?: boolean; pinned?: boolean }) => Promise<void>
+  /** Crée une collection et renvoie son id (null si le nom est vide). */
+  createCollection: (name: string) => Promise<number | null>
+  renameCollection: (id: number, name: string) => Promise<boolean>
+  deleteCollection: (id: number) => Promise<void>
+  setMember: (collectionId: number, entryId: number, member: boolean) => Promise<void>
+  setMembers: (collectionId: number, entryIds: number[]) => Promise<void>
   dismissResult: () => void
 }
 
@@ -37,13 +47,26 @@ export const useLibrary = create<LibraryState>((set, get) => {
     } finally { off(); set({ busy: false, progress: null }) }
   }
   return {
-    entries: [], loaded: false, busy: false, progress: null, result: null,
-    refresh: async () => { set({ entries: await window.api.invoke('library:list'), loaded: true }) },
+    entries: [], collections: [], savesRev: 0, loaded: false, busy: false, progress: null, result: null,
+    refresh: async () => {
+      const [entries, collections] = await Promise.all([window.api.invoke('library:list'), window.api.invoke('collections:list')])
+      set({ entries, collections, loaded: true })
+    },
     importPaths: (paths) => (paths.length ? run(() => window.api.invoke('library:import', { paths })) : Promise.resolve()),
     link: async () => { await get().importPaths(await window.api.invoke('library:pick', 'files')) },
     scan: () => run(() => window.api.invoke('library:scan')),
     add: async (gameId) => { await window.api.invoke('library:add', gameId); await get().refresh() },
-    removeEntry: async (id, action) => { await window.api.invoke('library:remove', { id, action }); await get().refresh() },
+    removeEntry: async (id, action) => { await window.api.invoke('library:remove', { id, action }); set({ savesRev: get().savesRev + 1 }); await get().refresh() },
+    setFlag: async (id, flags) => {
+      // Mise à jour immédiate de la liste (le cœur réagit au clic), puis l'enregistrement.
+      set({ entries: get().entries.map((e) => (e.id === id ? { ...e, ...flags } : e)) })
+      await window.api.invoke('library:flag', { id, ...flags })
+    },
+    createCollection: async (name) => { const c = await window.api.invoke('collections:create', name); await get().refresh(); return c?.id ?? null },
+    renameCollection: async (id, name) => { const ok = await window.api.invoke('collections:rename', { id, name }); await get().refresh(); return ok },
+    deleteCollection: async (id) => { await window.api.invoke('collections:delete', id); await get().refresh() },
+    setMember: async (collectionId, entryId, member) => { await window.api.invoke('collections:set', { collectionId, entryId, member }); await get().refresh() },
+    setMembers: async (collectionId, entryIds) => { await window.api.invoke('collections:setMembers', { collectionId, entryIds }); await get().refresh() },
     dismissResult: () => { clearTimeout(dismissTimer); set({ result: null }) }
   }
 })

@@ -1,5 +1,7 @@
 import type { Settings } from './settings'
-import type { ImportRequest, ImportResult, LibraryEntry, LibraryProgress } from './library'
+import type { Collection, ImportRequest, ImportResult, LibraryEntry, LibraryProgress } from './library'
+import type { AchievementsResult } from './achievements'
+import type { BackupInfo, SaveInfo } from './saves'
 import type { BiosImportResult, BiosSlotStatus } from './bios'
 import type { EmulatorProgress, EmulatorState, GameSession, LatestVersion, LaunchResult } from './emulators'
 import type { CatalogGame, CatalogPage, CatalogQuery, GameDetails, ProviderStatus, SyncProgress, SyncResult } from './catalog'
@@ -50,6 +52,28 @@ export interface IpcChannels {
   'library:add': { req: number; res: LibraryEntry | null }
   /** Affiche la ROM dans l'Explorateur. */
   'library:reveal': { req: number; res: void }
+  /** Favori et/ou épingle d'un jeu (champ absent = inchangé). */
+  'library:flag': { req: { id: number; favorite?: boolean; pinned?: boolean }; res: void }
+  'collections:list': { req: void; res: Collection[] }
+  /** Crée une collection (renvoie l'existante si le nom est déjà pris) ; null si le nom est vide. */
+  'collections:create': { req: string; res: Collection | null }
+  /** false si le nom est vide ou déjà pris. */
+  'collections:rename': { req: { id: number; name: string }; res: boolean }
+  'collections:delete': { req: number; res: void }
+  /** Ajoute (member = true) ou retire un jeu d'une collection. */
+  'collections:set': { req: { collectionId: number; entryId: number; member: boolean }; res: void }
+  /** Remplace la liste des jeux d'une collection. */
+  'collections:setMembers': { req: { collectionId: number; entryIds: number[] }; res: void }
+  /** Sauvegardes du jeu (fichiers trouvés, copies) ; null si l'émulateur est inconnu. */
+  'saves:info': { req: number; res: SaveInfo | null }
+  'saves:backup': { req: number; res: BackupInfo | null }
+  'saves:restore': { req: { entryId: number; name: string }; res: boolean }
+  'saves:deleteBackup': { req: { entryId: number; name: string }; res: void }
+  /** Supprime toutes les copies ; renvoie leur nombre. */
+  'saves:deleteAllBackups': { req: number; res: number }
+  /** Ouvre le dossier des sauvegardes dans l'Explorateur. */
+  'saves:open': { req: number; res: void }
+  'achievements:get': { req: { entryId: number; refresh?: boolean }; res: AchievementsResult }
   'emulators:list': { req: void; res: EmulatorState[] }
   /** Télécharge et installe (ou met à jour) un émulateur ; la progression arrive par 'emulators:progress'. */
   'emulators:install': { req: string; res: { ok: boolean; error?: string } }

@@ -14,15 +14,15 @@ import { VirtualKeyboard } from './VirtualKeyboard'
 import { Detail } from './Detail'
 
 const label = (c: string): string => consoleById(c)?.label ?? c
-type Section = 'home' | 'library' | 'catalog' | 'settings'
-const SECTIONS: Section[] = ['home', 'library', 'catalog', 'settings']
+type Section = 'home' | 'library' | 'collections' | 'catalog' | 'settings'
+const SECTIONS: Section[] = ['home', 'library', 'collections', 'catalog', 'settings']
 const PAGE = 60
 /** Jeu ouvert : `gameId` du catalogue (peut être null pour un fichier non reconnu) et/ou entrée de la bibliothèque. */
 interface Opened { gameId: number | null; entryId?: number }
 /** Dernière tuile ouverte : le focus y revient à la fermeture de la fiche. */
 let lastOpened: string | null = null
 
-function Tile({ id, gameId, title, cons, dim, onOpen }: { id: string; gameId: number | null; title: string; cons: string; dim?: boolean; onOpen: () => void }) {
+function Tile({ id, gameId, title, cons, dim, fav, onOpen }: { id: string; gameId: number | null; title: string; cons: string; dim?: boolean; fav?: boolean; onOpen: () => void }) {
   const tag = <Badge>{label(cons)}</Badge>
   const name = <span className="card-title">{title}</span>
   return (
@@ -30,12 +30,14 @@ function Tile({ id, gameId, title, cons, dim, onOpen }: { id: string; gameId: nu
       {gameId !== null
         ? <Cover className="cover-fill" gameId={gameId} title={title} kind="card">{name}{tag}</Cover>
         : <div className="cover-fill" style={artStyle(title)}>{name}{tag}</div>}
+      {fav && <span className="fav-mark">♥</span>}
     </button>
   )
 }
 
 export function BigPicture({ onExit }: { onExit: () => void }) {
   const entries = useLibrary((s) => s.entries)
+  const collections = useLibrary((s) => s.collections)
   const running = useEmulators((s) => s.running)
   const [section, setSection] = useState<Section>('home')
   const [consoleTab, setConsoleTab] = useState('all')
@@ -64,7 +66,11 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
     return () => { stale = true; clearTimeout(h) }
   }, [section, query, consoleTab, limit])
 
-  const chips = section === 'library' ? libraryConsoles : section === 'catalog' ? CONSOLES.filter((c) => (page?.consoles.find((x) => x.id === c.id)?.count ?? 0) > 0 || c.id === consoleTab).map((c) => c.id) : []
+  // Collections : seules celles qui ont au moins un jeu jouable ; sans choix explicite, la première.
+  const colList = useMemo(() => collections.filter((c) => playable.some((e) => e.collections.includes(c.id))), [collections, playable])
+  const activeCol = colList.find((c) => String(c.id) === consoleTab) ?? colList[0]
+  const colShown = activeCol ? playable.filter((e) => e.collections.includes(activeCol.id)) : []
+  const chips = section === 'collections' ? colList.map((c) => String(c.id)) : section === 'library' ? libraryConsoles : section === 'catalog' ? CONSOLES.filter((c) => (page?.consoles.find((x) => x.id === c.id)?.count ?? 0) > 0 || c.id === consoleTab).map((c) => c.id) : []
   const inGame = running.length > 0
   const overlay = keyboard || menu || opened !== null
 
@@ -82,11 +88,12 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   // B : revient d'un niveau (fiche, menu, recherche). Il ne quitte jamais : c'est le menu Start qui le fait.
   const cycleFilter = (d: 1 | -1): void => {
     if (!chips.length) return
-    const all = ['all', ...chips]
-    setConsoleTab(all[(Math.max(0, all.indexOf(consoleTab)) + d + all.length) % all.length]); setLimit(PAGE)
+    const all = section === 'collections' ? chips : ['all', ...chips]
+    const cur = section === 'collections' ? (activeCol ? String(activeCol.id) : '') : consoleTab
+    setConsoleTab(all[(Math.max(0, all.indexOf(cur)) + d + all.length) % all.length]); setLimit(PAGE)
   }
 
-  useNav((a) => {
+  useNav((a, fromKeyboard) => {
     if (menu) { if (a === 'back' || a === 'start') setMenu(false) }
     else if (opened) { if (a === 'back') setOpened(null) }
     else if (a === 'start') setMenu(true)
@@ -96,12 +103,14 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
     else if (a === 'nextFilter') cycleFilter(1)
     else if (a === 'y' && (section === 'library' || section === 'catalog')) setKeyboard(true)
     else if (a === 'back' && query) setQuery('')
+    // Au clavier, Échap au niveau le plus haut ouvre le menu (Reprendre / Quitter) : on peut quitter sans manette. À la manette, B ne quitte jamais.
+    else if (a === 'back' && fromKeyboard) setMenu(true)
   }, !keyboard && !inGame)
 
   const openEntry = (e: LibraryEntry): void => setOpened({ gameId: e.gameId, entryId: e.id })
   const openedEntry = opened?.entryId !== undefined ? entries.find((e) => e.id === opened.entryId) : undefined
   const playing = entries.find((e) => running.includes(e.id))
-  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} title={e.title} cons={e.console} onOpen={() => openEntry(e)} />)
+  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} title={e.title} cons={e.console} fav={e.favorite} onOpen={() => openEntry(e)} />)
   const searchable = section === 'library' || section === 'catalog'
 
   return (
@@ -114,11 +123,15 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
           <span className="bp-key">RB</span>
         </div>
         {searchable && <button data-nav className="bp-search" onClick={() => setKeyboard(true)}>🔍 {query || t('bp.searchHint')}</button>}
+        <button data-nav className="bp-tab bp-menu-btn" onClick={() => setMenu(true)}>☰ {t('bp.menuBtn')}</button>
       </header>
       {chips.length > 0 && (
         <div className="bp-chips">
           <span className="bp-key">LT</span>
-          {['all', ...chips].map((k) => <button key={k} data-nav className={`bp-chip${consoleTab === k ? ' active' : ''}`} onClick={() => { setConsoleTab(k); setLimit(PAGE) }}>{k === 'all' ? t('bp.all') : label(k)}</button>)}
+          {(section === 'collections' ? chips : ['all', ...chips]).map((k) => {
+            const active = section === 'collections' ? String(activeCol?.id) === k : consoleTab === k
+            return <button key={k} data-nav className={`bp-chip${active ? ' active' : ''}`} onClick={() => { setConsoleTab(k); setLimit(PAGE) }}>{k === 'all' ? t('bp.all') : section === 'collections' ? colList.find((c) => String(c.id) === k)?.name : label(k)}</button>
+          })}
           <span className="bp-key">RT</span>
         </div>
       )}
@@ -127,12 +140,16 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
         {section === 'home' && (playable.length === 0 ? <p className="empty">{t('bp.empty')}</p> : (
           <>
             {playable.some((e) => e.lastPlayed) && <><h2 className="bp-h">{t('home.continue')}</h2><div className="bp-grid">{libTiles(playable.filter((e) => e.lastPlayed).slice(0, 8), 'c')}</div></>}
+            {playable.some((e) => e.favorite) && <><h2 className="bp-h">{t('home.favorites')}</h2><div className="bp-grid">{libTiles(playable.filter((e) => e.favorite).slice(0, 8), 'f')}</div></>}
             <h2 className="bp-h">{t('home.recent')}</h2>
             <div className="bp-grid">{libTiles([...playable].sort((a, b) => b.addedAt - a.addedAt).slice(0, 8), 'r')}</div>
+            {colList.map((c) => <div key={c.id}><h2 className="bp-h">{c.name}</h2><div className="bp-grid">{libTiles(playable.filter((e) => e.collections.includes(c.id)).slice(0, 8), `k${c.id}-`)}</div></div>)}
           </>
         ))}
 
         {section === 'library' && (playable.length === 0 ? <p className="empty">{t('bp.empty')}</p> : libShown.length === 0 ? <p className="empty">{t('library.noMatch')}</p> : <div className="bp-grid">{libTiles(libShown, 'l')}</div>)}
+
+        {section === 'collections' && (colList.length === 0 ? <p className="empty">{collections.length === 0 ? t('bp.noCollections') : t('bp.emptyCollection')}</p> : <div className="bp-grid">{libTiles(colShown, 'k')}</div>)}
 
         {section === 'catalog' && (
           <div className="bp-grid">
@@ -144,7 +161,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
         {section === 'settings' && <BpSettings onExit={onExit} />}
       </div>
 
-      <footer className="bp-hints"><span>Ⓐ {t('bp.select')}</span><span>Ⓑ {t('bp.back')}</span>{searchable && <span>Ⓨ {t('bp.search')}</span>}<span>LB/RB {t('bp.section')}</span>{chips.length > 0 && <span>LT/RT {t('bp.console')}</span>}<span>☰ {t('bp.menu')}</span></footer>
+      <footer className="bp-hints"><span>Ⓐ {t('bp.select')}</span><span>Ⓑ {t('bp.back')}</span>{searchable && <span>Ⓨ {t('bp.search')}</span>}<span>LB/RB {t('bp.section')}</span>{chips.length > 0 && <span>LT/RT {t('bp.console')}</span>}<span>☰ / Esc / F11 {t('bp.menu')}</span></footer>
 
       {opened && <Detail gameId={opened.gameId} entry={openedEntry} onClose={() => setOpened(null)} />}
       {keyboard && <VirtualKeyboard value={query} onChange={(v) => { setQuery(v); setLimit(PAGE) }} onClose={() => setKeyboard(false)} />}

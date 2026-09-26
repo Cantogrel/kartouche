@@ -36,7 +36,22 @@ export const MIGRATIONS: readonly string[] = [
   // v7 : émulateurs installés (ou indiqués à la main : custom = 1) ; dir = dossier d'installation, exe = chemin complet de l'exécutable
   `CREATE TABLE emulators (
     id TEXT PRIMARY KEY, version TEXT, dir TEXT NOT NULL, exe TEXT NOT NULL, custom INTEGER NOT NULL DEFAULT 0, installed_at INTEGER NOT NULL
-  )`
+  )`,
+  // v8 : favoris et épingles (colonnes de la bibliothèque), collections nommées et leurs jeux
+  `ALTER TABLE library ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE library ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE collections (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, created_at INTEGER NOT NULL);
+  CREATE TABLE collection_items (
+    collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    library_id INTEGER NOT NULL REFERENCES library(id) ON DELETE CASCADE,
+    PRIMARY KEY (collection_id, library_id)
+  );
+  CREATE INDEX collection_items_lib ON collection_items (library_id)`,
+  // v9 : succès (RetroAchievements) : liste des jeux par console (rapprochement par titre) et progression par jeu
+  `CREATE TABLE ra_games (console TEXT NOT NULL, ra_id INTEGER NOT NULL, title TEXT NOT NULL, norm TEXT NOT NULL, PRIMARY KEY (console, ra_id));
+  CREATE INDEX ra_games_norm ON ra_games (console, norm);
+  CREATE TABLE ra_sync (console TEXT PRIMARY KEY, fetched_at INTEGER NOT NULL);
+  CREATE TABLE ra_progress (library_id INTEGER PRIMARY KEY REFERENCES library(id) ON DELETE CASCADE, json TEXT NOT NULL, fetched_at INTEGER NOT NULL)`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

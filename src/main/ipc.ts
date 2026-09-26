@@ -12,6 +12,9 @@ import { syncPopularity } from './catalog/popularity'
 import { localizeDetails } from './catalog/l10n'
 import { importPaths } from './library/importer'
 import { addCatalogGame, entryPath, listLibrary, refreshMissing, removeEntry } from './library/libraryStore'
+import { createCollection, deleteCollection, listCollections, renameCollection, setFlags, setMembers, setMembership } from './library/collections'
+import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget } from './saves/saves'
+import { getAchievements } from './achievements/retroachievements'
 import { ROM_EXTENSIONS } from '@shared/library'
 import { resolveLanguage } from '@shared/settings'
 import { EMULATORS, emulatorById, type EmulatorState } from '@shared/emulators'
@@ -105,6 +108,31 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   })
   handle('library:remove', (req) => removeEntry(db, req.id, req.action, paths.saves))
   handle('library:add', (gameId) => addCatalogGame(db, gameId))
+  handle('library:flag', (req) => setFlags(db, req.id, req))
+  handle('collections:list', () => listCollections(db))
+  handle('collections:create', (name) => createCollection(db, name))
+  handle('collections:rename', (req) => renameCollection(db, req.id, req.name))
+  handle('collections:delete', (id) => deleteCollection(db, id))
+  handle('collections:set', (req) => setMembership(db, req.collectionId, req.entryId, req.member))
+  handle('collections:setMembers', (req) => setMembers(db, req.collectionId, req.entryIds))
+  const saveRef = (id: number): { id: number; console: string; path: string } | null =>
+    (db.prepare('SELECT id, console, path FROM library WHERE id = ?').get(id) as { id: number; console: string; path: string } | undefined) ?? null
+  handle('saves:info', async (id) => { const e = saveRef(id); return e ? saveInfo(db, paths.saves, e) : null })
+  handle('saves:backup', async (id) => { const e = saveRef(id); return e ? backupSaves(db, paths.saves, e) : null })
+  handle('saves:restore', async (req) => { const e = saveRef(req.entryId); return e && !isRunning(e.id) ? restoreSaves(db, paths.saves, e, req.name) : false })
+  handle('saves:deleteBackup', async (req) => { const e = saveRef(req.entryId); if (e) await deleteBackup(db, paths.saves, e, req.name) })
+  handle('saves:deleteAllBackups', async (id) => { const e = saveRef(id); return e ? deleteAllBackups(db, paths.saves, e) : 0 })
+  handle('saves:open', async (id) => {
+    const e = saveRef(id)
+    const target = e && (await saveOpenTarget(db, paths.saves, e))
+    if (target) { if (target.select) shell.showItemInFolder(target.path); else await shell.openPath(target.path) }
+  })
+  handle('achievements:get', async (req) => {
+    const e = db.prepare('SELECT id, console, title FROM library WHERE id = ?').get(req.entryId) as { id: number; console: string; title: string } | undefined
+    if (!e) return { status: 'noMatch' }
+    const s = loadSettings(db)
+    return getAchievements(db, e, { username: s.raUsername, apiKey: s.raApiKey }, { refresh: req.refresh })
+  })
   handle('library:reveal', (id) => { const p = entryPath(db, id); if (p) shell.showItemInFolder(p) })
   const broadcast = (channel: string, payload: unknown): void => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send(channel, payload))
   const installing = new Set<string>()
@@ -166,7 +194,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     broadcast('game:session', s)
     if (s.running) { if (!globalShortcut.isRegistered(QUIT_KEY)) globalShortcut.register(QUIT_KEY, stopAllGames) }
     else if (runningCount() === 0) globalShortcut.unregister(QUIT_KEY)
-  }, join(paths.cache, 'tools')))
+  }, join(paths.cache, 'tools'), paths.saves))
   handle('game:stop', (entryId) => stopGame(entryId))
   handle('game:running', () => listLibrary(db).map((e) => e.id).filter(isRunning))
   handle('providers:status', () => providerStatus(db, PROVIDERS, loadSettings(db)))

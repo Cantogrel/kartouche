@@ -6,6 +6,8 @@ import { buildArgs, emulatorById, emulatorForConsole, type GameSession, type Lau
 import { getRow } from './emulatorStore'
 import { closeGracefully, connectedXInputSlots, watchQuitChord } from './quit'
 import { applyDolphinPad } from './configure'
+import { loadSettings } from '../db/settingsStore'
+import { backupSaves, prepareRetroarch } from '../saves/saves'
 
 const running = new Map<number, { pid: number }>()
 
@@ -23,7 +25,7 @@ export const stopAllGames = (): void => { for (const id of running.keys()) stopG
 export const runningCount = (): number => running.size
 
 /** Lance le jeu dans son émulateur, puis cumule le temps de jeu à la fermeture. */
-export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: GameSession) => void, cacheDir: string): Promise<LaunchResult> {
+export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: GameSession) => void, cacheDir: string, savesRoot: string): Promise<LaunchResult> {
   if (running.has(entryId)) return { ok: false, error: 'running' }
   const entry = db.prepare('SELECT console, path, missing FROM library WHERE id = ?').get(entryId) as { console: string; path: string; missing: number } | undefined
   if (!entry || entry.missing === 1 || !existsSync(entry.path)) return { ok: false, error: 'noFile' }
@@ -41,6 +43,8 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       const slots = await connectedXInputSlots(cacheDir)
       await applyDolphinPad(row.dir, slots.length ? slots[0] : null).catch(() => {})
     }
+    // RetroArch range ses sauvegardes et états dans le dossier de données de RomVault (par jeu, hors de l'installation).
+    if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot).catch(() => {})
     const started = Date.now()
     const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: 'ignore' })
     running.set(entryId, { pid: child.pid ?? 0 })
@@ -57,6 +61,8 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       db.prepare('UPDATE library SET play_minutes = play_minutes + ?, last_played = ? WHERE id = ?').run(minutes, Date.now(), entryId)
       const total = db.prepare('SELECT play_minutes FROM library WHERE id = ?').get(entryId) as { play_minutes: number } | undefined
       notify({ entryId, running: false, playMinutes: total?.play_minutes })
+      // Copie de sécurité des sauvegardes de ce jeu, seulement si elles ont changé depuis la dernière.
+      if (loadSettings(db).autoBackupSaves) void backupSaves(db, savesRoot, { id: entryId, console: entry.console, path: entry.path }, true).catch(() => {})
     }
     child.on('error', finish)
     child.on('exit', finish)

@@ -3,6 +3,8 @@ import { create } from 'zustand'
 import { t } from '@/i18n'
 import { useApp } from '@/store/app'
 import { useLibrary } from '@/store/library'
+import { useDialog } from '@/ui/CollectionDialogs'
+import { emulatorForConsole } from '@shared/emulators'
 import type { LibraryEntry } from '@shared/library'
 
 interface MenuState {
@@ -32,13 +34,30 @@ function actionsFor(entry: LibraryEntry, back: () => void): Action[] {
   const hasFile = !entry.missing
   const ask = (key: string): boolean => window.confirm(t(`confirm.${key}`, { title: entry.title }))
   const list: Action[] = []
+  list.push({ key: 'fav', label: `${entry.favorite ? '♥' : '♡'} ${t(entry.favorite ? 'fav.remove' : 'fav.add')}`, run: () => lib.setFlag(entry.id, { favorite: !entry.favorite }) })
+  list.push({ key: 'pin', label: `${entry.pinned ? '★' : '☆'} ${t(entry.pinned ? 'pin.remove' : 'pin.add')}`, run: () => lib.setFlag(entry.id, { pinned: !entry.pinned }) })
+  list.push({ key: 'collection', label: `▤ ${t('collection.addTo')}`, run: () => useDialog.getState().open({ kind: 'picker', entryId: entry.id }) })
   if (!hasFile) list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
   if (hasFile) list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })
   if (hasFile) list.push({ key: 'file', label: t('action.deleteFile'), danger: true, run: async () => { if (ask('file')) await lib.removeEntry(entry.id, 'file') } })
-  list.push({ key: 'save', label: t('action.deleteSave'), danger: true, run: async () => { if (ask('save')) await lib.removeEntry(entry.id, 'save') } })
+  list.push({ key: 'save', label: t('action.deleteSave'), danger: true, run: () => deleteSaves(entry, ask) })
   list.push({ key: 'entry', label: t('action.removeEntry'), run: async () => { if (ask('entry')) { await lib.removeEntry(entry.id, 'entry'); leaveIfOpen(entry.id, back) } } })
   list.push({ key: 'all', label: t('action.deleteAll'), danger: true, run: async () => { if (ask('all')) { await lib.removeEntry(entry.id, 'all'); leaveIfOpen(entry.id, back) } } })
   return list
+}
+
+/**
+ * Supprime les sauvegardes du jeu. Propres au jeu (RetroArch, melonDS) : on supprime après confirmation. Mélangées avec celles des autres jeux
+ * (tous les autres émulateurs) : rien n'est supprimé, on l'explique et on propose d'ouvrir le dossier.
+ */
+async function deleteSaves(entry: LibraryEntry, ask: (key: string) => boolean): Promise<void> {
+  const info = await window.api.invoke('saves:info', entry.id)
+  if (info && info.scope === 'emulator') {
+    if (window.confirm(t('action.saveShared', { name: emulatorForConsole(entry.console)?.name ?? info.emulator }))) await window.api.invoke('saves:open', entry.id)
+    return
+  }
+  if (!info || info.files === 0) { window.alert(t('action.noSave')); return }
+  if (ask('save')) { await useLibrary.getState().removeEntry(entry.id, 'save'); window.alert(t('action.saveDeleted', { title: entry.title })) }
 }
 
 /** Si la fiche du jeu retiré est affichée, on revient à la page précédente. */
@@ -66,7 +85,7 @@ export function EntryMenu() {
   if (!at || !entry) return null
   const actions = actionsFor(entry, back)
   // Reste dans la fenêtre : on remonte le menu s'il déborde en bas ou à droite.
-  const x = Math.min(at.x, window.innerWidth - 250), y = Math.min(at.y, window.innerHeight - actions.length * 38 - 16)
+  const x = Math.min(at.x, window.innerWidth - 250), y = Math.max(8, Math.min(at.y, window.innerHeight - actions.length * 38 - 16))
   return (
     <div className="ctx" style={{ left: x, top: y }} onClick={(e) => e.stopPropagation()}>
       <div className="ctx-title">{entry.title}</div>

@@ -3,17 +3,29 @@ import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { cueFiles } from './importer'
+import { deleteGameSaves } from '../saves/saves'
 import type { LibraryEntry, MatchKind } from '@shared/library'
 
 interface Row {
   id: number; game_id: number | null; console: string; title: string; path: string; size: number; match: string
-  missing: number; added_at: number; play_minutes: number; last_played: number | null
+  missing: number; added_at: number; play_minutes: number; last_played: number | null; favorite: number; pinned: number
 }
 
-const toEntry = (r: Row): LibraryEntry => ({
+const toEntry = (r: Row, collections: number[] = []): LibraryEntry => ({
   id: r.id, gameId: r.game_id, console: r.console, title: r.title, path: r.path, size: r.size, match: r.match as MatchKind,
-  missing: r.missing === 1, addedAt: r.added_at, playMinutes: r.play_minutes, lastPlayed: r.last_played
+  missing: r.missing === 1, addedAt: r.added_at, playMinutes: r.play_minutes, lastPlayed: r.last_played,
+  favorite: r.favorite === 1, pinned: r.pinned === 1, collections
 })
+
+/** Collections de chaque jeu (id de bibliothèque → ids de collection), en une seule requête. */
+function membership(db: DatabaseSync): Map<number, number[]> {
+  const m = new Map<number, number[]>()
+  for (const r of db.prepare('SELECT library_id, collection_id FROM collection_items ORDER BY collection_id').all() as { library_id: number; collection_id: number }[]) {
+    const l = m.get(r.library_id)
+    if (l) l.push(r.collection_id); else m.set(r.library_id, [r.collection_id])
+  }
+  return m
+}
 
 /** Vérifie sur disque la présence de chaque fichier de la bibliothèque et met à jour l'indicateur « manquant ». */
 export function refreshMissing(db: DatabaseSync): number {
@@ -30,7 +42,8 @@ export function refreshMissing(db: DatabaseSync): number {
 
 export function listLibrary(db: DatabaseSync): LibraryEntry[] {
   refreshMissing(db)
-  return (db.prepare('SELECT * FROM library ORDER BY title COLLATE NOCASE').all() as unknown as Row[]).map(toEntry)
+  const mem = membership(db)
+  return (db.prepare('SELECT * FROM library ORDER BY title COLLATE NOCASE').all() as unknown as Row[]).map((r) => toEntry(r, mem.get(r.id)))
 }
 
 const NO_FILE = 'nofile:'
@@ -65,8 +78,12 @@ async function deleteRomFiles(path: string): Promise<void> {
 export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAction, savesRoot: string): Promise<void> {
   const r = db.prepare('SELECT console, title, path FROM library WHERE id = ?').get(id) as { console: string; title: string; path: string } | undefined
   if (!r) return
+  if (action === 'save' || action === 'all') {
+    // Avant la ROM : melonDS range ses sauvegardes à côté d'elle. Copies de sécurité (backups/) conservées volontairement.
+    await deleteGameSaves(db, savesRoot, { id, console: r.console, path: r.path }).catch(() => {})
+    await rm(saveDir(savesRoot, r), { recursive: true, force: true })
+  }
   if (action === 'file' || action === 'all') await deleteRomFiles(r.path)
-  if (action === 'save' || action === 'all') await rm(saveDir(savesRoot, r), { recursive: true, force: true })
   if (action === 'entry' || action === 'all') db.prepare('DELETE FROM library WHERE id = ?').run(id)
   else if (action === 'file') db.prepare('UPDATE library SET missing = 1 WHERE id = ?').run(id)
 }
