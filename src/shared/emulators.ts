@@ -94,7 +94,7 @@ export interface EmulatorState {
 
 export interface EmulatorProgress {
   id: string
-  phase: 'resolve' | 'download' | 'extract' | 'cores' | 'done' | 'error'
+  phase: 'resolve' | 'download' | 'extract' | 'cores' | 'firmware' | 'done' | 'error'
   done: number
   total: number
   message?: string

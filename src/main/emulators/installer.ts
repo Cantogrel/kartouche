@@ -36,8 +36,8 @@ export async function extract(archive: string, dest: string): Promise<void> {
   }
 }
 
-async function download(url: string, file: string, onProgress: (done: number, total: number) => void): Promise<void> {
-  const res = await fetch(url, { headers: { 'user-agent': 'RomVault' }, redirect: 'follow' })
+export async function download(url: string, file: string, onProgress: (done: number, total: number) => void, userAgent = 'RomVault'): Promise<void> {
+  const res = await fetch(url, { headers: { 'user-agent': userAgent }, redirect: 'follow' })
   if (!res.ok || !res.body) throw new Error(`Téléchargement impossible (HTTP ${res.status})`)
   const total = Number(res.headers.get('content-length') ?? 0)
   let done = 0

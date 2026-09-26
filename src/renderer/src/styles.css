@@ -93,6 +93,18 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .emu-card h3 { margin: 0 0 4px; color: var(--text-strong); font-size: 20px; }
 .emu-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 20px; }
 .emu-foot .row { flex-wrap: wrap; }
+.bios-panel { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius); display: flex; flex-direction: column; gap: 8px; }
+.bios-panel.over { border-color: var(--accent, #7c8cff); background: var(--bg-elevated); }
+.bios-panel .row { flex-direction: column; align-items: stretch; gap: 8px; }
+.bios-panel .btn { white-space: nowrap; text-align: center; }
+.bios-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.bios-remove { margin-left: auto; background: none; border: 0; padding: 0 2px; color: var(--text-muted, #8b8b93); font-size: 12px; cursor: pointer; text-decoration: underline; }
+.bios-remove:hover { color: var(--danger, #e5484d); }
+.bios-list li { display: flex; align-items: center; gap: 4px; }
+.bios-mark { display: inline-block; width: 16px; font-weight: 700; }
+.bios-list .ok .bios-mark { color: #3fb950; }
+.bios-list .warn .bios-mark { color: #d29922; }
+.bios-list .bad .bios-mark { color: var(--danger, #e5484d); }
 .settings { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; }
 .settings-nav { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 8px; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; max-width: 520px; }

@@ -1,5 +1,6 @@
 import type { Settings } from './settings'
 import type { ImportRequest, ImportResult, LibraryEntry, LibraryProgress } from './library'
+import type { BiosImportResult, BiosSlotStatus } from './bios'
 import type { EmulatorProgress, EmulatorState, GameSession, LatestVersion, LaunchResult } from './emulators'
 import type { CatalogGame, CatalogPage, CatalogQuery, GameDetails, ProviderStatus, SyncProgress, SyncResult } from './catalog'
 
@@ -59,6 +60,16 @@ export interface IpcChannels {
   'emulators:check': { req: void; res: LatestVersion[] }
   /** Ouvre l'émulateur seul ('app'), son dossier ('dir') ou son dossier de BIOS ('bios'). */
   'emulators:open': { req: { id: string; what: 'app' | 'dir' | 'bios' }; res: LaunchResult }
+  /** État des BIOS / firmwares / clés de tous les émulateurs. */
+  'bios:status': { req: void; res: BiosSlotStatus[] }
+  /** Sélecteur de fichiers pour les BIOS d'un émulateur ; renvoie les chemins choisis. */
+  'bios:pick': { req: string; res: string[] }
+  /** Reconnaît, valide et place les fichiers fournis (glisser-déposer ou sélecteur). */
+  'bios:import': { req: { emulator: string; paths: string[] }; res: BiosImportResult[] }
+  /** Télécharge le firmware depuis la source officielle du constructeur (PS3, Vita) et l'installe ; progression par 'emulators:progress'. */
+  'bios:auto': { req: string; res: BiosImportResult }
+  /** Retire un BIOS / firmware / clé installé ; true si retiré. */
+  'bios:remove': { req: string; res: boolean }
   'game:play': { req: number; res: LaunchResult }
   /** Ferme le jeu proprement (fermeture des fenêtres de l'émulateur, de force au bout de 5 s). */
   'game:stop': { req: number; res: void }

@@ -18,6 +18,8 @@ import { EMULATORS, emulatorById, type EmulatorState } from '@shared/emulators'
 import { installEmulator, uninstallEmulator } from './emulators/installer'
 import { latestRelease } from './emulators/source'
 import { getRow, listEmulators, saveEmulator } from './emulators/emulatorStore'
+import { biosStatus, importBiosFile, removeBios } from './bios/bios'
+import { autoInstallFirmware } from './bios/official'
 import { isRunning, launchGame, openEmulator, runningCount, stopAllGames, stopGame } from './emulators/launcher'
 import { dirname, join } from 'node:path'
 import { mkdirSync } from 'node:fs'
@@ -144,6 +146,20 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     await shell.openPath(r.dir)
     return { ok: true }
   })
+  handle('bios:status', () => biosStatus({ db, paths }))
+  handle('bios:pick', async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = { properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[], filters: [{ name: 'BIOS / firmware', extensions: ['*'] }] }
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return res.canceled ? [] : res.filePaths
+  })
+  handle('bios:import', async ({ emulator, paths: files }) => {
+    const out = []
+    for (const f of files) out.push(await importBiosFile({ db, paths }, emulator, f))
+    return out
+  })
+  handle('bios:remove', (slotId) => removeBios({ db, paths }, slotId))
+  handle('bios:auto', (emulator) => autoInstallFirmware({ db, paths }, emulator, (p) => broadcast('emulators:progress', p)))
   // Raccourci clavier global pendant une partie (l'émulateur a le focus) : Ctrl+Alt+Q ferme le jeu proprement.
   const QUIT_KEY = 'CommandOrControl+Alt+Q'
   handle('game:play', (entryId) => launchGame(db, entryId, (s) => {

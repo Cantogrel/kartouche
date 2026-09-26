@@ -4,6 +4,8 @@ import { t } from '@/i18n'
 import { EMULATORS, compareVersions, emulatorMaker, emulatorRank, type EmulatorDef } from '@shared/emulators'
 import { CONSOLES, MAKERS } from '@shared/consoles'
 import { useEmulators } from '@/store/emulators'
+import { BiosPanel } from '@/ui/BiosPanel'
+import { biosSlotsFor } from '@shared/bios'
 
 const consoleNames = (def: EmulatorDef): string => def.consoles.map((c) => CONSOLES.find((x) => x.id === c)?.label ?? c).join(', ')
 
@@ -41,14 +43,15 @@ export function Emulators() {
                 </div>
               )}
               {errors[def.id] && <div className="muted" style={{ color: 'var(--danger, #e5484d)', marginTop: 8 }}>{errors[def.id]}</div>}
-              {def.needsFirmware && s?.installed && <div className="muted" style={{ marginTop: 8 }}>{t('emu.firmware')}</div>}
+              {biosSlotsFor(def.id).length > 0 && <BiosPanel emulator={def.id} />}
               <div className="emu-foot">
                 <Tag>{status}</Tag>
                 <div className="row">
                   {s?.installed && !p && (
                     <>
                       <Button onClick={() => void window.api.invoke('emulators:open', { id: def.id, what: 'app' })} disabled={s.missing}>{t('emu.open')}</Button>
-                      <Button onClick={() => void window.api.invoke('emulators:open', { id: def.id, what: def.needsFirmware ? 'bios' : 'dir' })}>{def.needsFirmware ? t('emu.biosFolder') : t('emu.folder')}</Button>
+                      <Button onClick={() => void window.api.invoke('emulators:open', { id: def.id, what: 'dir' })}>{t('emu.folder')}</Button>
+                      {biosSlotsFor(def.id).some((x) => x.kind === 'bios') && <Button onClick={() => void window.api.invoke('emulators:open', { id: def.id, what: 'bios' })}>{t('emu.biosFolder')}</Button>}
                       {(update || s.missing) && !s.custom && <Button variant="primary" onClick={() => void install(def.id)}>{t(s.missing ? 'emu.reinstall' : 'emu.update')}</Button>}
                       <Button onClick={() => { if (window.confirm(t(s.custom ? 'emu.confirmForget' : 'emu.confirmRemove', { name: def.name }))) void uninstall(def.id) }}>{t(s.custom ? 'emu.forget' : 'emu.remove')}</Button>
                     </>
