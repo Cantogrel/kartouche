@@ -1,3 +1,4 @@
+import { PROXY_HEADERS, PROXY_KEY, PROXY_URL } from '@shared/proxy'
 import type { GameDetails } from '@shared/catalog'
 import type { Settings } from '@shared/settings'
 import { consoleById } from '@shared/consoles'
@@ -33,6 +34,7 @@ let token: { clientId: string; value: string; expires: number } | null = null
 
 /** Jeton d'application Twitch (client credentials), mis en cache jusqu'à expiration. */
 export async function igdbToken(s: Settings): Promise<string> {
+  if (s.igdbClientId === PROXY_KEY) return PROXY_KEY // le proxy gère le jeton Twitch
   if (token && token.clientId === s.igdbClientId && token.expires > Date.now() + 60_000) return token.value
   const url = `https://id.twitch.tv/oauth2/token?client_id=${encodeURIComponent(s.igdbClientId)}&client_secret=${encodeURIComponent(s.igdbClientSecret)}&grant_type=client_credentials`
   const res = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(20_000) })

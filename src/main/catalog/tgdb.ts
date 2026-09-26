@@ -1,9 +1,12 @@
+import { PROXY_HEADERS, PROXY_KEY, PROXY_URL } from '@shared/proxy'
 import type { GameDetails } from '@shared/catalog'
 import type { MetadataProvider } from './providers'
 import { consoleById } from '@shared/consoles'
 import { searchTerm } from './igdb'
 
 const BASE = 'https://api.thegamesdb.net'
+const baseFor = (key: string): string => (key === PROXY_KEY ? `${PROXY_URL}/tgdb` : BASE)
+const headersFor = (key: string): Record<string, string> => (key === PROXY_KEY ? PROXY_HEADERS : {})
 type Names = Record<string, { name: string }>
 const lookups = new Map<string, Promise<Names>>()
 
@@ -11,7 +14,7 @@ const lookups = new Map<string, Promise<Names>>()
 function lookup(kind: 'Genres' | 'Developers' | 'Publishers', key: string): Promise<Names> {
   let p = lookups.get(kind)
   if (!p) {
-    p = fetch(`${BASE}/v1/${kind}?apikey=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(30_000) })
+    p = fetch(`${baseFor(key)}/v1/${kind}?apikey=${encodeURIComponent(key)}`, { headers: headersFor(key), signal: AbortSignal.timeout(30_000) })
       .then(async (r) => {
         if (!r.ok) throw new Error(`TheGamesDB HTTP ${r.status}`)
         const j = await r.json() as { data: Record<string, Names> }
@@ -34,8 +37,8 @@ export const tgdb: MetadataProvider = {
     const platform = consoleById(game.console)?.tgdb
     const term = searchTerm(game.name)
     if (!platform || !term) return null
-    const url = `${BASE}/v1.1/Games/ByGameName?apikey=${encodeURIComponent(s.tgdbApiKey)}&name=${encodeURIComponent(term)}&fields=overview,genres,publishers,developers&filter%5Bplatform%5D=${platform}`
-    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+    const url = `${baseFor(s.tgdbApiKey)}/v1.1/Games/ByGameName?apikey=${encodeURIComponent(s.tgdbApiKey)}&name=${encodeURIComponent(term)}&fields=overview,genres,publishers,developers&filter%5Bplatform%5D=${platform}`
+    const res = await fetch(url, { headers: headersFor(s.tgdbApiKey), signal: AbortSignal.timeout(30_000) })
     if (!res.ok) throw new Error(`TheGamesDB HTTP ${res.status}`)
     const games = ((await res.json()) as { data?: { games?: TgdbGame[] } }).data?.games ?? []
     // Le premier résultat n'est pas toujours le bon : on préfère un titre identique (insensible à la casse).

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import { MIGRATIONS, migrate } from './migrations'
-import { loadSettings, saveSettings } from './settingsStore'
+import { loadSettings, loadUserSettings, saveSettings } from './settingsStore'
 import { DEFAULT_SETTINGS } from '@shared/settings'
+import { PROXY_KEY } from '@shared/proxy'
 
 const version = (db: DatabaseSync): number => (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
 
@@ -47,7 +48,7 @@ describe('settingsStore', () => {
   const fresh = (): DatabaseSync => { const db = new DatabaseSync(':memory:'); migrate(db); return db }
 
   it('renvoie les valeurs par défaut sur une base vide', () => {
-    expect(loadSettings(fresh())).toEqual(DEFAULT_SETTINGS)
+    expect(loadUserSettings(fresh())).toEqual(DEFAULT_SETTINGS)
   })
 
   it('persiste et relit', () => {
@@ -59,7 +60,15 @@ describe('settingsStore', () => {
   it('ignore les valeurs invalides', () => {
     const db = fresh()
     saveSettings(db, { language: 'de' as never, importCopy: 'oui' as never })
-    expect(loadSettings(db)).toEqual(DEFAULT_SETTINGS)
+    expect(loadUserSettings(db)).toEqual(DEFAULT_SETTINGS)
+  })
+
+  it('sans clé de catalogue saisie, passe par le proxy ; une clé saisie est gardée', () => {
+    const db = fresh()
+    expect(loadSettings(db)).toMatchObject({ igdbClientId: PROXY_KEY, igdbClientSecret: PROXY_KEY, tgdbApiKey: PROXY_KEY, sgdbApiKey: PROXY_KEY, raApiKey: '' })
+    saveSettings(db, { tgdbApiKey: 'ma-cle' })
+    expect(loadSettings(db).tgdbApiKey).toBe('ma-cle')
+    expect(loadUserSettings(db).igdbClientId).toBe('')
   })
 
   it('tolère une valeur JSON corrompue', () => {

@@ -1,3 +1,4 @@
+import { PROXY_HEADERS, PROXY_KEY, PROXY_URL } from '@shared/proxy'
 import type { DatabaseSync } from 'node:sqlite'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -69,7 +70,7 @@ export async function limited<T>(fn: () => Promise<T>): Promise<T> {
 async function sgdbApi<T>(db: DatabaseSync, path: string, key: string): Promise<T | null> {
   if (usedToday(db, 'sgdb-img') >= IMG_LIMIT) return null
   recordUse(db, 'sgdb-img', Date.now())
-  const res = await fetch(`${SGDB}${path}`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(30_000) })
+  const res = await fetch(`${key === PROXY_KEY ? `${PROXY_URL}/sgdb` : SGDB}${path}`, { headers: key === PROXY_KEY ? PROXY_HEADERS : { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(30_000) })
   if (!res.ok) return null
   return ((await res.json()) as { data: T }).data
 }

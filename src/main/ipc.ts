@@ -1,7 +1,7 @@
 import { app, dialog, globalShortcut, ipcMain, screen, shell, BrowserWindow } from 'electron'
 import type { DatabaseSync } from 'node:sqlite'
 import type { IpcChannel, IpcChannels, AppPaths } from '@shared/ipc'
-import { loadSettings, saveSettings } from './db/settingsStore'
+import { loadSettings, loadUserSettings, saveSettings } from './db/settingsStore'
 import { setDataDir } from './paths'
 import { checkForUpdate, downloadUpdate, installUpdate, updateState } from './updater'
 import { catalogCount, getGame, queryCatalog } from './catalog/catalogStore'
@@ -46,7 +46,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('update:check', () => checkForUpdate())
   handle('update:download', () => downloadUpdate())
   handle('update:install', () => installUpdate())
-  handle('settings:get', () => loadSettings(db))
+  handle('settings:get', () => loadUserSettings(db))
   handle('settings:set', (patch) => saveSettings(db, patch))
   handle('paths:chooseDataDir', async () => {
     const win = BrowserWindow.getFocusedWindow()
