@@ -50,8 +50,9 @@ export async function igdbQuery<T>(s: Settings, bearer: string, body: string): P
   const wait = lastCall + 300 - Date.now()
   if (wait > 0) await new Promise((r) => setTimeout(r, wait))
   lastCall = Date.now()
-  const res = await fetch('https://api.igdb.com/v4/games', {
-    method: 'POST', headers: { 'Client-ID': s.igdbClientId, Authorization: `Bearer ${bearer}` }, body, signal: AbortSignal.timeout(30_000)
+  const viaProxy = s.igdbClientId === PROXY_KEY
+  const res = await fetch(viaProxy ? `${PROXY_URL}/igdb` : 'https://api.igdb.com/v4/games', {
+    method: 'POST', headers: viaProxy ? PROXY_HEADERS : { 'Client-ID': s.igdbClientId, Authorization: `Bearer ${bearer}` }, body, signal: AbortSignal.timeout(30_000)
   })
   if (!res.ok) throw new Error(`IGDB HTTP ${res.status}`)
   return await res.json() as T[]
