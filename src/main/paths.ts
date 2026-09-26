@@ -7,8 +7,8 @@ import type { AppPaths } from '@shared/ipc'
 const bootstrapFile = (): string => join(app.getPath('userData'), 'bootstrap.json')
 
 function defaultDataDir(): string {
-  // Dev : <racine du projet>\data. Packagé : <dossier de l'exe>\data.
-  return app.isPackaged ? join(dirname(app.getPath('exe')), 'data') : join(app.getAppPath(), 'data')
+  // Dev : <racine du projet>\data. Packagé : <userData>\data (l'installateur et les mises à jour n'y touchent jamais).
+  return app.isPackaged ? join(app.getPath('userData'), 'data') : join(app.getAppPath(), 'data')
 }
 
 export function resolveDataDir(): string {

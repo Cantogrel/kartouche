@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { IpcChannel, IpcChannels, AppPaths } from '@shared/ipc'
 import { loadSettings, saveSettings } from './db/settingsStore'
 import { setDataDir } from './paths'
+import { checkForUpdate, downloadUpdate, installUpdate, updateState } from './updater'
 import { catalogCount, getGame, queryCatalog } from './catalog/catalogStore'
 import { syncCatalog } from './catalog/sync'
 import { getDetails, providerStatus, type MetadataProvider } from './catalog/providers'
@@ -41,6 +42,10 @@ function handle<C extends IpcChannel>(channel: C, fn: Handler<C>): void {
 export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVersion: string }): void {
   const { db, paths } = ctx
   handle('app:info', () => ({ version: app.getVersion(), osLocale: app.getLocale(), sqlite: ctx.sqliteVersion, paths }))
+  handle('update:state', () => updateState())
+  handle('update:check', () => checkForUpdate())
+  handle('update:download', () => downloadUpdate())
+  handle('update:install', () => installUpdate())
   handle('settings:get', () => loadSettings(db))
   handle('settings:set', (patch) => saveSettings(db, patch))
   handle('paths:chooseDataDir', async () => {

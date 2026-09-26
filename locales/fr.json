@@ -268,5 +268,17 @@
   "bp.noCollections": "Aucune collection pour l'instant. Créez-en une depuis le mode classique (Bibliothèque → + Collection).",
   "bp.emptyCollection": "Cette collection n'a aucun jeu jouable.",
   "saves.location": "Emplacement : {p}",
-  "saves.file": "1 fichier"
+  "saves.file": "1 fichier",
+  "update.title": "Mises à jour de l’app",
+  "update.idle": "Les mises à jour sont vérifiées automatiquement au démarrage.",
+  "update.checking": "Vérification…",
+  "update.none": "RomVault est à jour.",
+  "update.available": "La version {version} est disponible.",
+  "update.downloading": "Téléchargement… {percent} %",
+  "update.ready": "La version {version} est prête à être installée.",
+  "update.error": "Échec de la vérification : {error}",
+  "update.unavailable": "Les mises à jour ne fonctionnent que dans l’app installée.",
+  "update.check": "Vérifier les mises à jour",
+  "update.download": "Télécharger",
+  "update.install": "Redémarrer et installer"
 }

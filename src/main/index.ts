@@ -7,6 +7,7 @@ import { registerIpc } from './ipc'
 import { getImage } from './catalog/images'
 import { getGame, rebuildDerived } from './catalog/catalogStore'
 import { loadSettings } from './db/settingsStore'
+import { initUpdater } from './updater'
 
 // Images du catalogue servies depuis le cache disque : rvimg://card/<id du jeu> (vignette) et rvimg://hero/<id du jeu> (bannière)
 protocol.registerSchemesAsPrivileged([{ scheme: 'rvimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
@@ -51,5 +52,6 @@ app.whenReady().then(() => {
   })
   registerIpc({ db, paths, sqliteVersion: v })
   createWindow()
+  initUpdater()
 })
 app.on('window-all-closed', () => app.quit())

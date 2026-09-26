@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ProviderStatus } from '@shared/catalog'
+import type { UpdateState } from '@shared/ipc'
 import { t } from '@/i18n'
 import { Button } from '@/ui'
 import { useSettings } from '@/store/settings'
@@ -15,6 +16,16 @@ export function Settings() {
   const [providers, setProviders] = useState<ProviderStatus[]>([])
   useEffect(() => { if (section === 'apiKeys') void window.api.invoke('providers:status').then(setProviders) }, [section, settings.igdbClientId, settings.igdbClientSecret, settings.tgdbApiKey, settings.sgdbApiKey])
   const quota = (id: string): string | null => { const p = providers.find((x) => x.id === id); return p?.configured ? t('settings.quota', { used: p.usedToday, limit: p.dailyLimit }) : null }
+
+  const [upd, setUpd] = useState<UpdateState | null>(null)
+  useEffect(() => {
+    if (section !== 'about') return
+    void window.api.invoke('update:state').then(setUpd)
+    return window.api.on('update:state', setUpd)
+  }, [section])
+  const updateLabel = !upd || upd.status === 'idle' ? t('update.idle')
+    : upd.status === 'error' ? t('update.error', { error: upd.error ?? '' })
+    : t(`update.${upd.status}`, { version: upd.version ?? '', percent: upd.percent })
 
   const chooseDir = async (): Promise<void> => {
     const r = await window.api.invoke('paths:chooseDataDir')
@@ -116,7 +127,16 @@ export function Settings() {
         )}
 
         {section === 'about' && info && (
-          <p className="muted">RomVault v{info.version} · SQLite {info.sqlite}</p>
+          <>
+            <p className="muted">RomVault v{info.version} · SQLite {info.sqlite}</p>
+            <h3>{t('update.title')}</h3>
+            <p className="muted">{updateLabel}</p>
+            <div className="row">
+              {(!upd || ['idle', 'none', 'error', 'unavailable'].includes(upd.status)) && <Button onClick={() => void window.api.invoke('update:check').then(setUpd)}>{t('update.check')}</Button>}
+              {upd?.status === 'available' && <Button variant="primary" onClick={() => void window.api.invoke('update:download')}>{t('update.download')}</Button>}
+              {upd?.status === 'ready' && <Button variant="primary" onClick={() => void window.api.invoke('update:install')}>{t('update.install')}</Button>}
+            </div>
+          </>
         )}
       </div>
     </div>

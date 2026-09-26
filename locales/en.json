@@ -268,5 +268,17 @@
   "bp.noCollections": "No collection yet. Create one from the classic mode (Library → + Collection).",
   "bp.emptyCollection": "This collection has no playable game.",
   "saves.location": "Location: {p}",
-  "saves.file": "1 file"
+  "saves.file": "1 file",
+  "update.title": "App updates",
+  "update.idle": "Updates are checked automatically at startup.",
+  "update.checking": "Checking…",
+  "update.none": "RomVault is up to date.",
+  "update.available": "Version {version} is available.",
+  "update.downloading": "Downloading… {percent}%",
+  "update.ready": "Version {version} is ready to install.",
+  "update.error": "Update check failed: {error}",
+  "update.unavailable": "Updates only work in the installed app.",
+  "update.check": "Check for updates",
+  "update.download": "Download",
+  "update.install": "Restart and install"
 }

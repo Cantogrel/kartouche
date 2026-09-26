@@ -99,6 +99,19 @@ export interface IpcChannels {
   'game:stop': { req: number; res: void }
   'game:running': { req: void; res: number[] }
   'providers:status': { req: void; res: ProviderStatus[] }
+  'update:state': { req: void; res: UpdateState }
+  'update:check': { req: void; res: UpdateState }
+  'update:download': { req: void; res: void }
+  /** Ferme l'app et installe la mise à jour téléchargée. */
+  'update:install': { req: void; res: void }
+}
+
+export interface UpdateState {
+  /** unavailable = app non installée (développement). */
+  status: 'idle' | 'checking' | 'available' | 'none' | 'downloading' | 'ready' | 'error' | 'unavailable'
+  version: string | null
+  percent: number
+  error: string | null
 }
 
 /** Événements poussés main → renderer. */
@@ -107,6 +120,7 @@ export interface IpcEvents {
   'library:progress': LibraryProgress
   'emulators:progress': EmulatorProgress
   'game:session': GameSession
+  'update:state': UpdateState
 }
 export type IpcChannel = keyof IpcChannels
 
