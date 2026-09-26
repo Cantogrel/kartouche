@@ -15,7 +15,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'rvimg', privileges: { standard:
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1400, height: 860, minWidth: 1000, minHeight: 640,
-    backgroundColor: '#0e0e0e', frame: false, show: false,
+    backgroundColor: '#0e0e0e', frame: false, show: false, icon: join(app.getAppPath(), 'build/icon.png'),
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: true }
   })
   win.once('ready-to-show', () => win.show())

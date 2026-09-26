@@ -6,9 +6,11 @@ directories:
 files:
   - out/**
   - locales/**
+  - build/icon.png
   - package.json
 asar: true
 win:
+  icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64]
@@ -20,6 +22,8 @@ nsis:
   include: build/installer.nsh
   deleteAppDataOnUninstall: false
   shortcutName: RomVault
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
 # Mises à jour automatiques : releases GitHub (owner/repo à renseigner avant la 1re publication).
 publish:
   provider: github

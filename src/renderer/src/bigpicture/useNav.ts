@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react'
+import { useSettings } from '@/store/settings'
+import type { Settings } from '@shared/settings'
 import { heldActions, pickNext, Repeater, type Dir, type PadAction } from './nav'
 
 const KEYS: Record<string, PadAction> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Escape: 'back', F11: 'start', PageUp: 'prev', PageDown: 'next', Home: 'prevFilter', End: 'nextFilter' }
@@ -36,6 +38,8 @@ export function moveFocus(dir: Dir): void {
   if (k >= 0) focusEl(others[k])
 }
 
+const cfg = (): Settings => useSettings.getState().settings
+
 /**
  * Branche la manette (API Gamepad, profil standard) et le clavier sur `onAction`.
  * La manette est lue à chaque image ; les directions se répètent en maintien. Le bouton A clique l'élément ciblé.
@@ -50,7 +54,7 @@ export function useNav(onAction: (a: PadAction, fromKeyboard: boolean) => void, 
     let raf = 0
     const heldNow = (): Set<PadAction> => {
       const held = new Set<PadAction>()
-      for (const pad of navigator.getGamepads()) if (pad) heldActions(pad).forEach((a) => held.add(a))
+      for (const pad of navigator.getGamepads()) if (pad) heldActions(pad, { swapAB: cfg().padSwapAB, threshold: cfg().padThreshold }).forEach((a) => held.add(a))
       return held
     }
     // Un bouton déjà maintenu au montage (celui qui a ouvert cet écran) ne compte pas comme un nouvel appui.

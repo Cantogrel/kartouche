@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import { useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 /** Dégradé déterministe servant de jaquette tant qu'aucune image n'est disponible. */
@@ -21,13 +22,13 @@ export const Button = ({ variant = 'default', className = '', ...p }: ButtonHTML
 )
 
 export const Pill = ({ active, children, onClick }: { active?: boolean; children: ReactNode; onClick?: () => void }) => (
-  <button className={`pill${active ? ' active' : ''}`} onClick={onClick}>{children}</button>
+  <button className={`pill${active ? ' active' : ''}`} aria-pressed={active} onClick={onClick}>{children}</button>
 )
 
 export const PageHead = ({ title, onBack, children }: { title: string; onBack?: () => void; children?: ReactNode }) => (
   <div className="pagehead">
     <div className="pagehead-l">
-      {onBack && <button className="back" onClick={onBack} aria-label="back">←</button>}
+      {onBack && <button className="back" onClick={onBack} aria-label={t('back')} title={t('back')}>←</button>}
       <h1>{title}</h1>
     </div>
     <div className="pagehead-r">{children}</div>
@@ -65,8 +66,8 @@ export function FilterGroup({ title, count, options, groups, selected, onToggle,
 export const GameCard = ({ title, console: cons, hasFile, progress, minutes, onClick }: {
   title: string; console: string; hasFile: boolean; progress?: number; minutes?: number; onClick?: () => void
 }) => (
-  <div className={`card${hasFile ? '' : ' nofile'}`} tabIndex={0} style={artStyle(title)} onClick={onClick}
-    onKeyDown={(e) => e.key === 'Enter' && onClick?.()}>
+  <div className={`card${hasFile ? '' : ' nofile'}`} role="button" tabIndex={0} aria-label={`${title} (${cons})`} style={artStyle(title)} onClick={onClick}
+    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.() } }}>
     <div className="art">{title}</div>
     <Badge side="l">{cons}</Badge>
     {hasFile && <Badge side="r">✓</Badge>}

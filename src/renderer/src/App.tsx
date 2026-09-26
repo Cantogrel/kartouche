@@ -23,7 +23,7 @@ const ICON: Record<string, string> = { home: '⌂', catalog: '▦', library: '�
 
 export default function App() {
   const { route, gameId, go, back, history, librarySearch, setLibrarySearch, pageTitle, bigPicture, setBigPicture } = useApp()
-  const { ready, load } = useSettings()
+  const { ready, load, lang } = useSettings()
   const [catalogQuery, setCatalogQuery] = useState('')
   const libEntries = useLibrary((s) => s.entries)
   // Réglage « démarrer en Big Picture » : appliqué une seule fois, au premier chargement.
@@ -32,33 +32,42 @@ export default function App() {
   useEffect(() => { if (ready && !started.current) { started.current = true; if (startBp) setBigPicture(true) } }, [ready, startBp, setBigPicture])
   useEffect(() => { void load(); void useLibrary.getState().refresh(); void useEmulators.getState().refresh(); return useEmulators.getState().listen() }, [load])
 
+  const { uiScale, accent, reduceMotion } = useSettings((s) => s.settings)
+  useEffect(() => {
+    const el = document.documentElement
+    el.style.zoom = String(uiScale)
+    el.dataset.accent = accent
+    el.classList.toggle('reduce-motion', reduceMotion)
+  }, [uiScale, accent, reduceMotion])
+
   if (!ready) return null
   if (bigPicture) return <BigPicture onExit={() => setBigPicture(false)} />
   const title = route === 'game' && pageTitle ? pageTitle : t(`nav.${route === 'game' ? 'catalog' : route}`)
   const activeNav = route === 'game' ? (gameId?.startsWith('lib:') ? 'library' : 'catalog') : route
   return (
-    <div className="app">
+    <div className="app" lang={lang}>
+      <a className="skip" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById('main')?.focus() }}>{t('a11y.skip')}</a>
       <div className="titlebar">
         <span>RomVault</span>
         <div className="right">
           <button className="bp-launch" onClick={() => setBigPicture(true)}>▶ {t('bigpicture')}</button>
-          <button onClick={() => window.api.window.minimize()}>–</button>
-          <button onClick={() => window.api.window.maximize()}>▢</button>
-          <button onClick={() => window.api.window.close()}>✕</button>
+          <button aria-label={t('a11y.minimize')} title={t('a11y.minimize')} onClick={() => window.api.window.minimize()}>–</button>
+          <button aria-label={t('a11y.maximize')} title={t('a11y.maximize')} onClick={() => window.api.window.maximize()}>▢</button>
+          <button aria-label={t('a11y.close')} title={t('a11y.close')} onClick={() => window.api.window.close()}>✕</button>
         </div>
       </div>
       <div className="body">
-        <nav className="sidebar">
+        <nav className="sidebar" aria-label={t('a11y.nav')}>
           {NAV.map((r) => (
-            <button key={r} className={`nav-item${activeNav === r ? ' active' : ''}`} onClick={() => go(r)}>
-              <span className="ico">{ICON[r]}</span>{t(`nav.${r}`)}
+            <button key={r} className={`nav-item${activeNav === r ? ' active' : ''}`} aria-current={activeNav === r ? 'page' : undefined} onClick={() => go(r)}>
+              <span className="ico" aria-hidden>{ICON[r]}</span>{t(`nav.${r}`)}
             </button>
           ))}
           <div className="side-lib">
           <SearchBox className="side" placeholder={t('searchLibrary')} value={librarySearch} onChange={setLibrarySearch} clearLabel={t('search.clear')} />
-          <div className="side-games">
+          <div className="side-games" role="group" aria-label={t('a11y.games')}>
             {libEntries.filter((g) => !librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase())).sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((g) => (
-              <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} onClick={() => go('game', `lib:${g.id}`)} onContextMenu={onEntryContext(g.id)}>
+              <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} aria-current={gameId === `lib:${g.id}` && route === 'game' ? 'page' : undefined} onClick={() => go('game', `lib:${g.id}`)} onContextMenu={onEntryContext(g.id)}>
                 <GameIcon gameId={g.gameId} console={g.console} />
                 <span className="side-name">{g.title}</span>{g.pinned && <span className="side-pin">★</span>}
               </button>
@@ -66,7 +75,7 @@ export default function App() {
           </div>
           </div>
         </nav>
-        <main className="main">
+        <main className="main" id="main" tabIndex={-1}>
           <PageHead title={title} onBack={history.length ? back : undefined}>
             {route === 'catalog' && <SearchBox placeholder={t('search')} value={catalogQuery} onChange={setCatalogQuery} clearLabel={t('search.clear')} />}
           </PageHead>
@@ -80,7 +89,7 @@ export default function App() {
       </div>
       <EntryMenu />
       <Dialogs />
-      <div className="statusbar">{t('footer.noJob')}</div>
+      <div className="statusbar" role="status" aria-live="polite">{t('footer.noJob')}</div>
     </div>
   )
 }

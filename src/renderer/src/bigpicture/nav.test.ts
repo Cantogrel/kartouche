@@ -28,6 +28,13 @@ describe('manette', () => {
     expect([...heldActions(pad([], [-0.9, 0.2]))]).toEqual(['left'])
     expect(heldActions(pad([], [0.3, 0.3])).size).toBe(0)
   })
+  it('inverse A et B et règle le seuil du stick', () => {
+    expect([...heldActions(pad([0]), { swapAB: true })]).toEqual(['back'])
+    expect([...heldActions(pad([1]), { swapAB: true })]).toEqual(['accept'])
+    expect([...heldActions(pad([2]), { swapAB: true })]).toEqual(['x'])
+    expect([...heldActions(pad([], [0.4, 0]), { threshold: 0.3 })]).toEqual(['right'])
+    expect(heldActions(pad([], [0.4, 0]), { threshold: 0.6 }).size).toBe(0)
+  })
   it('déclenche une fois, puis répète les directions seulement', () => {
     const r = new Repeater(400, 100)
     expect(r.update(new Set(['right', 'accept']), 0)).toEqual(['right', 'accept'])

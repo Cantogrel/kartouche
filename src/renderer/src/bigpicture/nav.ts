@@ -37,13 +37,17 @@ const BUTTONS: [number, PadAction][] = [
 const STICK = 0.6
 
 /** Actions maintenues à cet instant (croix directionnelle ou stick gauche, boutons du profil « standard »). */
-export function heldActions(pad: PadLike): Set<PadAction> {
+export function heldActions(pad: PadLike, opts: { swapAB?: boolean; threshold?: number } = {}): Set<PadAction> {
   const out = new Set<PadAction>()
-  for (const [i, a] of BUTTONS) if (pad.buttons[i]?.pressed) out.add(a)
+  const stick = opts.threshold ?? STICK
+  for (const [i, a] of BUTTONS) {
+    const act = opts.swapAB && i < 2 ? BUTTONS[1 - i][1] : a
+    if (pad.buttons[i]?.pressed) out.add(act)
+  }
   const ax = pad.axes[0] ?? 0
   const ay = pad.axes[1] ?? 0
-  if (ax > STICK) out.add('right'); else if (ax < -STICK) out.add('left')
-  if (ay > STICK) out.add('down'); else if (ay < -STICK) out.add('up')
+  if (ax > stick) out.add('right'); else if (ax < -stick) out.add('left')
+  if (ay > stick) out.add('down'); else if (ay < -stick) out.add('up')
   return out
 }
 

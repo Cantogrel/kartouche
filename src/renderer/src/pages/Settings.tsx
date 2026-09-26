@@ -4,7 +4,7 @@ import type { UpdateState } from '@shared/ipc'
 import { t } from '@/i18n'
 import { Button } from '@/ui'
 import { useSettings } from '@/store/settings'
-import type { LanguageSetting } from '@shared/settings'
+import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting } from '@shared/settings'
 
 const SECTIONS = ['general', 'import', 'emulation', 'controller', 'appearance', 'apiKeys', 'about'] as const
 type Section = (typeof SECTIONS)[number]
@@ -96,6 +96,31 @@ export function Settings() {
           </>
         )}
 
+        {section === 'controller' && <ControllerSection />}
+
+        {section === 'appearance' && (
+          <>
+            <div className="field">
+              {t('settings.accent')}
+              <div className="row" role="radiogroup" aria-label={t('settings.accent')}>
+                {ACCENTS.map((a) => (
+                  <button key={a} role="radio" aria-checked={settings.accent === a} aria-label={t(`accent.${a}`)} title={t(`accent.${a}`)} className={`swatch accent-${a}${settings.accent === a ? ' on' : ''}`} onClick={() => void update({ accent: a as Accent })} />
+                ))}
+              </div>
+            </div>
+            <label className="field">
+              {t('settings.uiScale')}
+              <select value={settings.uiScale} onChange={(e) => void update({ uiScale: Number(e.target.value) })}>
+                {UI_SCALES.map((v) => <option key={v} value={v}>{Math.round(v * 100)} %</option>)}
+              </select>
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={settings.reduceMotion} onChange={(e) => void update({ reduceMotion: e.target.checked })} /> {t('settings.reduceMotion')}
+            </label>
+            <p className="muted">{t('settings.reduceMotionHint')}</p>
+          </>
+        )}
+
         {section === 'apiKeys' && (
           <>
             <p className="muted">{t('settings.raHint')}</p>
@@ -122,5 +147,43 @@ export function Settings() {
         )}
       </div>
     </div>
+  )
+}
+
+/** Manette : réglages du Big Picture + contrôle en direct des manettes détectées (API Gamepad, profil standard). */
+function ControllerSection() {
+  const { settings, update } = useSettings()
+  const [pads, setPads] = useState<{ id: string; pressed: string[] }[]>([])
+  useEffect(() => {
+    const names = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Select', 'Start', 'L3', 'R3', '↑', '↓', '←', '→']
+    const timer = window.setInterval(() => {
+      const list = [...navigator.getGamepads()].filter((p): p is Gamepad => !!p).map((p) => ({
+        id: p.id.replace(/\s*\(.*$/, ''),
+        pressed: [...p.buttons].flatMap((b, i) => (b.pressed ? [names[i] ?? String(i)] : []))
+      }))
+      setPads((old) => (JSON.stringify(old) === JSON.stringify(list) ? old : list))
+    }, 150)
+    return () => window.clearInterval(timer)
+  }, [])
+  return (
+    <>
+      <label className="check">
+        <input type="checkbox" checked={settings.padSwapAB} onChange={(e) => void update({ padSwapAB: e.target.checked })} /> {t('settings.padSwap')}
+      </label>
+      <p className="muted">{t('settings.padSwapHint')}</p>
+      <label className="field">
+        {t('settings.padThreshold')}
+        <input type="range" min={0.3} max={0.9} step={0.05} value={settings.padThreshold} onChange={(e) => void update({ padThreshold: Number(e.target.value) })} />
+        <span className="muted">{t('settings.padThresholdHint')}</span>
+      </label>
+      <h3>{t('settings.padDetected')}</h3>
+      {pads.length === 0 && <p className="muted">{t('settings.padNone')}</p>}
+      {pads.map((p) => (
+        <div key={p.id} className="copy-row">
+          <strong>{p.id}</strong>
+          <div className="muted">{p.pressed.length ? p.pressed.join(' + ') : t('settings.padIdle')}</div>
+        </div>
+      ))}
+    </>
   )
 }

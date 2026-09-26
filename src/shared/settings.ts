@@ -19,7 +19,19 @@ export interface Settings {
   raApiKey: string
   /** Copie automatique des sauvegardes à la fin de chaque partie. */
   autoBackupSaves: boolean
+  /** Manette : inverser A et B (valider = B, retour = A, disposition Nintendo). */
+  padSwapAB: boolean
+  /** Manette : seuil d'inclinaison du stick pour compter comme une direction (0.3 = sensible, 0.9 = ferme). */
+  padThreshold: number
+  /** Apparence : échelle de l'interface, couleur d'accent, animations réduites. */
+  uiScale: number
+  accent: Accent
+  reduceMotion: boolean
 }
+
+export const ACCENTS = ['white', 'violet', 'blue', 'green', 'orange'] as const
+export type Accent = (typeof ACCENTS)[number]
+export const UI_SCALES = [0.9, 1, 1.1, 1.25, 1.5] as const
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
@@ -33,7 +45,12 @@ export const DEFAULT_SETTINGS: Settings = {
   sgdbApiKey: '',
   raUsername: '',
   raApiKey: '',
-  autoBackupSaves: true
+  autoBackupSaves: true,
+  padSwapAB: false,
+  padThreshold: 0.6,
+  uiScale: 1,
+  accent: 'white',
+  reduceMotion: false
 }
 
 /** Fusionne une saisie partielle non fiable avec les valeurs actuelles : toute valeur invalide est ignorée. */
@@ -53,6 +70,11 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (typeof p.raUsername === 'string') out.raUsername = p.raUsername.trim()
   if (typeof p.raApiKey === 'string') out.raApiKey = p.raApiKey.trim()
   if (typeof p.autoBackupSaves === 'boolean') out.autoBackupSaves = p.autoBackupSaves
+  if (typeof p.padSwapAB === 'boolean') out.padSwapAB = p.padSwapAB
+  if (typeof p.padThreshold === 'number' && p.padThreshold >= 0.3 && p.padThreshold <= 0.9) out.padThreshold = Math.round(p.padThreshold * 100) / 100
+  if (typeof p.uiScale === 'number' && (UI_SCALES as readonly number[]).includes(p.uiScale)) out.uiScale = p.uiScale
+  if (typeof p.accent === 'string' && (ACCENTS as readonly string[]).includes(p.accent)) out.accent = p.accent as Accent
+  if (typeof p.reduceMotion === 'boolean') out.reduceMotion = p.reduceMotion
   return out
 }
 

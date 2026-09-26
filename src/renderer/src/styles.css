@@ -238,3 +238,32 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .modal-item, .modal-item input, .collection-select, .collection-select option { cursor: pointer; }
 .modal-item:hover { background: var(--hover); }
 .save-path { word-break: break-all; }
+
+/* Accessibilité : focus clavier visible partout, lien d'évitement, mouvement réduit */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card:focus-visible, .row-card:focus-visible { outline-offset: 0; border-color: var(--accent); }
+.search:focus-visible, .modal-filter:focus-visible, .collection-input:focus-visible, select:focus-visible, .field input:focus-visible { outline-offset: 0; border-color: var(--accent); }
+.modal:focus, .main:focus { outline: none; }
+.skip { position: fixed; left: 8px; top: -60px; z-index: 200; background: var(--accent); color: var(--accent-fg); padding: 6px 12px; border-radius: var(--radius); font-weight: 600; text-decoration: none; }
+.skip:focus { top: 8px; }
+.nav-item, .btn, .pill, .card, .row-card { transition: background-color .12s, border-color .12s, transform .15s; }
+.btn:active, .pill:active { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: default; }
+.titlebar button:focus-visible { outline-offset: -3px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .card:hover, .bp-tile:focus { transform: none; }
+}
+
+/* Apparence : couleur d'accent, animations réduites, pastilles du réglage */
+:root[data-accent='violet'] { --accent: #9a8cff; }
+:root[data-accent='blue'] { --accent: #4aa3ff; }
+:root[data-accent='green'] { --accent: #3ecf8e; }
+:root[data-accent='orange'] { --accent: #ff9f43; }
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+.reduce-motion .card:hover, .reduce-motion .bp-tile:focus { transform: none; }
+.swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--border-strong); padding: 0; }
+.swatch.on { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--text-strong); }
+.swatch.accent-white { background: #fff; } .swatch.accent-violet { background: #9a8cff; } .swatch.accent-blue { background: #4aa3ff; }
+.swatch.accent-green { background: #3ecf8e; } .swatch.accent-orange { background: #ff9f43; }
+input[type='range'] { accent-color: var(--accent); max-width: 320px; }

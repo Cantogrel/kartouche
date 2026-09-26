@@ -100,7 +100,7 @@ export function Catalog({ query }: { query: string }) {
         </div>
         {status && status.total === 0 && !status.syncing && <p className="muted">{t('catalog.empty')}</p>}
         {games.map((g) => (
-          <div key={g.id} className="row-card" tabIndex={0} onMouseEnter={() => prefetch(g.id)} onFocus={() => prefetch(g.id)} onClick={() => go('game', String(g.id))} onKeyDown={(e) => e.key === 'Enter' && go('game', String(g.id))}>
+          <div key={g.id} className="row-card" role="button" tabIndex={0} onMouseEnter={() => prefetch(g.id)} onFocus={() => prefetch(g.id)} onClick={() => go('game', String(g.id))} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go('game', String(g.id)) } }}>
             <Cover className="thumb" gameId={g.id} title={g.name}><Badge>{labelOf(g.console)}</Badge></Cover>
             <div>
               <div className="title">{g.name}</div>
