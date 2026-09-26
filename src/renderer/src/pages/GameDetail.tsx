@@ -6,6 +6,7 @@ import { CatalogGameDetail, LibraryFile } from './CatalogGame'
 import { useLibrary } from '@/store/library'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
 import { useApp } from '@/store/app'
+import { PlayButton } from '@/ui/PlayButton'
 import { useEffect } from 'react'
 
 /** Les ids numériques viennent du catalogue ; les autres sont des jeux de démonstration (bibliothèque, Phase 4). */
@@ -24,7 +25,7 @@ function LibraryGameDetail({ entryId }: { entryId: number }) {
   useEffect(() => { if (entry) setPageTitle(entry.title) }, [entry, setPageTitle])
   if (!entry) return null
   if (entry.gameId !== null) return <CatalogGameDetail id={entry.gameId} entry={entry} />
-  return <div className="content"><div className="panel"><h3>{entry.title}</h3><p className="muted">{t('match.none')}</p><LibraryFile entry={entry} /><div className="row" style={{ marginTop: 12 }}>{entry.missing && <Button variant="primary" onClick={() => void useLibrary.getState().link()}>{t('linkRom')}</Button>}<Button onClick={(e) => openEntryMenuAt(e, entry.id)}>⚙ {t('options')}</Button></div></div></div>
+  return <div className="content"><div className="panel"><h3>{entry.title}</h3><p className="muted">{t('match.none')}</p><LibraryFile entry={entry} /><div className="row" style={{ marginTop: 12 }}>{entry.missing ? <Button variant="primary" onClick={() => void useLibrary.getState().link()}>{t('linkRom')}</Button> : <PlayButton entry={entry} />}<Button onClick={(e) => openEntryMenuAt(e, entry.id)}>⚙ {t('options')}</Button></div></div></div>
 }
 
 function DemoGameDetail({ gameId }: { gameId?: string }) {

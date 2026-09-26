@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, shell, BrowserWindow } from 'electron'
+import { app, dialog, globalShortcut, ipcMain, screen, shell, BrowserWindow } from 'electron'
 import type { DatabaseSync } from 'node:sqlite'
 import type { IpcChannel, IpcChannels, AppPaths } from '@shared/ipc'
 import { loadSettings, saveSettings } from './db/settingsStore'
@@ -14,6 +14,13 @@ import { importPaths } from './library/importer'
 import { addCatalogGame, entryPath, listLibrary, refreshMissing, removeEntry } from './library/libraryStore'
 import { ROM_EXTENSIONS } from '@shared/library'
 import { resolveLanguage } from '@shared/settings'
+import { EMULATORS, emulatorById, type EmulatorState } from '@shared/emulators'
+import { installEmulator, uninstallEmulator } from './emulators/installer'
+import { latestRelease } from './emulators/source'
+import { getRow, listEmulators, saveEmulator } from './emulators/emulatorStore'
+import { isRunning, launchGame, openEmulator, runningCount, stopAllGames, stopGame } from './emulators/launcher'
+import { dirname, join } from 'node:path'
+import { mkdirSync } from 'node:fs'
 
 /** Ordre de la cascade de fiches enrichies. */
 const PROVIDERS: MetadataProvider[] = [igdb, tgdb]
@@ -97,6 +104,55 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('library:remove', (req) => removeEntry(db, req.id, req.action, paths.saves))
   handle('library:add', (gameId) => addCatalogGame(db, gameId))
   handle('library:reveal', (id) => { const p = entryPath(db, id); if (p) shell.showItemInFolder(p) })
+  const broadcast = (channel: string, payload: unknown): void => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send(channel, payload))
+  const installing = new Set<string>()
+  handle('emulators:list', () => listEmulators(db))
+  handle('emulators:install', async (id) => {
+    const def = emulatorById(id)
+    if (!def) return { ok: false, error: 'unknown' }
+    if (installing.has(id)) return { ok: false, error: 'busy' }
+    installing.add(id)
+    try {
+      const d = screen.getPrimaryDisplay()
+      const ctx = { lang: resolveLanguage(loadSettings(db).language, app.getLocale()), displayHeight: Math.round(d.size.height * d.scaleFactor) }
+      await installEmulator(db, def, paths, (p) => broadcast('emulators:progress', p), ctx)
+      return { ok: true }
+    } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) } } finally { installing.delete(id) }
+  })
+  handle('emulators:uninstall', (id) => uninstallEmulator(db, id))
+  handle('emulators:locate', async (id) => {
+    const def = emulatorById(id)
+    if (!def) return null
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = { properties: ['openFile'] as 'openFile'[], filters: [{ name: def.name, extensions: ['exe'] }] }
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (res.canceled || !res.filePaths[0]) return null
+    saveEmulator(db, { id, version: null, dir: dirname(res.filePaths[0]), exe: res.filePaths[0], custom: true })
+    return listEmulators(db).find((e) => e.id === id) as EmulatorState
+  })
+  handle('emulators:check', async () => {
+    const installedIds = listEmulators(db).filter((e) => e.installed && !e.custom).map((e) => e.id)
+    return Promise.all(installedIds.map(async (id) => {
+      try { return { id, version: (await latestRelease(EMULATORS.find((e) => e.id === id)!)).version } } catch (e) { return { id, version: null, error: e instanceof Error ? e.message : String(e) } }
+    }))
+  })
+  handle('emulators:open', async ({ id, what }) => {
+    if (what === 'app') return openEmulator(db, id)
+    if (what === 'bios') { const d = join(paths.bios, id); mkdirSync(d, { recursive: true }); await shell.openPath(d); return { ok: true } }
+    const r = getRow(db, id)
+    if (!r) return { ok: false, error: 'notInstalled' }
+    await shell.openPath(r.dir)
+    return { ok: true }
+  })
+  // Raccourci clavier global pendant une partie (l'émulateur a le focus) : Ctrl+Alt+Q ferme le jeu proprement.
+  const QUIT_KEY = 'CommandOrControl+Alt+Q'
+  handle('game:play', (entryId) => launchGame(db, entryId, (s) => {
+    broadcast('game:session', s)
+    if (s.running) { if (!globalShortcut.isRegistered(QUIT_KEY)) globalShortcut.register(QUIT_KEY, stopAllGames) }
+    else if (runningCount() === 0) globalShortcut.unregister(QUIT_KEY)
+  }, join(paths.cache, 'tools')))
+  handle('game:stop', (entryId) => stopGame(entryId))
+  handle('game:running', () => listLibrary(db).map((e) => e.id).filter(isRunning))
   handle('providers:status', () => providerStatus(db, PROVIDERS, loadSettings(db)))
 
   ipcMain.on('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize())

@@ -32,7 +32,11 @@ export const MIGRATIONS: readonly string[] = [
     added_at INTEGER NOT NULL, play_minutes INTEGER NOT NULL DEFAULT 0, last_played INTEGER
   );
   CREATE INDEX library_game ON library (game_id);
-  CREATE INDEX library_crc ON library (console, crc)`
+  CREATE INDEX library_crc ON library (console, crc)`,
+  // v7 : émulateurs installés (ou indiqués à la main : custom = 1) ; dir = dossier d'installation, exe = chemin complet de l'exécutable
+  `CREATE TABLE emulators (
+    id TEXT PRIMARY KEY, version TEXT, dir TEXT NOT NULL, exe TEXT NOT NULL, custom INTEGER NOT NULL DEFAULT 0, installed_at INTEGER NOT NULL
+  )`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

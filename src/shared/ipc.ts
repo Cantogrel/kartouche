@@ -1,5 +1,6 @@
 import type { Settings } from './settings'
 import type { ImportRequest, ImportResult, LibraryEntry, LibraryProgress } from './library'
+import type { EmulatorProgress, EmulatorState, GameSession, LatestVersion, LaunchResult } from './emulators'
 import type { CatalogGame, CatalogPage, CatalogQuery, GameDetails, ProviderStatus, SyncProgress, SyncResult } from './catalog'
 
 export interface AppPaths {
@@ -48,6 +49,20 @@ export interface IpcChannels {
   'library:add': { req: number; res: LibraryEntry | null }
   /** Affiche la ROM dans l'Explorateur. */
   'library:reveal': { req: number; res: void }
+  'emulators:list': { req: void; res: EmulatorState[] }
+  /** Télécharge et installe (ou met à jour) un émulateur ; la progression arrive par 'emulators:progress'. */
+  'emulators:install': { req: string; res: { ok: boolean; error?: string } }
+  'emulators:uninstall': { req: string; res: void }
+  /** Indique à la main l'exécutable d'un émulateur déjà installé ; null si annulé. */
+  'emulators:locate': { req: string; res: EmulatorState | null }
+  /** Interroge les sources pour connaître la dernière version de chaque émulateur installé. */
+  'emulators:check': { req: void; res: LatestVersion[] }
+  /** Ouvre l'émulateur seul ('app'), son dossier ('dir') ou son dossier de BIOS ('bios'). */
+  'emulators:open': { req: { id: string; what: 'app' | 'dir' | 'bios' }; res: LaunchResult }
+  'game:play': { req: number; res: LaunchResult }
+  /** Ferme le jeu proprement (fermeture des fenêtres de l'émulateur, de force au bout de 5 s). */
+  'game:stop': { req: number; res: void }
+  'game:running': { req: void; res: number[] }
   'providers:status': { req: void; res: ProviderStatus[] }
 }
 
@@ -55,6 +70,8 @@ export interface IpcChannels {
 export interface IpcEvents {
   'catalog:progress': SyncProgress
   'library:progress': LibraryProgress
+  'emulators:progress': EmulatorProgress
+  'game:session': GameSession
 }
 export type IpcChannel = keyof IpcChannels
 

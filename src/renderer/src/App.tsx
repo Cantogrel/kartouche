@@ -5,6 +5,7 @@ import { useApp, type Route } from '@/store/app'
 import { PageHead } from '@/ui'
 import { DEMO_GAMES } from '@/data/demo'
 import { useLibrary } from '@/store/library'
+import { useEmulators } from '@/store/emulators'
 import { GameIcon } from '@/ui/ConsoleTile'
 import { EntryMenu, onEntryContext } from '@/ui/EntryMenu'
 import { Library } from '@/pages/Library'
@@ -23,7 +24,7 @@ export default function App() {
   const { ready, load } = useSettings()
   const [catalogQuery, setCatalogQuery] = useState('')
   const libEntries = useLibrary((s) => s.entries)
-  useEffect(() => { void load(); void useLibrary.getState().refresh() }, [load])
+  useEffect(() => { void load(); void useLibrary.getState().refresh(); void useEmulators.getState().refresh(); return useEmulators.getState().listen() }, [load])
 
   if (!ready) return null
   const game = route === 'game' ? DEMO_GAMES.find((g) => g.id === gameId) : undefined

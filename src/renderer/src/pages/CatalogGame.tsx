@@ -9,6 +9,7 @@ import type { CatalogGame, GameDetails } from '@shared/catalog'
 import type { LibraryEntry } from '@shared/library'
 import { useLibrary } from '@/store/library'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
+import { PlayButton } from '@/ui/PlayButton'
 
 /** Fiche d'un jeu du catalogue : données du DAT + description enrichie si un fournisseur (IGDB) est configuré. */
 export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEntry }) {
@@ -42,7 +43,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
           <div className="row">
             {!owned && <Button variant="primary" onClick={() => void addToLibrary(game.id)}>{t('addToLibrary')}</Button>}
             {owned?.missing && <Button variant="primary" onClick={() => void link()}>{t('linkRom')}</Button>}
-            {owned && !owned.missing && <Button variant="primary" disabled>✓ {t('inLibrary')}</Button>}
+            {owned && !owned.missing && <PlayButton entry={owned} />}
             {owned && <Button onClick={(e) => openEntryMenuAt(e, owned.id)}>⚙ {t('options')}</Button>}
           </div>
         </div>

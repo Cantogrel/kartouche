@@ -1,0 +1,334 @@
+import { spawn } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+
+/** Ce dont la configuration automatique a besoin : langue de l'app, taille de l'écran, dossier de BIOS de l'émulateur. */
+export interface ConfigContext {
+  lang: 'en' | 'fr'
+  /** Hauteur de l'écran principal en pixels physiques. */
+  displayHeight: number
+  biosDir: string
+}
+
+/** 1 = jusqu'à 1080p (défaut), 2 = 1440p, 3 = 4K et plus. Sert à choisir la résolution interne de rendu. */
+export const resolutionTier = (displayHeight: number): 1 | 2 | 3 => (displayHeight >= 2160 ? 3 : displayHeight >= 1440 ? 2 : 1)
+
+/** Une valeur = une ligne ; un tableau = la clé répétée (plusieurs liaisons de touches ou de manette, format DuckStation/PCSX2). */
+type IniValue = string | number | boolean | readonly string[]
+type IniPatch = Record<string, Record<string, IniValue>>
+
+const escRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Fusionne des réglages dans un fichier .ini existant (ou vide) : les clés présentes sont mises à jour, les absentes ajoutées,
+ * tout le reste (autres sections, commentaires, réglages de l'utilisateur) est conservé. `sep` : « = » ou « = » sans espaces (style Qt).
+ */
+export function patchIni(text: string, patch: IniPatch, sep = ' = '): string {
+  const nl = text.includes('\r\n') ? '\r\n' : '\n'
+  const lines = text === '' ? [] : text.split(/\r?\n/)
+  for (const [section, keys] of Object.entries(patch)) {
+    let start = lines.findIndex((l) => l.trim() === `[${section}]`)
+    if (start === -1) {
+      if (lines.length && lines[lines.length - 1].trim() !== '') lines.push('')
+      lines.push(`[${section}]`)
+      start = lines.length - 1
+    }
+    let end = lines.findIndex((l, i) => i > start && /^\s*\[.*\]\s*$/.test(l))
+    if (end === -1) end = lines.length
+    for (const [key, raw] of Object.entries(keys)) {
+      const values = Array.isArray(raw) ? (raw as readonly string[]).map(String) : [String(raw)]
+      const re = new RegExp(String.raw`^(\s*${escRe(key)}\s*=\s*).*$`)
+      const at: number[] = []
+      for (let i = start + 1; i < end; i++) if (re.test(lines[i])) at.push(i)
+      if (at.length === values.length) { at.forEach((i, n) => { lines[i] = lines[i].replace(re, (_m, g1: string) => g1 + values[n]) }); continue }
+      // Nombre de lignes différent : on remplace toutes les lignes de la clé, à la place de la première (sinon en fin de section).
+      let ins = at.length ? at[0] : end
+      if (!at.length) while (ins - 1 > start && lines[ins - 1].trim() === '') ins--
+      for (let k = at.length - 1; k >= 0; k--) lines.splice(at[k], 1)
+      end -= at.length
+      lines.splice(ins, 0, ...values.map((v) => `${key}${sep}${v}`))
+      end += values.length
+    }
+  }
+  return lines.join(nl) + (lines.length && lines[lines.length - 1] !== '' ? nl : '')
+}
+
+/** Fichier plat `clé = "valeur"` de RetroArch. */
+export function patchCfg(text: string, patch: Record<string, string | number | boolean>): string {
+  const nl = text.includes('\r\n') ? '\r\n' : '\n'
+  const lines = text === '' ? [] : text.replace(/(\r?\n)+$/, '').split(/\r?\n/)
+  for (const [key, value] of Object.entries(patch)) {
+    const re = new RegExp(`^\\s*${escRe(key)}\\s*=`)
+    const line = `${key} = "${value}"`
+    const at = lines.findIndex((l) => re.test(l))
+    if (at !== -1) lines[at] = line
+    else lines.push(line)
+  }
+  return lines.join(nl) + nl
+}
+
+async function readText(file: string): Promise<string> {
+  return existsSync(file) ? readFile(file, 'utf8') : ''
+}
+
+async function writeIni(file: string, patch: IniPatch, sep?: string): Promise<void> {
+  await mkdir(dirname(file), { recursive: true })
+  await writeFile(file, patchIni(await readText(file), patch, sep))
+}
+
+/** Crée un fichier seulement s'il n'existe pas (YAML, TOML, XML : pas de fusion, on ne touche pas à un fichier existant). */
+async function createOnce(file: string, content: string): Promise<void> {
+  if (existsSync(file)) return
+  await mkdir(dirname(file), { recursive: true })
+  await writeFile(file, content)
+}
+
+/** Réglage Qt « clé\default=false » + « clé=valeur » (Azahar, Eden). */
+const qt = (o: Record<string, string | number | boolean>): Record<string, string | number | boolean> => {
+  const out: Record<string, string | number | boolean> = {}
+  for (const [k, v] of Object.entries(o)) { out[`${k}\\default`] = false; out[k] = v }
+  return out
+}
+
+const pick = <T>(tier: 1 | 2 | 3, values: readonly [T, T, T]): T => values[tier - 1]
+
+/** Change des valeurs de premier niveau d'un YAML (« clé: valeur ») en gardant tout le reste. */
+export function patchYaml(text: string, patch: Record<string, string | number | boolean>): string {
+  const nl = text.includes('\r\n') ? '\r\n' : '\n'
+  const lines = text === '' ? [] : text.replace(/(\r?\n)+$/, '').split(/\r?\n/)
+  for (const [key, value] of Object.entries(patch)) {
+    const re = new RegExp(String.raw`^${escRe(key)}:`)
+    const at = lines.findIndex((l) => re.test(l))
+    if (at !== -1) lines[at] = `${key}: ${value}`
+    else lines.push(`${key}: ${value}`)
+  }
+  return lines.join(nl) + nl
+}
+
+/** Lance un programme le temps qu'il crée ses fichiers de configuration (jusqu'à 20 s), puis le referme. */
+async function runOnceUntil(exe: string, cwd: string, ready: () => boolean): Promise<void> {
+  if (!existsSync(exe)) return
+  const child = spawn(exe, [], { cwd, stdio: 'ignore', windowsHide: true })
+  child.on('error', () => {})
+  for (let i = 0; i < 40 && !ready(); i++) await new Promise((r) => setTimeout(r, 500))
+  await new Promise((r) => setTimeout(r, 700))
+  child.kill()
+  await new Promise((r) => setTimeout(r, 500))
+}
+
+// --- Dolphin -------------------------------------------------------------------------------------------------------------
+
+/**
+ * Une expression Dolphin qui cite un périphérique absent est invalide EN ENTIER (clavier compris) : on ne cite donc que la
+ * manette réellement branchée, ce qui impose d'écrire ces liaisons au lancement du jeu (voir `applyDolphinPad`).
+ */
+const pad = (device: string | null, control: string): string | null => (device ? `\`${device}:${control}\`` : null)
+const kbOrPad = (kb: string, device: string | null, control: string): string => [kb, pad(device, control)].filter(Boolean).join(' | ')
+
+/** Liaisons GameCube + Wiimote/Nunchuk : clavier, et manette XInput (`XInput/<n>/Gamepad`) si `device` est donné. */
+export function dolphinInputs(device: string | null): { gc: IniPatch; wii: IniPatch } {
+  const k = (kb: string, control: string): string => kbOrPad(kb, device, control)
+  const rumble = device ? `\`${device}:Motor L\` | \`${device}:Motor R\`` : ''
+  // Sans « Device », les touches non qualifiées (clavier) n'ont aucun périphérique de référence et ne répondent pas.
+  const gc: Record<string, string> = {
+    Device: 'DInput/0/Keyboard Mouse',
+    'Buttons/A': k('`X`', 'Button A'), 'Buttons/B': k('`Z`', 'Button B'), 'Buttons/X': k('`C`', 'Button X'), 'Buttons/Y': k('`S`', 'Button Y'),
+    'Buttons/Z': k('`D`', 'Shoulder R'), 'Buttons/Start': k('`RETURN`', 'Start'),
+    'Main Stick/Up': k('`UP`', 'Left Y+'), 'Main Stick/Down': k('`DOWN`', 'Left Y-'), 'Main Stick/Left': k('`LEFT`', 'Left X-'), 'Main Stick/Right': k('`RIGHT`', 'Left X+'),
+    'C-Stick/Up': k('`I`', 'Right Y+'), 'C-Stick/Down': k('`K`', 'Right Y-'), 'C-Stick/Left': k('`J`', 'Right X-'), 'C-Stick/Right': k('`L`', 'Right X+'),
+    'Triggers/L': k('`Q`', 'Trigger L'), 'Triggers/R': k('`W`', 'Trigger R'),
+    'D-Pad/Up': k('`T`', 'Pad N'), 'D-Pad/Down': k('`G`', 'Pad S'), 'D-Pad/Left': k('`F`', 'Pad W'), 'D-Pad/Right': k('`H`', 'Pad E')
+  }
+  // Toujours écrits (vides sans manette) pour effacer la manette citée lors d'un lancement précédent.
+  gc['Triggers/L-Analog'] = pad(device, 'Trigger L') ?? ''
+  gc['Triggers/R-Analog'] = pad(device, 'Trigger R') ?? ''
+  gc['Rumble/Motor'] = rumble
+  // Wiimote + Nunchuk : sticks, boutons et pointeur (stick droit) ; le clavier et la souris restent actifs.
+  const wii: Record<string, string> = {
+    Source: '1',
+    Device: 'DInput/0/Keyboard Mouse',
+    Extension: 'Nunchuk',
+    'Buttons/A': k('`Click 0`', 'Button A'), 'Buttons/B': k('`Click 1`', 'Trigger R'), 'Buttons/1': k('`1`', 'Button X'), 'Buttons/2': k('`2`', 'Button Y'),
+    'Buttons/-': k('Q', 'Back'), 'Buttons/+': k('E', 'Start'), 'Buttons/Home': k('RETURN', 'Thumb R'),
+    'D-Pad/Up': k('UP', 'Pad N'), 'D-Pad/Down': k('DOWN', 'Pad S'), 'D-Pad/Left': k('LEFT', 'Pad W'), 'D-Pad/Right': k('RIGHT', 'Pad E'),
+    'IR/Up': k('`Cursor Y-`', 'Right Y+'), 'IR/Down': k('`Cursor Y+`', 'Right Y-'), 'IR/Left': k('`Cursor X-`', 'Right X-'), 'IR/Right': k('`Cursor X+`', 'Right X+'),
+    'Shake/X': k('`Click 2`', 'Shoulder R'), 'Shake/Y': k('`Click 2`', 'Shoulder R'), 'Shake/Z': k('`Click 2`', 'Shoulder R'),
+    'Nunchuk/Buttons/C': k('`Shift`', 'Shoulder L'), 'Nunchuk/Buttons/Z': k('`Ctrl`', 'Trigger L'),
+    'Nunchuk/Stick/Up': k('W', 'Left Y+'), 'Nunchuk/Stick/Down': k('S', 'Left Y-'), 'Nunchuk/Stick/Left': k('A', 'Left X-'), 'Nunchuk/Stick/Right': k('D', 'Left X+')
+  }
+  wii['Rumble/Motor'] = rumble
+  return { gc: { GCPad1: gc }, wii: { Wiimote1: wii } }
+}
+
+/**
+ * Vrai si le fichier de manette GameCube est absent, celui de RomVault (bouton A = touche X, éventuellement suivie de la manette) ou un
+ * état inutilisable (« Button A » sans périphérique alors que le périphérique par défaut est le clavier) : on peut alors le réécrire.
+ */
+export function isUntouchedPadFile(text: string): boolean {
+  const a = /^\s*Buttons\/A\s*=\s*(.*?)\s*$/m.exec(text)
+  if (!a) return true
+  if (/^`X`(\s*\|.*)?$/.test(a[1])) return true
+  return a[1] === '`Button A`' && /^\s*Device\s*=\s*DInput\/\d+\/Keyboard Mouse\s*$/m.test(text)
+}
+
+/**
+ * Écrit les liaisons clavier + manette de Dolphin. Appelé au lancement d'un jeu avec la manette XInput branchée (ou null) : les
+ * réglages faits à la main par l'utilisateur ne sont pas touchés (on ne réécrit que si « Bouton A » est encore celui que RomVault a écrit).
+ */
+export async function applyDolphinPad(dir: string, xinputSlot: number | null): Promise<void> {
+  const cfg = join(dir, 'User', 'Config')
+  const gcFile = join(cfg, 'GCPadNew.ini')
+  if (!isUntouchedPadFile(await readText(gcFile))) return
+  const { gc, wii } = dolphinInputs(xinputSlot === null ? null : `XInput/${xinputSlot}/Gamepad`)
+  await writeIni(gcFile, gc)
+  await writeIni(join(cfg, 'WiimoteNew.ini'), wii)
+}
+
+/** Langue de la console Wii = octet « IPL.LNG » du fichier SYSCONF (0 JP, 1 EN, 2 DE, 3 FR, 4 ES, 5 IT, 6 NL). */
+export function setSysconfLanguage(data: Buffer, language: number): boolean {
+  if (data.length < 8 || data.subarray(0, 4).toString('latin1') !== 'SCv0') return false
+  const count = data.readUInt16BE(4)
+  for (let i = 0; i < count; i++) {
+    const off = data.readUInt16BE(6 + i * 2)
+    const nameLen = (data[off] & 0x1f) + 1
+    if (data.subarray(off + 1, off + 1 + nameLen).toString('latin1') === 'IPL.LNG') { data[off + 1 + nameLen] = language; return true }
+  }
+  return false
+}
+
+/** Lance Dolphin une seconde le temps qu'il crée son SYSCONF (réglages de la Wii), puis le referme. */
+async function dolphinCreateSysconf(dir: string): Promise<string | null> {
+  const sysconf = join(dir, 'User', 'Wii', 'shared2', 'sys', 'SYSCONF')
+  const pads = [join(dir, 'User', 'Config', 'GCPadNew.ini'), join(dir, 'User', 'Config', 'WiimoteNew.ini')]
+  if (existsSync(sysconf) && pads.every((f) => existsSync(f))) return sysconf
+  await runOnceUntil(join(dir, 'Dolphin.exe'), dir, () => existsSync(sysconf) && pads.every((f) => existsSync(f)))
+  return existsSync(sysconf) ? sysconf : null
+}
+
+async function configureDolphin(dir: string, ctx: ConfigContext, tier: 1 | 2 | 3): Promise<void> {
+  const fr = ctx.lang === 'fr'
+  const cfg = join(dir, 'User', 'Config')
+  await writeIni(join(cfg, 'Dolphin.ini'), {
+    Analytics: { PermissionAsked: true, Enabled: false },
+    Interface: { LanguageCode: fr ? 'fr' : 'en', ConfirmStop: false },
+    // Langue de la GameCube : 0 anglais, 1 allemand, 2 français, 3 espagnol, 4 italien, 5 néerlandais.
+    Core: { SelectedLanguage: fr ? 2 : 0 },
+    Display: { Fullscreen: true }
+  })
+  await writeIni(join(cfg, 'GFX.ini'), { Settings: { InternalResolution: pick(tier, [3, 4, 6]) } })
+  // Dolphin crée lui-même ses fichiers de manettes et le SYSCONF de la Wii au premier démarrage : on le laisse faire, puis on les modifie
+  // (un GCPadNew.ini partiel, écrit avant, était remplacé par des liaisons inutilisables). La langue de la Wii vit dans le SYSCONF, binaire.
+  const sysconf = await dolphinCreateSysconf(dir)
+  if (sysconf) {
+    const data = await readFile(sysconf)
+    if (setSysconfLanguage(data, fr ? 3 : 1)) await writeFile(sysconf, data)
+  }
+  // Clavier seul à l'installation ; la manette est ajoutée à chaque lancement selon ce qui est branché (applyDolphinPad).
+  await applyDolphinPad(dir, null)
+}
+
+// --- DuckStation / PCSX2 : clavier + première manette SDL (tout type de manette) ---------------------------------------------
+
+const SDL_NAMES: Record<string, string> = {
+  Up: 'SDL-0/DPadUp', Down: 'SDL-0/DPadDown', Left: 'SDL-0/DPadLeft', Right: 'SDL-0/DPadRight',
+  Triangle: 'SDL-0/Y', Circle: 'SDL-0/B', Cross: 'SDL-0/A', Square: 'SDL-0/X', Select: 'SDL-0/Back', Start: 'SDL-0/Start',
+  L1: 'SDL-0/LeftShoulder', R1: 'SDL-0/RightShoulder', L2: 'SDL-0/+LeftTrigger', R2: 'SDL-0/+RightTrigger', L3: 'SDL-0/LeftStick', R3: 'SDL-0/RightStick',
+  LUp: 'SDL-0/-LeftY', LDown: 'SDL-0/+LeftY', LLeft: 'SDL-0/-LeftX', LRight: 'SDL-0/+LeftX',
+  RUp: 'SDL-0/-RightY', RDown: 'SDL-0/+RightY', RLeft: 'SDL-0/-RightX', RRight: 'SDL-0/+RightX',
+  LargeMotor: 'SDL-0/LargeMotor', SmallMotor: 'SDL-0/SmallMotor'
+}
+/** Liaisons de la manette PlayStation : le clavier d'origine de l'émulateur puis la manette (clé répétée = plusieurs liaisons). */
+const psPad = (arrows: [string, string, string, string], enter: string): Record<string, string | readonly string[]> => {
+  const kb: Record<string, string> = {
+    Up: arrows[0], Right: arrows[1], Down: arrows[2], Left: arrows[3],
+    Triangle: 'Keyboard/I', Circle: 'Keyboard/L', Cross: 'Keyboard/K', Square: 'Keyboard/J', Select: 'Keyboard/Backspace', Start: enter,
+    L1: 'Keyboard/Q', L2: 'Keyboard/1', R1: 'Keyboard/E', R2: 'Keyboard/3', L3: 'Keyboard/2', R3: 'Keyboard/4',
+    LUp: 'Keyboard/W', LRight: 'Keyboard/D', LDown: 'Keyboard/S', LLeft: 'Keyboard/A', RUp: 'Keyboard/T', RRight: 'Keyboard/H', RDown: 'Keyboard/G', RLeft: 'Keyboard/F'
+  }
+  const out: Record<string, string | readonly string[]> = {}
+  for (const [k, key] of Object.entries(kb)) out[k] = [key, SDL_NAMES[k]]
+  out.LargeMotor = SDL_NAMES.LargeMotor
+  out.SmallMotor = SDL_NAMES.SmallMotor
+  return out
+}
+
+/**
+ * Rend un émulateur directement utilisable : langue de l'app, plein écran, résolution interne ≥ 1080p (adaptée à l'écran), BIOS, manette.
+ * Appelé une seule fois, à l'installation : une mise à jour ne réécrit jamais les réglages de l'utilisateur.
+ */
+export async function configureEmulator(id: string, dir: string, ctx: ConfigContext): Promise<void> {
+  await mkdir(dir, { recursive: true })
+  const fr = ctx.lang === 'fr'
+  const tier = resolutionTier(ctx.displayHeight)
+  switch (id) {
+    case 'retroarch': {
+      const cfg = join(dir, 'retroarch.cfg')
+      // Les manettes sont reconnues seules (autoconfig) ; Échap quitte d'un seul appui, sans confirmation.
+      await writeFile(cfg, patchCfg(await readText(cfg), {
+        system_directory: ctx.biosDir, video_fullscreen: true, video_windowed_fullscreen: true, user_language: fr ? 2 : 0,
+        quit_press_twice: false, input_autodetect_enable: true, input_quit_gamepad_combo: 3
+      }))
+      const opts = join(dir, 'retroarch-core-options.cfg')
+      await writeFile(opts, patchCfg(await readText(opts), { 'mupen64plus-next-EnableNativeResFactor': pick(tier, [4, 6, 8]) }))
+      return
+    }
+    case 'duckstation':
+      return writeIni(join(dir, 'settings.ini'), {
+        // Pas de « Language » : DuckStation suit la langue du système, et une langue demandée sans fichier de traduction externe déclenche une erreur au démarrage.
+        Main: { StartFullscreen: true, ConfirmPowerOff: false, SetupWizardIncomplete: false },
+        GPU: { ResolutionScale: pick(tier, [5, 6, 9]) },
+        BIOS: { SearchDirectory: ctx.biosDir },
+        InputSources: { SDL: true },
+        Pad1: { Type: 'AnalogController', ...psPad(['Keyboard/UpArrow', 'Keyboard/RightArrow', 'Keyboard/DownArrow', 'Keyboard/LeftArrow'], 'Keyboard/Enter') }
+      })
+    case 'dolphin':
+      return configureDolphin(dir, ctx, tier)
+    case 'pcsx2':
+      return writeIni(join(dir, 'inis', 'PCSX2.ini'), {
+        // SettingsVersion : sans lui PCSX2 juge le fichier invalide et propose de tout réinitialiser.
+        UI: { SettingsVersion: 1, SetupWizardIncomplete: false, StartFullscreen: true, Language: fr ? 'fr-FR' : 'en-US', ConfirmShutdown: false },
+        'EmuCore/GS': { upscale_multiplier: pick(tier, [3, 4, 6]) },
+        Folders: { Bios: ctx.biosDir },
+        InputSources: { SDL: true },
+        Pad1: { Type: 'DualShock2', ...psPad(['Keyboard/Up', 'Keyboard/Right', 'Keyboard/Down', 'Keyboard/Left'], 'Keyboard/Return') }
+      })
+    case 'melonds':
+      return createOnce(join(dir, 'melonDS.toml'), [
+        '[3D]', 'Renderer = 1', '',
+        '[3D.GL]', `ScaleFactor = ${pick(tier, [6, 8, 12])}`, '',
+        '[Instance0.Firmware]', 'OverrideSettings = true', `Language = ${fr ? 2 : 1}`, ''
+      ].join('\n'))
+    case 'azahar':
+      return writeIni(join(dir, 'user', 'config', 'qt-config.ini'), {
+        Renderer: qt({ resolution_factor: pick(tier, [5, 7, 10]) }),
+        UI: qt({ fullscreen: true, language: fr ? 'fr' : 'en' })
+      }, '=')
+    case 'cemu':
+      return createOnce(join(dir, 'settings.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<content>\n  <fullscreen>true</fullscreen>\n  <console_language>${fr ? 2 : 1}</console_language>\n</content>\n`)
+    case 'eden':
+      return writeIni(join(dir, 'user', 'config', 'qt-config.ini'), {
+        Renderer: qt({ resolution_setup: pick(tier, [2, 3, 5]) }),
+        System: qt({ language_index: fr ? 2 : 1 }),
+        UI: qt({ fullscreen: true, language: fr ? 'fr' : 'en' })
+      }, '=')
+    case 'ppsspp':
+      return writeIni(join(dir, 'memstick', 'PSP', 'SYSTEM', 'ppsspp.ini'), {
+        General: { Language: fr ? 'fr_FR' : 'en_US' },
+        SystemParam: { Language: fr ? 2 : 1 },
+        // 0 = résolution automatique : celle de la fenêtre, donc de l'écran en plein écran.
+        Graphics: { FullScreen: true, InternalResolution: 0 }
+      })
+    case 'rpcs3':
+      await createOnce(join(dir, 'config', 'config.yml'), `Video:\n  Resolution Scale: ${pick(tier, [150, 200, 300])}\nSystem:\n  Language: ${fr ? 'French' : 'English (US)'}\n`)
+      return writeIni(join(dir, 'config', 'GuiConfigs', 'CurrentSettings.ini'), { main_window: { startGameFullscreen: true } }, '=')
+    case 'vita3k': {
+      // Vita3K ignore un config.yml partiel : on le laisse créer le sien (premier démarrage), puis on en change les valeurs.
+      const file = join(dir, 'config.yml')
+      if (!existsSync(file)) await runOnceUntil(join(dir, 'Vita3K.exe'), dir, () => existsSync(file) && readFileSync(file, 'utf8').includes('sys-lang'))
+      if (!existsSync(file)) return
+      await writeFile(file, patchYaml(await readText(file), { 'sys-lang': fr ? 2 : 1, 'resolution-multiplier': pick(tier, [2, 3, 4]), 'boot-apps-full-screen': true }))
+      return
+    }
+  }
+}
