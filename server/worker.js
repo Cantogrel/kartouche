@@ -23,8 +23,8 @@ export default {
   async fetch(req, env) {
     if (req.headers.get('x-rv-token') !== env.APP_TOKEN) return text(403, 'forbidden')
     const url = new URL(req.url)
-    const m = url.pathname.match(/^\/(igdb|tgdb|sgdb)(\/[A-Za-z0-9_./-]*)?$/)
-    if (!m || url.pathname.includes('..')) return text(404, 'not found')
+    const m = url.pathname.match(/^\/(igdb|tgdb|sgdb)(\/[^\s?#]*)?$/)
+    if (!m || decodeURIComponent(url.pathname).includes('..')) return text(404, 'not found')
     const [, svc, sub = ''] = m
     try {
       if (svc === 'igdb') {

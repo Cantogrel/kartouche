@@ -13,9 +13,6 @@ export function Settings() {
   const [section, setSection] = useState<Section>('general')
   const { settings, info, update } = useSettings()
   const [restart, setRestart] = useState(false)
-  const [providers, setProviders] = useState<ProviderStatus[]>([])
-  useEffect(() => { if (section === 'apiKeys') void window.api.invoke('providers:status').then(setProviders) }, [section, settings.igdbClientId, settings.igdbClientSecret, settings.tgdbApiKey, settings.sgdbApiKey])
-  const quota = (id: string): string | null => { const p = providers.find((x) => x.id === id); return p?.configured ? t('settings.quota', { used: p.usedToday, limit: p.dailyLimit }) : null }
 
   const [upd, setUpd] = useState<UpdateState | null>(null)
   useEffect(() => {
@@ -101,21 +98,6 @@ export function Settings() {
 
         {section === 'apiKeys' && (
           <>
-            <p className="muted">{t('settings.igdbHint')}</p>
-            <label className="field">{t('settings.igdbId')}
-              <input defaultValue={settings.igdbClientId} onBlur={(e) => update({ igdbClientId: e.target.value })} autoComplete="off" />
-            </label>
-            <label className="field">{t('settings.igdbSecret')}
-              <input type="password" defaultValue={settings.igdbClientSecret} onBlur={(e) => update({ igdbClientSecret: e.target.value })} autoComplete="off" />
-            </label>
-            <p className="muted">{quota('igdb')}</p>
-            <label className="field">{t('settings.tgdbKey')}
-              <input type="password" defaultValue={settings.tgdbApiKey} onBlur={(e) => update({ tgdbApiKey: e.target.value })} autoComplete="off" />
-            </label>
-            <p className="muted">{quota('tgdb')}</p>
-            <label className="field">{t('settings.sgdbKey')}
-              <input type="password" defaultValue={settings.sgdbApiKey} onBlur={(e) => update({ sgdbApiKey: e.target.value })} autoComplete="off" />
-            </label>
             <p className="muted">{t('settings.raHint')}</p>
             <label className="field">{t('settings.raUser')}
               <input defaultValue={settings.raUsername} onBlur={(e) => update({ raUsername: e.target.value })} autoComplete="off" />
