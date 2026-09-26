@@ -280,5 +280,8 @@
   "update.unavailable": "Les mises à jour ne fonctionnent que dans l’app installée.",
   "update.check": "Vérifier les mises à jour",
   "update.download": "Télécharger",
-  "update.install": "Redémarrer et installer"
+  "update.install": "Redémarrer et installer",
+  "footer.installing": "Installation de {name}",
+  "footer.importing": "Import… {n}/{total}",
+  "footer.importing0": "Import…"
 }

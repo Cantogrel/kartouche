@@ -44,6 +44,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .back { background: none; border: 0; font-size: 18px; color: var(--text); }
 .titlebar .bp-launch { color: var(--text); font-size: 12px; }
 .statusbar { font-size: 12px; color: var(--text-muted); padding: 3px 12px; border-top: 1px solid var(--border); }
+.statusbar-spin { display: inline-block; width: 10px; height: 10px; margin-right: 8px; border: 2px solid var(--border); border-top-color: var(--text-muted); border-radius: 50%; animation: statusbar-rot 0.8s linear infinite; vertical-align: -1px; }
+@keyframes statusbar-rot { to { transform: rotate(360deg); } }
 .nav-item .ico { width: 18px; text-align: center; opacity: .8; }
 .nav-item.small { padding: 6px 10px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .nav-item.dim { opacity: .5; }

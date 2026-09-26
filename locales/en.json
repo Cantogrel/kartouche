@@ -280,5 +280,8 @@
   "update.unavailable": "Updates only work in the installed app.",
   "update.check": "Check for updates",
   "update.download": "Download",
-  "update.install": "Restart and install"
+  "update.install": "Restart and install",
+  "footer.installing": "Installing {name}",
+  "footer.importing": "Importing… {n}/{total}",
+  "footer.importing0": "Importing…"
 }
