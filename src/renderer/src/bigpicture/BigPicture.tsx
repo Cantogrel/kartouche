@@ -80,12 +80,20 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   const cycle = (d: 1 | -1): void => go(SECTIONS[(SECTIONS.indexOf(section) + d + SECTIONS.length) % SECTIONS.length])
 
   // B : revient d'un niveau (fiche, menu, recherche). Il ne quitte jamais : c'est le menu Start qui le fait.
+  const cycleFilter = (d: 1 | -1): void => {
+    if (!chips.length) return
+    const all = ['all', ...chips]
+    setConsoleTab(all[(Math.max(0, all.indexOf(consoleTab)) + d + all.length) % all.length]); setLimit(PAGE)
+  }
+
   useNav((a) => {
     if (menu) { if (a === 'back' || a === 'start') setMenu(false) }
     else if (opened) { if (a === 'back') setOpened(null) }
     else if (a === 'start') setMenu(true)
     else if (a === 'prev') cycle(-1)
     else if (a === 'next') cycle(1)
+    else if (a === 'prevFilter') cycleFilter(-1)
+    else if (a === 'nextFilter') cycleFilter(1)
     else if (a === 'y' && (section === 'library' || section === 'catalog')) setKeyboard(true)
     else if (a === 'back' && query) setQuery('')
   }, !keyboard && !inGame)
@@ -109,7 +117,9 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
       </header>
       {chips.length > 0 && (
         <div className="bp-chips">
+          <span className="bp-key">LT</span>
           {['all', ...chips].map((k) => <button key={k} data-nav className={`bp-chip${consoleTab === k ? ' active' : ''}`} onClick={() => { setConsoleTab(k); setLimit(PAGE) }}>{k === 'all' ? t('bp.all') : label(k)}</button>)}
+          <span className="bp-key">RT</span>
         </div>
       )}
 
@@ -134,7 +144,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
         {section === 'settings' && <BpSettings onExit={onExit} />}
       </div>
 
-      <footer className="bp-hints"><span>Ⓐ {t('bp.select')}</span><span>Ⓑ {t('bp.back')}</span>{searchable && <span>Ⓨ {t('bp.search')}</span>}<span>LB/RB {t('bp.section')}</span><span>☰ {t('bp.menu')}</span></footer>
+      <footer className="bp-hints"><span>Ⓐ {t('bp.select')}</span><span>Ⓑ {t('bp.back')}</span>{searchable && <span>Ⓨ {t('bp.search')}</span>}<span>LB/RB {t('bp.section')}</span>{chips.length > 0 && <span>LT/RT {t('bp.console')}</span>}<span>☰ {t('bp.menu')}</span></footer>
 
       {opened && <Detail gameId={opened.gameId} entry={openedEntry} onClose={() => setOpened(null)} />}
       {keyboard && <VirtualKeyboard value={query} onChange={(v) => { setQuery(v); setLimit(PAGE) }} onClose={() => setKeyboard(false)} />}

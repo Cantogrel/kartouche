@@ -188,7 +188,7 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 
 .bp-body { flex: 1; overflow-y: auto; min-height: 0; }
 .bp-h { font-size: 22px; color: var(--text-strong); margin: 10px 10px 6px; }
-.bp-chips { display: flex; gap: 8px; overflow-x: auto; padding: 6px 6px 14px; flex: none; }
+.bp-chips { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 6px 6px 14px; flex: none; }
 .bp-chip { border: 2px solid transparent; background: var(--bg-elevated); border-radius: 999px; padding: 6px 16px; white-space: nowrap; color: var(--text-muted); font-size: 15px !important; }
 .bp-chip.active { background: var(--active); color: var(--text-strong); }
 .bp-chip:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,255,255,.25); }

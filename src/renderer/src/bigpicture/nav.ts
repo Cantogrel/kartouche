@@ -1,7 +1,7 @@
 /** Navigation par focus (manette / clavier) : choix de l'élément voisin dans une direction et lecture des boutons de la manette. */
 
 export type Dir = 'up' | 'down' | 'left' | 'right'
-export type PadAction = Dir | 'accept' | 'back' | 'x' | 'y' | 'prev' | 'next' | 'start'
+export type PadAction = Dir | 'accept' | 'back' | 'x' | 'y' | 'prev' | 'next' | 'prevFilter' | 'nextFilter' | 'start'
 export interface Box { x: number; y: number; w: number; h: number }
 
 const center = (b: Box): { cx: number; cy: number } => ({ cx: b.x + b.w / 2, cy: b.y + b.h / 2 })
@@ -31,7 +31,7 @@ export function pickNext(cur: Box, others: Box[], dir: Dir): number {
 export interface PadLike { buttons: ArrayLike<{ pressed: boolean }>; axes: ArrayLike<number> }
 
 const BUTTONS: [number, PadAction][] = [
-  [0, 'accept'], [1, 'back'], [2, 'x'], [3, 'y'], [4, 'prev'], [5, 'next'], [9, 'start'],
+  [0, 'accept'], [1, 'back'], [2, 'x'], [3, 'y'], [4, 'prev'], [5, 'next'], [6, 'prevFilter'], [7, 'nextFilter'], [9, 'start'],
   [12, 'up'], [13, 'down'], [14, 'left'], [15, 'right']
 ]
 const STICK = 0.6

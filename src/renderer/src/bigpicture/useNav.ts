@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { heldActions, pickNext, Repeater, type Dir, type PadAction } from './nav'
 
-const KEYS: Record<string, PadAction> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Escape: 'back', F11: 'start', PageUp: 'prev', PageDown: 'next' }
+const KEYS: Record<string, PadAction> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Escape: 'back', F11: 'start', PageUp: 'prev', PageDown: 'next', Home: 'prevFilter', End: 'nextFilter' }
 
 /** Racine de focus active : la dernière `[data-focus-root]` du document (une fenêtre superposée prend la main). */
 function activeRoot(): HTMLElement | null {
