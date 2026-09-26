@@ -19,7 +19,7 @@ function createWindow(): BrowserWindow {
   })
   win.once('ready-to-show', () => win.show())
   if (process.env['ELECTRON_RENDERER_URL']) win.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  else win.loadFile(join(__dirname, '../renderer/index.html'), { hash: process.env['ROMVAULT_HASH'] })
+  else win.loadFile(join(__dirname, '../renderer/index.html'), { hash: process.env['ROMVAULT_HASH'] ?? (process.argv.includes('--bigpicture') ? 'bigpicture' : undefined) })
   return win
 }
 

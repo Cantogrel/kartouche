@@ -1,120 +1,193 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { t } from '@/i18n'
-import { Cover } from '@/ui'
-import { ConsoleTile } from '@/ui/ConsoleTile'
+import { Badge, Cover, artStyle } from '@/ui'
 import { useLibrary } from '@/store/library'
 import { useEmulators } from '@/store/emulators'
-import { emulatorForConsole } from '@shared/emulators'
-import { consoleById } from '@shared/consoles'
+import { useSettings } from '@/store/settings'
+import { CONSOLES, consoleById } from '@shared/consoles'
+import { EMULATORS } from '@shared/emulators'
+import type { CatalogPage } from '@shared/catalog'
+import type { LanguageSetting } from '@shared/settings'
 import type { LibraryEntry } from '@shared/library'
 import { focusEl, navItems, useNav } from './useNav'
 import { VirtualKeyboard } from './VirtualKeyboard'
+import { Detail } from './Detail'
 
 const label = (c: string): string => consoleById(c)?.label ?? c
+type Section = 'home' | 'library' | 'catalog' | 'settings'
+const SECTIONS: Section[] = ['home', 'library', 'catalog', 'settings']
+const PAGE = 60
+/** Jeu ouvert : `gameId` du catalogue (peut être null pour un fichier non reconnu) et/ou entrée de la bibliothèque. */
+interface Opened { gameId: number | null; entryId?: number }
+/** Dernière tuile ouverte : le focus y revient à la fermeture de la fiche. */
+let lastOpened: string | null = null
 
-/** Fenêtre d'un jeu : jaquette, temps de jeu, lancement. Le lancement se fait au bouton A, sans souris. */
-function Detail({ entry, onClose }: { entry: LibraryEntry; onClose: () => void }) {
-  const running = useEmulators((s) => s.running.includes(entry.id))
-  const play = useEmulators((s) => s.play)
-  const def = emulatorForConsole(entry.console)
-  const installed = useEmulators((s) => s.list.find((e) => e.id === def?.id)?.installed)
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => { focusEl(navItems()[0]) }, [])
-  const launch = async (): Promise<void> => {
-    if (def && installed === false) { setError(t('play.notInstalled')); return }
-    const r = await play(entry.id)
-    setError(r.ok ? null : t(`play.${r.error ?? 'spawn'}`) + (r.detail && r.error === 'spawn' ? ` (${r.detail})` : ''))
-  }
+function Tile({ id, gameId, title, cons, dim, onOpen }: { id: string; gameId: number | null; title: string; cons: string; dim?: boolean; onOpen: () => void }) {
+  const tag = <Badge>{label(cons)}</Badge>
+  const name = <span className="card-title">{title}</span>
   return (
-    <div className="bp-overlay">
-      <div className="bp-detail" data-focus-root>
-        {entry.gameId !== null && <Cover className="bp-detail-cover" gameId={entry.gameId} title={entry.title} kind="card" />}
-        <div className="bp-detail-body">
-          <h2>{entry.title}</h2>
-          <div className="muted">{label(entry.console)} · {t('bp.played', { n: entry.playMinutes })}</div>
-          {error && <div className="bp-error">{error}</div>}
-          <div className="bp-actions">
-            {running
-              ? <button data-nav className="bp-btn primary" onClick={() => void window.api.invoke('game:stop', entry.id)}>■ {t('play.stop')}</button>
-              : <button data-nav className="bp-btn primary" onClick={() => void launch()}>▶ {t('play')}</button>}
-            <button data-nav className="bp-btn" onClick={onClose}>{t('bp.back')}</button>
-          </div>
-          <div className="muted">{t('play.quitHint')}</div>
-        </div>
-      </div>
-    </div>
+    <button data-nav data-tile={id} className={`bp-tile${dim ? ' dim' : ''}`} onClick={() => { lastOpened = id; onOpen() }}>
+      {gameId !== null
+        ? <Cover className="cover-fill" gameId={gameId} title={title} kind="card">{name}{tag}</Cover>
+        : <div className="cover-fill" style={artStyle(title)}>{name}{tag}</div>}
+    </button>
   )
 }
 
 export function BigPicture({ onExit }: { onExit: () => void }) {
   const entries = useLibrary((s) => s.entries)
   const running = useEmulators((s) => s.running)
-  const [tab, setTab] = useState('all')
+  const [section, setSection] = useState<Section>('home')
+  const [consoleTab, setConsoleTab] = useState('all')
   const [query, setQuery] = useState('')
   const [keyboard, setKeyboard] = useState(false)
-  const [openId, setOpenId] = useState<number | null>(null)
+  const [menu, setMenu] = useState(false)
+  const [opened, setOpened] = useState<Opened | null>(null)
+  const [page, setPage] = useState<CatalogPage | null>(null)
+  const [limit, setLimit] = useState(PAGE)
 
   useEffect(() => { void useLibrary.getState().refresh(); window.api.window.fullscreen(true); return () => window.api.window.fullscreen(false) }, [])
+  const go = (s: Section): void => { setSection(s); setConsoleTab('all'); setQuery(''); setLimit(PAGE) }
 
   const playable = useMemo(() => entries.filter((e) => !e.missing).sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0) || a.title.localeCompare(b.title)), [entries])
-  const consoles = useMemo(() => [...new Set(playable.map((e) => e.console))].sort((a, b) => label(a).localeCompare(label(b))), [playable])
-  const tabs = ['all', ...consoles]
   const q = query.trim().toLowerCase()
-  const shown = playable.filter((e) => (tab === 'all' || e.console === tab) && (!q || e.title.toLowerCase().includes(q)))
-  const open = playable.find((e) => e.id === openId) ?? null
-  const inGame = running.length > 0
+  const libraryConsoles = useMemo(() => [...new Set(playable.map((e) => e.console))].sort((a, b) => label(a).localeCompare(label(b))), [playable])
+  const libShown = playable.filter((e) => (consoleTab === 'all' || e.console === consoleTab) && (!q || e.title.toLowerCase().includes(q)))
 
-  // Premier focus sur la grille (ou, sans jeu, sur l'onglet) ; retour de la fiche → on retrouve la tuile.
+  // Catalogue : recherche côté principal (la même que la page classique), triée par popularité.
   useEffect(() => {
-    if (keyboard || open || inGame || !playable.length) return
+    if (section !== 'catalog') return
+    let stale = false
+    const h = setTimeout(() => {
+      void window.api.invoke('catalog:search', { q: query, consoles: consoleTab === 'all' ? [] : [consoleTab], genres: [], sort: 'popularity', dir: 'desc', limit, includeVariants: false }).then((p) => { if (!stale) setPage(p) })
+    }, 150)
+    return () => { stale = true; clearTimeout(h) }
+  }, [section, query, consoleTab, limit])
+
+  const chips = section === 'library' ? libraryConsoles : section === 'catalog' ? CONSOLES.filter((c) => (page?.consoles.find((x) => x.id === c.id)?.count ?? 0) > 0 || c.id === consoleTab).map((c) => c.id) : []
+  const inGame = running.length > 0
+  const overlay = keyboard || menu || opened !== null
+
+  // Premier focus sur le contenu ; à la fermeture d'une fiche on retrouve la tuile ouverte.
+  useEffect(() => {
+    if (overlay || inGame) return
     const items = navItems()
-    if (items.includes(document.activeElement as HTMLElement)) return
-    const tile = items.find((e) => e.dataset.entry !== undefined && e.dataset.entry === String(lastOpened))
-    focusEl(tile ?? items.find((e) => e.dataset.entry !== undefined) ?? items[0])
-  }, [keyboard, open, inGame, tab, query, playable.length])
+    const first = items.find((e) => e.dataset.tile === lastOpened) ?? items.find((e) => e.dataset.tile !== undefined || e.classList.contains('bp-row'))
+    if (!first || items.includes(document.activeElement as HTMLElement)) return
+    focusEl(first)
+  }, [overlay, inGame, section, consoleTab, query, playable.length, page])
 
-  const cycle = (d: 1 | -1): void => { setTab(tabs[(Math.max(0, tabs.indexOf(tab)) + d + tabs.length) % tabs.length]) }
+  const cycle = (d: 1 | -1): void => go(SECTIONS[(SECTIONS.indexOf(section) + d + SECTIONS.length) % SECTIONS.length])
 
+  // B : revient d'un niveau (fiche, menu, recherche). Il ne quitte jamais : c'est le menu Start qui le fait.
   useNav((a) => {
-    if (a === 'start') onExit()
-    else if (open) { if (a === 'back') { setOpenId(null) } }
+    if (menu) { if (a === 'back' || a === 'start') setMenu(false) }
+    else if (opened) { if (a === 'back') setOpened(null) }
+    else if (a === 'start') setMenu(true)
     else if (a === 'prev') cycle(-1)
     else if (a === 'next') cycle(1)
-    else if (a === 'y') setKeyboard(true)
-    else if (a === 'back') { if (query) setQuery(''); else onExit() }
+    else if (a === 'y' && (section === 'library' || section === 'catalog')) setKeyboard(true)
+    else if (a === 'back' && query) setQuery('')
   }, !keyboard && !inGame)
 
-  const openEntry = (e: LibraryEntry): void => { lastOpened = e.id; setOpenId(e.id) }
-  const playing = playable.find((e) => running.includes(e.id))
+  const openEntry = (e: LibraryEntry): void => setOpened({ gameId: e.gameId, entryId: e.id })
+  const openedEntry = opened?.entryId !== undefined ? entries.find((e) => e.id === opened.entryId) : undefined
+  const playing = entries.find((e) => running.includes(e.id))
+  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} title={e.title} cons={e.console} onOpen={() => openEntry(e)} />)
+  const searchable = section === 'library' || section === 'catalog'
 
   return (
-    <div className="bp" data-focus-root>
+    <div className="bpv" data-focus-root>
       <header className="bp-head">
         <h1>RomVault</h1>
         <div className="bp-tabs">
           <span className="bp-key">LB</span>
-          {tabs.map((k) => <button key={k} data-nav className={`bp-tab${tab === k ? ' active' : ''}`} onClick={() => setTab(k)}>{k === 'all' ? t('bp.all') : label(k)}</button>)}
+          {SECTIONS.map((s) => <button key={s} data-nav className={`bp-tab${section === s ? ' active' : ''}`} onClick={() => go(s)}>{t(`nav.${s}`)}</button>)}
           <span className="bp-key">RB</span>
         </div>
-        <button data-nav className="bp-search" onClick={() => setKeyboard(true)}>🔍 {query || t('bp.searchHint')}</button>
+        {searchable && <button data-nav className="bp-search" onClick={() => setKeyboard(true)}>🔍 {query || t('bp.searchHint')}</button>}
       </header>
-      {playable.length === 0 ? <p className="empty">{t('bp.empty')}</p> : shown.length === 0 ? <p className="empty">{t('library.noMatch')}</p> : (
-        <div className="bp-grid">
-          {shown.map((e) => (
-            <button key={e.id} data-nav data-entry={e.id} className="bp-tile" onClick={() => openEntry(e)}>
-              {e.gameId !== null ? <Cover className="cover-fill" gameId={e.gameId} title={e.title} kind="card" /> : <div className="cover-fill bp-noart"><ConsoleTile id={e.console} /></div>}
-              <span className="card-title">{e.title}</span>
-            </button>
-          ))}
+      {chips.length > 0 && (
+        <div className="bp-chips">
+          {['all', ...chips].map((k) => <button key={k} data-nav className={`bp-chip${consoleTab === k ? ' active' : ''}`} onClick={() => { setConsoleTab(k); setLimit(PAGE) }}>{k === 'all' ? t('bp.all') : label(k)}</button>)}
         </div>
       )}
-      <footer className="bp-hints"><span>Ⓐ {t('bp.select')}</span><span>Ⓑ {t('bp.back')}</span><span>Ⓨ {t('bp.search')}</span><span>LB/RB {t('bp.console')}</span><span>☰ {t('bp.exit')}</span></footer>
-      {open && <Detail entry={open} onClose={() => setOpenId(null)} />}
-      {keyboard && <VirtualKeyboard value={query} onChange={setQuery} onClose={() => setKeyboard(false)} />}
+
+      <div className="bp-body">
+        {section === 'home' && (playable.length === 0 ? <p className="empty">{t('bp.empty')}</p> : (
+          <>
+            {playable.some((e) => e.lastPlayed) && <><h2 className="bp-h">{t('home.continue')}</h2><div className="bp-grid">{libTiles(playable.filter((e) => e.lastPlayed).slice(0, 8), 'c')}</div></>}
+            <h2 className="bp-h">{t('home.recent')}</h2>
+            <div className="bp-grid">{libTiles([...playable].sort((a, b) => b.addedAt - a.addedAt).slice(0, 8), 'r')}</div>
+          </>
+        ))}
+
+        {section === 'library' && (playable.length === 0 ? <p className="empty">{t('bp.empty')}</p> : libShown.length === 0 ? <p className="empty">{t('library.noMatch')}</p> : <div className="bp-grid">{libTiles(libShown, 'l')}</div>)}
+
+        {section === 'catalog' && (
+          <div className="bp-grid">
+            {(page?.games ?? []).map((g) => <Tile key={g.id} id={`g${g.id}`} gameId={g.id} title={g.name} cons={g.console} dim={!entries.some((e) => e.gameId === g.id)} onOpen={() => setOpened({ gameId: g.id })} />)}
+            {page && page.total > page.games.length && <button data-nav className="bp-tile bp-more" onClick={() => setLimit(limit + PAGE)}>{t('catalog.more')}</button>}
+          </div>
+        )}
+
+        {section === 'settings' && <BpSettings onExit={onExit} />}
+      </div>
+
+      <footer className="bp-hints"><span>Ⓐ {t('bp.select')}</span><span>Ⓑ {t('bp.back')}</span>{searchable && <span>Ⓨ {t('bp.search')}</span>}<span>LB/RB {t('bp.section')}</span><span>☰ {t('bp.menu')}</span></footer>
+
+      {opened && <Detail gameId={opened.gameId} entry={openedEntry} onClose={() => setOpened(null)} />}
+      {keyboard && <VirtualKeyboard value={query} onChange={(v) => { setQuery(v); setLimit(PAGE) }} onClose={() => setKeyboard(false)} />}
+      {menu && (
+        <div className="bp-overlay">
+          <div className="bp-menu" data-focus-root>
+            <MenuFocus />
+            <button data-nav className="bp-btn primary" onClick={() => setMenu(false)}>{t('bp.resume')}</button>
+            <button data-nav className="bp-btn" onClick={onExit}>{t('bp.exit')}</button>
+            <button data-nav className="bp-btn" onClick={() => window.api.window.close()}>{t('bp.quitApp')}</button>
+          </div>
+        </div>
+      )}
       {inGame && <div className="bp-overlay solid"><div className="bp-playing"><h2>{t('bp.inGame', { title: playing?.title ?? '' })}</h2><div className="muted">{t('play.quitHint')}</div></div></div>}
     </div>
   )
 }
 
-/** Dernière tuile ouverte : le focus y revient à la fermeture de la fiche. */
-let lastOpened: number | null = null
+/** Donne le focus au premier bouton du menu à son ouverture. */
+function MenuFocus(): null {
+  useEffect(() => { focusEl(navItems()[0]) }, [])
+  return null
+}
+
+const LANGS: LanguageSetting[] = ['auto', 'en', 'fr']
+
+/** Réglages utiles à la manette : langue, démarrage, émulateurs (installer / état), quitter. Le reste (clés API, dossiers…) reste au mode classique. */
+function BpSettings({ onExit }: { onExit: () => void }) {
+  const { settings, update } = useSettings()
+  const { list, progress, errors, install } = useEmulators()
+  const langName = (l: LanguageSetting): string => (l === 'auto' ? t('settings.langAuto') : l === 'en' ? 'English' : 'Français')
+  return (
+    <div className="bp-settings">
+      <button data-nav className="bp-row" onClick={() => void update({ language: LANGS[(LANGS.indexOf(settings.language) + 1) % LANGS.length] })}>
+        <span>{t('settings.language')}</span><strong>{langName(settings.language)}</strong>
+      </button>
+      <button data-nav className="bp-row" onClick={() => void update({ startInBigPicture: !settings.startInBigPicture })}>
+        <span>{t('settings.startBigPicture')}</span><strong>{settings.startInBigPicture ? t('bp.on') : t('bp.off')}</strong>
+      </button>
+      <h2 className="bp-h">{t('nav.emulators')}</h2>
+      {EMULATORS.map((def) => {
+        const s = list.find((e) => e.id === def.id)
+        const p = progress[def.id]
+        const status = p ? t('emu.installing') : !s?.installed ? t('status.notInstalled') : s.missing ? t('emu.missing') : t('status.installed')
+        const can = !p && !s?.installed
+        return (
+          <button key={def.id} data-nav className="bp-row" onClick={() => { if (can) void install(def.id) }}>
+            <span>{def.name}<span className="muted"> · {def.consoles.map(label).join(', ')}</span></span>
+            <strong>{errors[def.id] ? t('play.spawn') : can ? `${status} — ${t('emu.install')}` : status}</strong>
+          </button>
+        )
+      })}
+      <button data-nav className="bp-row" onClick={onExit}><span>{t('bp.exit')}</span></button>
+    </div>
+  )
+}

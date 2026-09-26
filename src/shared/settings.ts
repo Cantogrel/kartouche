@@ -7,6 +7,8 @@ export interface Settings {
   /** Proposer par défaut la suppression du fichier d'origine après import. */
   importDeleteSource: boolean
   scanFolders: string[]
+  /** Ouvrir RomVault directement en Big Picture (aussi possible avec l'argument --bigpicture). */
+  startInBigPicture: boolean
   /** Identifiants Twitch de l'utilisateur pour IGDB (jamais commités : stockés dans la base locale). */
   igdbClientId: string
   igdbClientSecret: string
@@ -19,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   importCopy: true,
   importDeleteSource: false,
   scanFolders: [],
+  startInBigPicture: false,
   igdbClientId: '',
   igdbClientSecret: '',
   tgdbApiKey: '',
@@ -33,6 +36,7 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (p.language === 'auto' || p.language === 'en' || p.language === 'fr') out.language = p.language
   if (typeof p.importCopy === 'boolean') out.importCopy = p.importCopy
   if (typeof p.importDeleteSource === 'boolean') out.importDeleteSource = p.importDeleteSource
+  if (typeof p.startInBigPicture === 'boolean') out.startInBigPicture = p.startInBigPicture
   if (Array.isArray(p.scanFolders) && p.scanFolders.every((x) => typeof x === 'string')) out.scanFolders = [...new Set(p.scanFolders as string[])]
   if (typeof p.igdbClientId === 'string') out.igdbClientId = p.igdbClientId.trim()
   if (typeof p.igdbClientSecret === 'string') out.igdbClientSecret = p.igdbClientSecret.trim()

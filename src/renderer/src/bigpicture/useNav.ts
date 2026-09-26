@@ -26,6 +26,11 @@ export function moveFocus(dir: Dir): void {
   const cur = items.find((i) => i === document.activeElement)
   if (!cur) { focusEl(items[0]); return }
   const box = (e: HTMLElement): { x: number; y: number; w: number; h: number } => { const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height } }
+  // Zone défilable (description d'une fiche) : haut/bas la font défiler tant qu'elle peut, puis le focus reprend sa route.
+  if (cur.dataset.scroll !== undefined && (dir === 'up' || dir === 'down')) {
+    const room = dir === 'down' ? cur.scrollHeight - cur.clientHeight - cur.scrollTop > 1 : cur.scrollTop > 1
+    if (room) { cur.scrollBy({ top: dir === 'down' ? 140 : -140, behavior: 'smooth' }); return }
+  }
   const others = items.filter((i) => i !== cur)
   const k = pickNext(box(cur), others.map(box), dir)
   if (k >= 0) focusEl(others[k])

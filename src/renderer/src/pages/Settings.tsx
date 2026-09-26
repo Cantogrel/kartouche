@@ -55,6 +55,10 @@ export function Settings() {
                 <option value="fr">Français</option>
               </select>
             </label>
+            <label className="check">
+              <input type="checkbox" checked={settings.startInBigPicture} onChange={(e) => update({ startInBigPicture: e.target.checked })} /> {t('settings.startBigPicture')}
+            </label>
+            <p className="muted">{t('settings.startBigPictureHint')}</p>
           </>
         )}
 

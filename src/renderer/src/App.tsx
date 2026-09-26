@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from '@/i18n'
 import { useSettings } from '@/store/settings'
 import { useApp, type Route } from '@/store/app'
@@ -25,6 +25,10 @@ export default function App() {
   const { ready, load } = useSettings()
   const [catalogQuery, setCatalogQuery] = useState('')
   const libEntries = useLibrary((s) => s.entries)
+  // Réglage « démarrer en Big Picture » : appliqué une seule fois, au premier chargement.
+  const started = useRef(false)
+  const startBp = useSettings((s) => s.settings.startInBigPicture)
+  useEffect(() => { if (ready && !started.current) { started.current = true; if (startBp) setBigPicture(true) } }, [ready, startBp, setBigPicture])
   useEffect(() => { void load(); void useLibrary.getState().refresh(); void useEmulators.getState().refresh(); return useEmulators.getState().listen() }, [load])
 
   if (!ready) return null
@@ -37,7 +41,7 @@ export default function App() {
       <div className="titlebar">
         <span>RomVault</span>
         <div className="right">
-          <button className="bp" onClick={() => setBigPicture(true)}>▶ {t('bigpicture')}</button>
+          <button className="bp-launch" onClick={() => setBigPicture(true)}>▶ {t('bigpicture')}</button>
           <button onClick={() => window.api.window.minimize()}>–</button>
           <button onClick={() => window.api.window.maximize()}>▢</button>
           <button onClick={() => window.api.window.close()}>✕</button>

@@ -181,8 +181,16 @@
   "bp.back": "Back",
   "bp.search": "Search",
   "bp.console": "Console",
-  "bp.exit": "Exit",
+  "bp.exit": "Exit Big Picture",
   "bp.played": "{n} min played",
   "bp.empty": "Your library is empty. Add games from the classic mode.",
-  "bp.inGame": "Playing {title}"
+  "bp.inGame": "Playing {title}",
+  "bp.section": "Section",
+  "bp.menu": "Menu",
+  "bp.resume": "Resume",
+  "bp.quitApp": "Quit RomVault",
+  "bp.on": "On",
+  "bp.off": "Off",
+  "settings.startBigPicture": "Start in Big Picture",
+  "settings.startBigPictureHint": "Opens RomVault directly in Big Picture mode. You can also launch it with the --bigpicture argument (for example from Sunshine)."
 }
