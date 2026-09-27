@@ -3,7 +3,7 @@ import { copyFile, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { ROM_EXTENSIONS, type ImportItem, type ImportResult, type LibraryProgress } from '@shared/library'
-import { hashFile, readZip } from './hash'
+import { extractZipEntries, hashFile, readZip, readZipEntryText } from './hash'
 import { identify } from './identify'
 
 export interface ImportOptions {
@@ -39,16 +39,39 @@ function freeName(dir: string, name: string): string {
   for (let i = 2; ; i++) if (!existsSync(join(dir, `${stem} (${i})${ext}`))) return `${stem} (${i})${ext}`
 }
 
-interface Prepared { crc?: string; sha1?: string; size: number; name: string; ext: string }
+interface Prepared {
+  crc?: string
+  sha1?: string
+  size: number
+  name: string
+  ext: string
+  /** Zip disque multi-fichiers (.cue + pistes) : entrées à extraire, feuille .cue en tête. */
+  zipEntries?: string[]
+}
 
 async function prepare(file: string, extra: string[]): Promise<Prepared | string> {
   const ext = extOf(file)
   if (ext === 'zip') {
-    const entries = (await readZip(file))?.filter((z) => extOf(z.name) in ROM_EXTENSIONS)
-    if (!entries) return 'archive illisible'
-    if (entries.length !== 1) return 'archive : un seul fichier de ROM attendu'
-    const z = entries[0]
-    return { crc: z.crc, size: z.size, name: stemOf(z.name), ext: extOf(z.name) }
+    const all = await readZip(file)
+    if (!all) return 'archive illisible'
+    const roms = all.filter((z) => extOf(z.name) in ROM_EXTENSIONS)
+    if (roms.length === 1) {
+      const z = roms[0]
+      return { crc: z.crc, size: z.size, name: stemOf(z.name), ext: extOf(z.name) }
+    }
+    // Disque .cue + pistes dans un zip : reconnu seulement si une unique feuille .cue référence exactement les autres entrées de ROM.
+    const cues = roms.filter((z) => extOf(z.name) === 'cue')
+    if (cues.length === 1) {
+      const cue = cues[0]
+      const text = await readZipEntryText(file, cue.name)
+      const refs = text ? [...text.matchAll(/^\s*FILE\s+"([^"]+)"/gim)].map((m) => basename(m[1]).toLowerCase()) : null
+      const tracks = refs?.map((r) => roms.find((z) => basename(z.name).toLowerCase() === r)).filter((z): z is typeof roms[number] => !!z)
+      if (refs && tracks && tracks.length === refs.length && tracks.length + 1 === roms.length) {
+        const t = tracks[0]
+        return { crc: t.crc, size: t.size, name: stemOf(cue.name), ext: 'cue', zipEntries: [cue.name, ...tracks.map((tr) => tr.name)] }
+      }
+    }
+    return 'archive : un seul fichier de ROM attendu (ou un .cue avec ses pistes)'
   }
   // Disque .cue : l'empreinte de référence est celle de la première piste.
   const target = ext === 'cue' && extra[0] ? extra[0] : file
@@ -107,7 +130,16 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
       const target = same[0] ?? (id.gameId !== null ? (byGame.all(id.gameId, cons) as { id: number; path: string }[]).find((r) => !existsSync(r.path)) : undefined)
 
       let dest = file
-      if (opt.copy && !inRoms) {
+      if (prep.zipEntries) {
+        // Un .cue dans un zip ne peut pas rester tel quel (ses pistes doivent exister à côté sur disque) : toujours extrait.
+        const [cueEntry, ...trackEntries] = prep.zipEntries
+        const dir = join(opt.romsDir, cons)
+        await mkdir(dir, { recursive: true })
+        dest = join(dir, freeName(dir, basename(cueEntry)))
+        const mapping = [{ entry: cueEntry, dest }, ...trackEntries.map((t) => ({ entry: t, dest: join(dir, basename(t)) }))]
+        if (!(await extractZipEntries(file, mapping))) { await rm(dest, { force: true }); throw new Error('extraction de l’archive échouée') }
+        if (opt.deleteSource) await rm(file, { force: true })
+      } else if (opt.copy && !inRoms) {
         const dir = join(opt.romsDir, cons)
         await mkdir(dir, { recursive: true })
         const name = freeName(dir, basename(file))

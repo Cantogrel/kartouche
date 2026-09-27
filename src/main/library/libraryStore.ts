@@ -1,10 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { existsSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
-import { extname, join } from 'node:path'
+import { copyFile, rm } from 'node:fs/promises'
+import { basename, dirname, extname, join } from 'node:path'
 import { cueFiles } from './importer'
 import { deleteGameSaves } from '../saves/saves'
-import type { LibraryEntry, MatchKind } from '@shared/library'
+import type { LibraryEntry, MatchKind, SbiImportResult } from '@shared/library'
 
 interface Row {
   id: number; game_id: number | null; console: string; title: string; path: string; size: number; match: string
@@ -92,4 +92,25 @@ export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAc
 export function entryPath(db: DatabaseSync, id: number): string | null {
   const r = db.prepare('SELECT path FROM library WHERE id = ?').get(id) as { path: string } | undefined
   return r && !r.path.startsWith(NO_FILE) && existsSync(r.path) ? r.path : null
+}
+
+/** Emplacement attendu du fichier .sbi d'une entrée (même nom que le fichier lancé, extension .sbi) ; null si la console n'en a pas besoin. */
+export function sbiPathFor(entry: { console: string; path: string }): string | null {
+  if (entry.console !== 'ps1') return null
+  return join(dirname(entry.path), basename(entry.path, extname(entry.path)) + '.sbi')
+}
+
+/** Copie un fichier .sbi fourni par l'utilisateur à côté de la ROM, sous le nom que l'émulateur attend (protection libcrypt). */
+export async function importSbi(db: DatabaseSync, entryId: number, sourcePath: string): Promise<SbiImportResult> {
+  const row = db.prepare('SELECT console, path FROM library WHERE id = ?').get(entryId) as { console: string; path: string } | undefined
+  if (!row) return { ok: false, error: 'notFound' }
+  const dest = sbiPathFor(row)
+  if (!dest) return { ok: false, error: 'notPs1' }
+  if (extname(sourcePath).toLowerCase() !== '.sbi') return { ok: false, error: 'badFile' }
+  try {
+    await copyFile(sourcePath, dest)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: 'failed', detail: e instanceof Error ? e.message : String(e) }
+  }
 }

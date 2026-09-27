@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { deflateRawSync, crc32 } from 'node:zlib'
 import { migrate } from '../db/migrations'
-import { hashFile, readZip } from './hash'
+import { extractZipEntries, hashFile, readZip, readZipEntryText } from './hash'
 import { identify } from './identify'
 import { importPaths } from './importer'
-import { addCatalogGame, listLibrary, removeEntry, saveDir } from './libraryStore'
+import { addCatalogGame, importSbi, listLibrary, removeEntry, saveDir, sbiPathFor } from './libraryStore'
 
 const hex = (n: number): string => (n >>> 0).toString(16).padStart(8, '0')
 let dir: string
@@ -21,15 +21,30 @@ const addGame = (console: string, title: string, base: string, crc: string | nul
 
 /** Zip minimal (une entrée compressée) pour tester la lecture du répertoire central. */
 function makeZip(name: string, data: Buffer): Buffer {
-  const comp = deflateRawSync(data), nm = Buffer.from(name), crc = crc32(data)
-  const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(8, 8)
-  lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(nm.length, 26)
-  const cd = Buffer.alloc(46); cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(20, 4); cd.writeUInt16LE(20, 6); cd.writeUInt16LE(8, 10)
-  cd.writeUInt32LE(crc, 16); cd.writeUInt32LE(comp.length, 20); cd.writeUInt32LE(data.length, 24); cd.writeUInt16LE(nm.length, 28)
-  const off = lh.length + nm.length + comp.length
-  const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(1, 8); end.writeUInt16LE(1, 10)
-  end.writeUInt32LE(cd.length + nm.length, 12); end.writeUInt32LE(off, 16)
-  return Buffer.concat([lh, nm, comp, cd, nm, end])
+  return makeZipMulti([{ name, data }])
+}
+
+/** Zip à plusieurs entrées (méthode déflate), pour tester une archive disque .cue + pistes. */
+function makeZipMulti(files: { name: string; data: Buffer }[]): Buffer {
+  const locals: Buffer[] = []
+  const centrals: Buffer[] = []
+  let off = 0
+  for (const { name, data } of files) {
+    const comp = deflateRawSync(data), nm = Buffer.from(name), crc = crc32(data)
+    const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(8, 8)
+    lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(nm.length, 26)
+    const cd = Buffer.alloc(46); cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(20, 4); cd.writeUInt16LE(20, 6); cd.writeUInt16LE(8, 10)
+    cd.writeUInt32LE(crc, 16); cd.writeUInt32LE(comp.length, 20); cd.writeUInt32LE(data.length, 24); cd.writeUInt16LE(nm.length, 28)
+    cd.writeUInt32LE(off, 42)
+    locals.push(lh, nm, comp)
+    centrals.push(cd, nm)
+    off += lh.length + nm.length + comp.length
+  }
+  const cdStart = off
+  const cdBuf = Buffer.concat(centrals)
+  const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10)
+  end.writeUInt32LE(cdBuf.length, 12); end.writeUInt32LE(cdStart, 16)
+  return Buffer.concat([...locals, cdBuf, end])
 }
 
 describe('hash', () => {
@@ -44,6 +59,18 @@ describe('hash', () => {
   })
   it('renvoie null pour un fichier qui n’est pas un zip', async () => {
     const f = join(dir, 'x.zip'); writeFileSync(f, 'pas un zip'); expect(await readZip(f)).toBeNull()
+  })
+  it('lit le texte d’une entrée et en extrait plusieurs vers des chemins choisis', async () => {
+    const cue = Buffer.from('FILE "Disc (Track 1).bin" BINARY\n')
+    const track = Buffer.from('piste')
+    const f = join(dir, 'disc.zip')
+    writeFileSync(f, makeZipMulti([{ name: 'Disc.cue', data: cue }, { name: 'Disc (Track 1).bin', data: track }]))
+    expect(await readZipEntryText(f, 'Disc.cue')).toBe(cue.toString('latin1'))
+    expect(await readZipEntryText(f, 'absent.cue')).toBeNull()
+    const out1 = join(dir, 'out1.cue'), out2 = join(dir, 'out2.bin')
+    expect(await extractZipEntries(f, [{ entry: 'Disc.cue', dest: out1 }, { entry: 'Disc (Track 1).bin', dest: out2 }])).toBe(true)
+    expect(readFileSync(out1)).toEqual(cue); expect(readFileSync(out2)).toEqual(track)
+    expect(await extractZipEntries(f, [{ entry: 'inconnu.bin', dest: join(dir, 'out3') }])).toBe(false)
   })
 })
 
@@ -109,6 +136,25 @@ describe('import', () => {
     expect(r.items[0].file).toBe(cue) // console ambiguë ps1/ps2 → non importée, mais une seule entrée (la piste est absorbée)
     expect(r.items[0].status).toBe('ambiguous')
   })
+  it('extrait un zip .cue + piste (archive à plusieurs fichiers, sinon rejetée avant)', async () => {
+    const track = Buffer.from('piste')
+    const z = join(dir, 'src', 'Disc.zip')
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(z, makeZipMulti([
+      { name: 'Disc.cue', data: Buffer.from('FILE "Disc (Track 1).bin" BINARY\n  TRACK 01 MODE2/2352\n') },
+      { name: 'Disc (Track 1).bin', data: track }
+    ]))
+    const id = addGame('ps1', 'Disc', 'disc', hex(crc32(track)), track.length)
+    const r = await importPaths(db, [z], opt())
+    expect(r.items[0]).toMatchObject({ status: 'added', console: 'ps1', match: 'hash' })
+    expect(existsSync(join(dir, 'roms', 'ps1', 'Disc.cue'))).toBe(true)
+    expect(readFileSync(join(dir, 'roms', 'ps1', 'Disc (Track 1).bin'))).toEqual(track)
+    expect(listLibrary(db)[0]).toMatchObject({ gameId: id, console: 'ps1', missing: false })
+    // Un zip à plusieurs fichiers sans .cue reconnaissable reste rejeté.
+    const bad = join(dir, 'src', 'Bad.zip')
+    writeFileSync(bad, makeZipMulti([{ name: 'a.bin', data: Buffer.from('a') }, { name: 'b.bin', data: Buffer.from('b') }]))
+    expect((await importPaths(db, [bad], opt())).items[0].status).toBe('error')
+  })
 })
 
 describe('bibliothèque', () => {
@@ -152,5 +198,30 @@ describe('bibliothèque', () => {
     mkdirSync(saveDir(saves, e2), { recursive: true })
     await removeEntry(db, e2.id, 'all', saves)
     expect(listLibrary(db)).toHaveLength(0); expect(existsSync(e2.path)).toBe(false); expect(existsSync(saveDir(saves, e2))).toBe(false)
+  })
+})
+
+describe('sbi', () => {
+  const opt = () => ({ copy: true, deleteSource: false, romsDir: join(dir, 'roms') })
+  const rom = (name: string, content: string): string => { const f = join(dir, 'src', name); mkdirSync(join(dir, 'src'), { recursive: true }); writeFileSync(f, content); return f }
+
+  it('place le .sbi à côté de la ROM, sous le nom attendu ; refuse une console qui n’en a pas besoin ou un fichier qui n’est pas un .sbi', async () => {
+    addGame('ps1', 'Disc', 'disc', 'cbf43926', 9)
+    await importPaths(db, [rom('Disc.bin', '123456789')], opt())
+    const [e] = listLibrary(db)
+    expect(sbiPathFor(e)).toBe(join(dir, 'roms', 'ps1', 'Disc.sbi'))
+    const sbi = join(dir, 'src', 'external.sbi'); writeFileSync(sbi, 'x')
+    expect(await importSbi(db, e.id, sbi)).toMatchObject({ ok: true })
+    expect(existsSync(join(dir, 'roms', 'ps1', 'Disc.sbi'))).toBe(true)
+    const notSbi = join(dir, 'src', 'x.txt'); writeFileSync(notSbi, 'x')
+    expect(await importSbi(db, e.id, notSbi)).toMatchObject({ ok: false, error: 'badFile' })
+    expect(await importSbi(db, 999999, sbi)).toMatchObject({ ok: false, error: 'notFound' })
+
+    const nesContent = 'nes cart!'
+    addGame('nes', 'Cart', 'cart', hex(crc32(Buffer.from(nesContent))), nesContent.length)
+    await importPaths(db, [rom('Cart.nes', nesContent)], opt())
+    const nesEntry = listLibrary(db).find((x) => x.console === 'nes')!
+    expect(sbiPathFor(nesEntry)).toBeNull()
+    expect(await importSbi(db, nesEntry.id, sbi)).toMatchObject({ ok: false, error: 'notPs1' })
   })
 })

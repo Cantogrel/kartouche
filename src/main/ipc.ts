@@ -12,7 +12,7 @@ import { tgdb } from './catalog/tgdb'
 import { syncPopularity } from './catalog/popularity'
 import { localizeDetails } from './catalog/l10n'
 import { importPaths } from './library/importer'
-import { addCatalogGame, entryPath, listLibrary, refreshMissing, removeEntry } from './library/libraryStore'
+import { addCatalogGame, entryPath, importSbi, listLibrary, refreshMissing, removeEntry } from './library/libraryStore'
 import { createCollection, deleteCollection, listCollections, renameCollection, setFlags, setMembers, setMembership } from './library/collections'
 import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget } from './saves/saves'
 import { getAchievements } from './achievements/retroachievements'
@@ -113,6 +113,13 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   })
   handle('library:remove', (req) => removeEntry(db, req.id, req.action, paths.saves))
   handle('library:add', (gameId) => addCatalogGame(db, gameId))
+  handle('library:pickSbi', async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = { properties: ['openFile'] as 'openFile'[], filters: [{ name: 'SBI', extensions: ['sbi'] }] }
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return res.canceled ? null : (res.filePaths[0] ?? null)
+  })
+  handle('library:importSbi', (req) => importSbi(db, req.entryId, req.path))
   handle('library:flag', (req) => setFlags(db, req.id, req))
   handle('collections:list', () => listCollections(db))
   handle('collections:create', (name) => createCollection(db, name))

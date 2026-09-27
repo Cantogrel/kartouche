@@ -1,15 +1,47 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { dirname } from 'node:path'
-import { buildArgs, emulatorById, emulatorForConsole, type GameSession, type LaunchResult } from '@shared/emulators'
+import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { buildArgs, emulatorById, emulatorForConsole, type EmulatorDef, type GameSession, type LaunchResult, type QuickExit } from '@shared/emulators'
 import { getRow } from './emulatorStore'
 import { closeGracefully, connectedXInputSlots, watchQuitChord } from './quit'
-import { applyDolphinPad } from './configure'
+import { applyDolphinPad, ensureDuckstationLogging } from './configure'
 import { loadSettings } from '../db/settingsStore'
 import { backupSaves, prepareRetroarch } from '../saves/saves'
 
-const running = new Map<number, { pid: number }>()
+const running = new Map<number, { pid: number; stopped: boolean }>()
+
+/** En dessous, une fermeture sans intervention de l'utilisateur est probablement un échec (BIOS refusé, fichier manquant…) plutôt qu'une vraie partie. */
+const QUICK_EXIT_MS = 10_000
+/** Combien de sortie standard/erreur de l'émulateur on garde (les émulateurs à interface graphique n'écrivent en général rien ici). */
+const CAPTURE_MAX = 8000
+
+/**
+ * Fichier de journal connu par émulateur, pour quand celui-ci n'écrit rien sur la sortie standard (cas de la plupart des
+ * interfaces Qt/wx). Limité aux emplacements par défaut bien établis ; les autres émulateurs restent couverts par la seule
+ * détection (fermeture rapide signalée) tant que leur propre emplacement de journal n'a pas été vérifié.
+ */
+const KNOWN_LOG_FILES: Record<string, (dir: string) => string> = {
+  duckstation: (dir) => join(dir, 'duckstation.log'),
+  rpcs3: (dir) => join(dir, 'log', 'RPCS3.log'),
+  // Cemu n'est pas installé en mode portable par RomVault (pas d'entrée `portable` dans EMULATORS) : il journalise dans son dossier utilisateur Windows.
+  cemu: () => join(homedir(), 'AppData', 'Roaming', 'Cemu', 'log.txt')
+}
+
+/** Ne garde que les lignes qui ressemblent à un avertissement/erreur (format DuckStation « W(fn): » / « E(fn): », ou mot « error »/« warn ») ; sinon les dernières lignes. */
+export function relevantLogLines(text: string, max = 20): string {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim())
+  const flagged = lines.filter((l) => /^[EW][/(]/.test(l) || /error|warn/i.test(l))
+  return (flagged.length ? flagged : lines.slice(-max)).slice(-max).join('\n')
+}
+
+async function readLaunchLog(def: EmulatorDef, dir: string): Promise<string | undefined> {
+  const known = KNOWN_LOG_FILES[def.id]
+  if (!known) return undefined
+  try { return relevantLogLines(await readFile(known(dir), 'utf8')) } catch { return undefined }
+}
 
 /** Temps de jeu arrondi à la minute ; une session de moins de 30 s ne compte pas. */
 export const sessionMinutes = (ms: number): number => Math.floor((ms + 30000) / 60000)
@@ -19,7 +51,7 @@ export const isRunning = (entryId: number): boolean => running.has(entryId)
 /** Ferme le jeu proprement. */
 export function stopGame(entryId: number): void {
   const r = running.get(entryId)
-  if (r && r.pid > 0) closeGracefully(r.pid)
+  if (r && r.pid > 0) { r.stopped = true; closeGracefully(r.pid) }
 }
 export const stopAllGames = (): void => { for (const id of running.keys()) stopGame(id) }
 export const runningCount = (): number => running.size
@@ -36,7 +68,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
   const args = buildArgs(def, entry.path, entry.console)
   if (!args) return { ok: false, error: 'unsupported', detail: def.id }
   // Réservé pendant la préparation (détection de la manette) pour qu'un double clic ne lance pas deux fois le jeu.
-  running.set(entryId, { pid: 0 })
+  running.set(entryId, { pid: 0, stopped: false })
   try {
     // Dolphin invalide toute liaison qui cite un périphérique absent : la manette branchée est écrite à chaque lancement.
     if (def.id === 'dolphin') {
@@ -45,27 +77,41 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     }
     // RetroArch range ses sauvegardes et états dans le dossier de données de RomVault (par jeu, hors de l'installation).
     if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot).catch(() => {})
+    // DuckStation n'écrit rien sur la sortie standard : sans ça, un jeu qui se ferme tout seul ne laisse aucune trace exploitable.
+    if (def.id === 'duckstation') await ensureDuckstationLogging(row.dir).catch(() => {})
     const started = Date.now()
-    const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: 'ignore' })
-    running.set(entryId, { pid: child.pid ?? 0 })
+    const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: ['ignore', 'pipe', 'pipe'] })
+    running.set(entryId, { pid: child.pid ?? 0, stopped: false })
+    // Capturé au cas où l'émulateur écrit sur la sortie standard (RetroArch, par ex.) ; sert de diagnostic si le jeu se ferme vite.
+    let captured = ''
+    const onOutput = (chunk: Buffer): void => { captured = (captured + chunk.toString('utf8')).slice(-CAPTURE_MAX) }
+    child.stdout?.on('data', onOutput)
+    child.stderr?.on('data', onOutput)
     // Retour + Start maintenus sur une manette XInput ferment le jeu proprement (la plupart des émulateurs n'ont pas de « quitter » à la manette).
     let stopWatch: (() => void) | null = null
     let over = false
     void watchQuitChord(cacheDir, () => stopGame(entryId)).then((stop) => { if (over) stop(); else stopWatch = stop }).catch(() => {})
-    const finish = (): void => {
+    const finish = async (): Promise<void> => {
       if (over) return
       over = true
       stopWatch?.()
+      const stopped = running.get(entryId)?.stopped ?? false
       running.delete(entryId)
-      const minutes = sessionMinutes(Date.now() - started)
+      const elapsedMs = Date.now() - started
+      const minutes = sessionMinutes(elapsedMs)
       db.prepare('UPDATE library SET play_minutes = play_minutes + ?, last_played = ? WHERE id = ?').run(minutes, Date.now(), entryId)
       const total = db.prepare('SELECT play_minutes FROM library WHERE id = ?').get(entryId) as { play_minutes: number } | undefined
-      notify({ entryId, running: false, playMinutes: total?.play_minutes })
+      // Fermé tout seul (pas par l'utilisateur) en moins de QUICK_EXIT_MS : probablement un échec plutôt qu'une vraie partie.
+      let quickExit: QuickExit | undefined
+      if (!stopped && elapsedMs < QUICK_EXIT_MS) {
+        quickExit = { elapsedMs, log: captured.trim() || (await readLaunchLog(def, row.dir)) }
+      }
+      notify({ entryId, running: false, playMinutes: total?.play_minutes, quickExit })
       // Copie de sécurité des sauvegardes de ce jeu, seulement si elles ont changé depuis la dernière.
       if (loadSettings(db).autoBackupSaves) void backupSaves(db, savesRoot, { id: entryId, console: entry.console, path: entry.path }, true).catch(() => {})
     }
-    child.on('error', finish)
-    child.on('exit', finish)
+    child.on('error', () => void finish())
+    child.on('exit', () => void finish())
     notify({ entryId, running: true })
     return { ok: true }
   } catch (e) {

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { EmulatorProgress, EmulatorState, LatestVersion, LaunchResult } from '@shared/emulators'
+import type { EmulatorProgress, EmulatorState, LatestVersion, LaunchResult, QuickExit } from '@shared/emulators'
 
 interface EmulatorsState {
   list: EmulatorState[]
@@ -10,17 +10,20 @@ interface EmulatorsState {
   checking: boolean
   /** Jeux (ids de la bibliothèque) actuellement ouverts dans un émulateur. */
   running: number[]
+  /** Dernière fermeture suspecte (probable échec de lancement) par jeu ; effacée au lancement suivant. */
+  quickExits: Record<number, QuickExit>
   refresh: () => Promise<void>
   install: (id: string) => Promise<void>
   uninstall: (id: string) => Promise<void>
   locate: (id: string) => Promise<void>
   check: () => Promise<void>
   play: (entryId: number) => Promise<LaunchResult>
+  dismissQuickExit: (entryId: number) => void
   listen: () => () => void
 }
 
 export const useEmulators = create<EmulatorsState>((set, get) => ({
-  list: [], loaded: false, progress: {}, errors: {}, latest: {}, checking: false, running: [],
+  list: [], loaded: false, progress: {}, errors: {}, latest: {}, checking: false, running: [], quickExits: {},
   refresh: async () => {
     const [list, running] = await Promise.all([window.api.invoke('emulators:list'), window.api.invoke('game:running')])
     set({ list, running, loaded: true })
@@ -45,11 +48,23 @@ export const useEmulators = create<EmulatorsState>((set, get) => ({
       set({ latest: Object.fromEntries(res.map((r) => [r.id, r.version])) })
     } finally { set({ checking: false }) }
   },
-  play: (entryId) => window.api.invoke('game:play', entryId),
+  play: (entryId) => {
+    get().dismissQuickExit(entryId)
+    return window.api.invoke('game:play', entryId)
+  },
+  dismissQuickExit: (entryId) => set((s) => {
+    if (!(entryId in s.quickExits)) return s
+    const quickExits = { ...s.quickExits }
+    delete quickExits[entryId]
+    return { quickExits }
+  }),
   listen: () => {
     const off1 = window.api.on('emulators:progress', (p) => set((s) => (s.progress[p.id] ? { progress: { ...s.progress, [p.id]: p } } : s)))
     const off2 = window.api.on('game:session', (g) => {
-      set((s) => ({ running: g.running ? [...new Set([...s.running, g.entryId])] : s.running.filter((x) => x !== g.entryId) }))
+      set((s) => ({
+        running: g.running ? [...new Set([...s.running, g.entryId])] : s.running.filter((x) => x !== g.entryId),
+        quickExits: g.quickExit ? { ...s.quickExits, [g.entryId]: g.quickExit } : s.quickExits
+      }))
       if (!g.running) void import('./library').then((m) => m.useLibrary.getState().refresh())
     })
     return () => { off1(); off2() }

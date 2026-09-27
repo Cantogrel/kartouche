@@ -1,5 +1,5 @@
 import type { Settings } from './settings'
-import type { Collection, ImportRequest, ImportResult, LibraryEntry, LibraryProgress } from './library'
+import type { Collection, ImportRequest, ImportResult, LibraryEntry, LibraryProgress, SbiImportResult } from './library'
 import type { AchievementsResult } from './achievements'
 import type { BackupInfo, SaveInfo } from './saves'
 import type { BiosImportResult, BiosSlotStatus } from './bios'
@@ -54,6 +54,10 @@ export interface IpcChannels {
   'library:reveal': { req: number; res: void }
   /** Favori et/ou épingle d'un jeu (champ absent = inchangé). */
   'library:flag': { req: { id: number; favorite?: boolean; pinned?: boolean }; res: void }
+  /** Ouvre le sélecteur pour un fichier .sbi ; null si annulé. */
+  'library:pickSbi': { req: void; res: string | null }
+  /** Copie un .sbi à côté de la ROM d'un jeu (protection libcrypt PS1). */
+  'library:importSbi': { req: { entryId: number; path: string }; res: SbiImportResult }
   'collections:list': { req: void; res: Collection[] }
   /** Crée une collection (renvoie l'existante si le nom est déjà pris) ; null si le nom est vide. */
   'collections:create': { req: string; res: Collection | null }

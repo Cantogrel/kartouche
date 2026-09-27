@@ -99,8 +99,9 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .bios-panel.over { border-color: var(--accent, #7c8cff); background: var(--bg-elevated); }
 .bios-panel .row { flex-direction: column; align-items: stretch; gap: 8px; }
 .bios-panel .btn { white-space: nowrap; text-align: center; }
-.bios-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.bios-remove { margin-left: auto; background: none; border: 0; padding: 0 2px; color: var(--text-muted, #8b8b93); font-size: 12px; cursor: pointer; text-decoration: underline; }
+.bios-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; user-select: text; cursor: text; }
+.bios-panel > .muted { user-select: text; cursor: text; }
+.bios-remove { margin-left: auto; background: none; border: 0; padding: 0 2px; color: var(--text-muted, #8b8b93); font-size: 12px; cursor: pointer; text-decoration: underline; user-select: none; }
 .bios-remove:hover { color: var(--danger, #e5484d); }
 .bios-list li { display: flex; align-items: center; gap: 4px; }
 .bios-mark { display: inline-block; width: 16px; font-weight: 700; }
@@ -135,6 +136,8 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .import-result { margin-bottom: 16px; }
 .panel { margin-bottom: 16px; }
 .lib-file { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; word-break: break-all; }
+.quick-exit { display: flex; flex-direction: column; gap: 8px; border-left: 3px solid #ff7b7b; }
+.quick-exit pre { background: var(--bg-elevated); border-radius: var(--radius); padding: 10px; margin: 0; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 12em; overflow: auto; }
 
 /* Liste des jeux du menu latéral (miniature, séparation du menu principal) et menu contextuel */
 .side-lib { margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--border); }

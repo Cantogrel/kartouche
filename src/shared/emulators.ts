@@ -104,4 +104,23 @@ export interface LatestVersion { id: string; version: string | null; error?: str
 
 export interface LaunchResult { ok: boolean; error?: 'noEmulator' | 'notInstalled' | 'noFile' | 'spawn' | 'unsupported' | 'running'; detail?: string }
 
-export interface GameSession { entryId: number; running: boolean; playMinutes?: number }
+/** Présent quand le jeu s'est fermé (ou a planté) très vite après son lancement, sans que l'utilisateur ne l'ait fermé lui-même. */
+export interface QuickExit { elapsedMs: number; log?: string }
+
+export interface GameSession { entryId: number; running: boolean; playMinutes?: number; quickExit?: QuickExit }
+
+/**
+ * Signatures reconnues dans le journal d'un lancement raté, indépendamment de l'émulateur qui les a émises (clé i18n `play.*`).
+ * Une entrée plus spécifique doit passer avant une plus générale (SBI avant BIOS : un message SBI cite parfois le mot « BIOS »).
+ */
+const KNOWN_FAILURES: readonly { pattern: RegExp; key: string }[] = [
+  { pattern: /subq|\.sbi\b/i, key: 'play.quickExitSbi' },
+  { pattern: /bios.*(missing|invalid|not found|refused)|no bios|aucun bios/i, key: 'play.quickExitBios' },
+  { pattern: /firmware.*(missing|invalid|not found)/i, key: 'play.quickExitFirmware' }
+]
+
+/** Clé i18n d'une cause connue reconnue dans le journal, ou undefined si rien de reconnu (le journal brut reste la seule piste). */
+export function explainFailure(log: string | undefined): string | undefined {
+  if (!log) return undefined
+  return KNOWN_FAILURES.find((f) => f.pattern.test(log))?.key
+}

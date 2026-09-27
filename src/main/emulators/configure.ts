@@ -201,6 +201,15 @@ export async function applyDolphinPad(dir: string, xinputSlot: number | null): P
   await writeIni(join(cfg, 'WiimoteNew.ini'), wii)
 }
 
+/**
+ * Active la journalisation fichier de DuckStation (idempotent, réappliqué à chaque lancement) : DuckStation n'écrit rien
+ * sur la sortie standard, donc c'est le seul moyen de récupérer la raison d'un jeu qui se ferme sans se lancer (BIOS
+ * refusé, SBI manquant, etc.) — voir `readLaunchLog` dans le lanceur.
+ */
+export async function ensureDuckstationLogging(dir: string): Promise<void> {
+  await writeIni(join(dir, 'settings.ini'), { Logging: { LogLevel: 'Warning', LogToFile: true } })
+}
+
 /** Langue de la console Wii = octet « IPL.LNG » du fichier SYSCONF (0 JP, 1 EN, 2 DE, 3 FR, 4 ES, 5 IT, 6 NL). */
 export function setSysconfLanguage(data: Buffer, language: number): boolean {
   if (data.length < 8 || data.subarray(0, 4).toString('latin1') !== 'SCv0') return false
@@ -352,8 +361,8 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
     }
     case 'duckstation':
       return writeIni(join(dir, 'settings.ini'), {
-        // Pas de « Language » : DuckStation suit la langue du système, et une langue demandée sans fichier de traduction externe déclenche une erreur au démarrage.
-        Main: { StartFullscreen: true, ConfirmPowerOff: false, SetupWizardIncomplete: false },
+        // Les traductions sont fournies avec l'exe (translations/duckstation-qt_fr.qm, etc.) : « Language » est sans risque, contrairement à une ancienne hypothèse.
+        Main: { StartFullscreen: true, ConfirmPowerOff: false, SetupWizardIncomplete: false, Language: fr ? 'fr' : 'en' },
         GPU: { ResolutionScale: pick(tier, [5, 6, 9]) },
         BIOS: { SearchDirectory: ctx.biosDir },
         InputSources: { SDL: true },

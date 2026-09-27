@@ -3,13 +3,13 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { EMULATORS, buildArgs, compareVersions, emulatorById, emulatorForConsole } from '@shared/emulators'
+import { EMULATORS, buildArgs, compareVersions, emulatorById, emulatorForConsole, explainFailure } from '@shared/emulators'
 import { CONSOLES } from '@shared/consoles'
 import { migrate } from '../db/migrations'
 import { pickRelease, retroarchVersion } from './source'
 import { findExe, flattenRoot, isFreshInstall } from './installer'
 import { listEmulators, saveEmulator } from './emulatorStore'
-import { sessionMinutes } from './launcher'
+import { relevantLogLines, sessionMinutes } from './launcher'
 
 describe('émulateurs : définitions', () => {
   it('chaque console du catalogue a un émulateur, et un seul', () => {
@@ -83,5 +83,18 @@ describe('émulateurs : installation', () => {
     expect(sessionMinutes(29000)).toBe(0)
     expect(sessionMinutes(31000)).toBe(1)
     expect(sessionMinutes(90 * 60000)).toBe(90)
+  })
+  it('reconnaît une cause connue d’échec dans un journal, indépendamment de l’émulateur qui l’a écrite', () => {
+    expect(explainFailure('W(CheckForRequiredSubQ): SBI file missing but required for SCES-02835')).toBe('play.quickExitSbi')
+    expect(explainFailure('E BIOS: no bios file found for region')).toBe('play.quickExitBios')
+    expect(explainFailure('firmware not found, aborting')).toBe('play.quickExitFirmware')
+    expect(explainFailure('I/Core: démarrage normal')).toBeUndefined()
+    expect(explainFailure(undefined)).toBeUndefined()
+  })
+  it('ne garde que les lignes d’avertissement/erreur d’un journal, sinon les dernières lignes', () => {
+    const log = ['I/Core: démarrage', 'I/BIOS: recherche…', 'W(CheckForRequiredSubQ): SBI file missing but required for SCES-02835', 'I/VideoThread: arrêt'].join('\n')
+    expect(relevantLogLines(log)).toBe('W(CheckForRequiredSubQ): SBI file missing but required for SCES-02835')
+    const noisy = Array.from({ length: 30 }, (_, i) => `I/Core: ligne ${i}`).join('\n')
+    expect(relevantLogLines(noisy, 5)).toBe(Array.from({ length: 5 }, (_, i) => `I/Core: ligne ${25 + i}`).join('\n'))
   })
 })

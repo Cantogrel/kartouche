@@ -9,7 +9,7 @@ import type { CatalogGame, GameDetails } from '@shared/catalog'
 import type { LibraryEntry } from '@shared/library'
 import { useLibrary } from '@/store/library'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
-import { PlayButton } from '@/ui/PlayButton'
+import { PlayButton, QuickExitNotice } from '@/ui/PlayButton'
 import { AchievementsPanel, FlagButtons, SavesPanel } from '@/ui/GameExtras'
 
 /** Fiche d'un jeu du catalogue : données du DAT + description enrichie si un fournisseur (IGDB) est configuré. */
@@ -51,6 +51,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
         </div>
       </Cover>
       <div className="detail">
+        {owned && !owned.missing && <QuickExitNotice entryId={owned.id} />}
         <div className="panel">
           {year && <div><strong>{t('game.released', { d: String(year) })}</strong></div>}
           <div className="muted">{[details?.publisher && t('game.publishedBy', { p: details.publisher }), developer && t('game.developedBy', { p: developer })].filter(Boolean).join(' · ')}</div>

@@ -61,3 +61,10 @@ export interface ImportResult {
 }
 
 export interface LibraryProgress { done: number; total: number; current: string }
+
+export interface SbiImportResult {
+  ok: boolean
+  /** notPs1 = console sans .sbi ; notFound = jeu introuvable ; badFile = pas un .sbi ; failed = échec de copie. */
+  error?: 'notPs1' | 'notFound' | 'badFile' | 'failed'
+  detail?: string
+}

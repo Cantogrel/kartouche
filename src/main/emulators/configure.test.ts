@@ -47,9 +47,12 @@ describe('configuration automatique des émulateurs', () => {
     const t = read('settings.ini')
     expect(t).toContain('OutputVolume = 80')
     expect(t).toContain('StartFullscreen = true')
-    expect(t).not.toContain('Language')
+    // Les traductions sont fournies avec l'exe (translations/duckstation-qt_*.qm) : Language est sans risque, contrairement à une ancienne hypothèse.
+    expect(t).toContain('Language = fr')
     expect(t).toContain('ResolutionScale = 9')
     expect(t).toContain(`SearchDirectory = ${join(dir, 'bios')}`)
+    await configureEmulator('duckstation', dir, ctx({ lang: 'en' }))
+    expect(read('settings.ini')).toContain('Language = en')
   })
   it('DuckStation : clavier ET manette sur chaque touche', async () => {
     await configureEmulator('duckstation', dir, ctx())
