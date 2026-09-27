@@ -40,6 +40,8 @@ export const BIOS_SLOTS: readonly BiosSlot[] = [
   { id: 'vita', emulator: 'vita3k', kind: 'firmware', required: true, names: ['psvupdat.pup'], minSize: 30 * MB, auto: true },
   { id: 'switch-keys', emulator: 'eden', kind: 'keys', required: true, names: ['prod.keys'] },
   { id: 'switch-firmware', emulator: 'eden', kind: 'firmware', required: true, exts: ['.zip'], minSize: 100 * MB },
+  { id: 'wiiu-keys', emulator: 'cemu', kind: 'keys', required: true },
+  { id: '3ds-keys', emulator: 'azahar', kind: 'keys', required: true },
   { id: 'nds7', emulator: 'melonds', kind: 'bios', required: false, names: ['bios7.bin'], sizes: [16384], md5: { df692a80a5b1bc90728bc3dfc76cd948: 'ARM7' } },
   { id: 'nds9', emulator: 'melonds', kind: 'bios', required: false, names: ['bios9.bin'], sizes: [4096], md5: { a392174eb3e572fed6447e956bde4b25: 'ARM9' } },
   { id: 'ndsfw', emulator: 'melonds', kind: 'bios', required: false, names: ['firmware.bin'], sizes: [131072, 262144, 524288] }

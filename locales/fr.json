@@ -188,6 +188,8 @@
   "bios.slot.nds7": "BIOS ARM7 DS (bios7.bin)",
   "bios.slot.nds9": "BIOS ARM9 DS (bios9.bin)",
   "bios.slot.ndsfw": "Firmware DS (firmware.bin)",
+  "bios.slot.wiiu-keys": "Clé de disque Wii U (keys.txt de Cemu)",
+  "bios.slot.3ds-keys": "Clés AES 3DS (aes_keys.txt d'Azahar)",
   "bios.auto": "Installer automatiquement",
   "bios.autoFailed": "Installation automatique impossible — importez le fichier vous-même",
   "bios.downloading": "Téléchargement du firmware {done} / {total} Mo",

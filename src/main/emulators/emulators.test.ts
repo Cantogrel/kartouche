@@ -7,7 +7,7 @@ import { EMULATORS, buildArgs, compareVersions, emulatorById, emulatorForConsole
 import { CONSOLES } from '@shared/consoles'
 import { migrate } from '../db/migrations'
 import { pickRelease, retroarchVersion } from './source'
-import { findExe, flattenRoot } from './installer'
+import { findExe, flattenRoot, isFreshInstall } from './installer'
 import { listEmulators, saveEmulator } from './emulatorStore'
 import { sessionMinutes } from './launcher'
 
@@ -22,6 +22,18 @@ describe('émulateurs : définitions', () => {
   it('refuse une console que l’émulateur ne gère pas', () => {
     expect(buildArgs(emulatorById('dolphin')!, 'x', 'ps1')).toBeNull()
     expect(emulatorForConsole('switch')?.id).toBe('eden')
+  })
+})
+
+describe('émulateurs : installation fraîche', () => {
+  it('jamais installé (aucune ligne) : fraîche', () => {
+    expect(isFreshInstall(undefined)).toBe(true)
+  })
+  it('exécutable enregistré mais absent (dossier supprimé hors de RomVault) : fraîche quand même — rien à préserver', () => {
+    expect(isFreshInstall({ exe: 'E:/dossier-qui-n-existe-pas-9273/x.exe' })).toBe(true)
+  })
+  it('exécutable enregistré et présent : pas fraîche, les réglages de l’utilisateur sont gardés', () => {
+    expect(isFreshInstall({ exe: __filename })).toBe(false)
   })
 })
 

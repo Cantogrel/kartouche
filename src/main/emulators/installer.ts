@@ -98,11 +98,20 @@ async function installCores(def: EmulatorDef, dir: string, cache: string, report
   }
 }
 
+/**
+ * Vrai si rien d'une installation précédente ne subsiste (jamais installé, ou dossier/exe supprimé hors de RomVault, ou
+ * installation précédente jamais allée au bout) : dans ce cas les réglages automatiques (langue, manette, plein écran)
+ * sont (ré)écrits. Un exécutable enregistré mais absent ne compte pas comme « déjà installé » : il n'y a alors rien à préserver.
+ */
+export function isFreshInstall(prevRow: { exe: string } | undefined): boolean {
+  return !prevRow || !existsSync(prevRow.exe)
+}
+
 /** Télécharge la dernière version, l'extrait (par-dessus l'installation existante en cas de mise à jour : les données portables sont conservées) et l'enregistre. */
 export async function installEmulator(db: DatabaseSync, def: EmulatorDef, paths: AppPaths, report: Report, ctx: Omit<ConfigContext, 'biosDir'>): Promise<void> {
   const id = def.id
-  // Réglages automatiques (langue, plein écran, résolution) seulement à la première installation : une mise à jour garde ceux de l'utilisateur.
-  const fresh = !getRow(db, id)
+  // Réglages automatiques (langue, plein écran, résolution, manette) seulement à la première installation : une mise à jour garde ceux de l'utilisateur.
+  const fresh = isFreshInstall(getRow(db, id))
   const cache = join(paths.cache, 'downloads')
   const tmp = join(paths.emulators, `${id}.tmp`)
   try {

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useSettings } from '@/store/settings'
 import type { Settings } from '@shared/settings'
-import { heldActions, pickNext, Repeater, type Dir, type PadAction } from './nav'
+import { heldActions, pickNext, Repeater, rightStickScroll, type Dir, type PadAction } from './nav'
 
 const KEYS: Record<string, PadAction> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Escape: 'back', F11: 'start', PageUp: 'prev', PageDown: 'next', Home: 'prevFilter', End: 'nextFilter' }
 
@@ -40,6 +40,14 @@ export function moveFocus(dir: Dir): void {
 
 const cfg = (): Settings => useSettings.getState().settings
 
+/** Défilement continu au stick droit de la zone `[data-scroll]` de l'écran actif, quel que soit l'élément ciblé par le stick gauche. */
+function scrollWithRightStick(): void {
+  const delta = rightStickScroll(navigator.getGamepads(), 0.15, 6)
+  if (!delta) return
+  const el = activeRoot()?.querySelector<HTMLElement>('[data-scroll]')
+  if (el) el.scrollTop += delta
+}
+
 /**
  * Branche la manette (API Gamepad, profil standard) et le clavier sur `onAction`.
  * La manette est lue à chaque image ; les directions se répètent en maintien. Le bouton A clique l'élément ciblé.
@@ -66,6 +74,7 @@ export function useNav(onAction: (a: PadAction, fromKeyboard: boolean) => void, 
     }
     const tick = (now: number): void => {
       rep.update(heldNow(), now).forEach((a) => fire(a))
+      scrollWithRightStick()
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)

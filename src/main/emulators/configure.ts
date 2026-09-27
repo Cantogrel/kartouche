@@ -93,6 +93,22 @@ const qt = (o: Record<string, string | number | boolean>): Record<string, string
 
 const pick = <T>(tier: 1 | 2 | 3, values: readonly [T, T, T]): T => values[tier - 1]
 
+/** Fusionne des clés dans une section TOML (« [section] ») existante ou absente, sans toucher au reste du fichier. */
+export function setTomlKeys(text: string, section: string, values: Record<string, string | number | boolean>): string {
+  const fmt = (v: string | number | boolean): string => (typeof v === 'string' ? JSON.stringify(v) : String(v))
+  const lines = text.split(/\r?\n/)
+  const head = lines.findIndex((l) => l.trim() === `[${section}]`)
+  if (head < 0) return `${text.replace(/\s*$/, '')}\n\n[${section}]\n${Object.entries(values).map(([k, v]) => `${k} = ${fmt(v)}`).join('\n')}\n`
+  let end = lines.findIndex((l, i) => i > head && /^\s*\[/.test(l))
+  if (end < 0) end = lines.length
+  for (const [k, v] of Object.entries(values)) {
+    const at = lines.findIndex((l, i) => i > head && i < end && new RegExp(`^\\s*${k}\\s*=`).test(l))
+    if (at >= 0) lines[at] = `${k} = ${fmt(v)}`
+    else { lines.splice(end, 0, `${k} = ${fmt(v)}`); end++ }
+  }
+  return lines.join('\n')
+}
+
 /** Change des valeurs de premier niveau d'un YAML (« clé: valeur ») en gardant tout le reste. */
 export function patchYaml(text: string, patch: Record<string, string | number | boolean>): string {
   const nl = text.includes('\r\n') ? '\r\n' : '\n'
@@ -253,6 +269,67 @@ const psPad = (arrows: [string, string, string, string], enter: string): Record<
   return out
 }
 
+// --- Cemu : profil manette Wii U GamePad (clavier + 1ère manette XInput) -------------------------------------------------
+
+/**
+ * Identifiants VPAD::ButtonId de Cemu (src/input/emulated/VPADController.h) — champ `<mapping>` des entrées du profil.
+ * Reste stable tant que Cemu ne change pas cet enum (jamais réordonné depuis sa création).
+ */
+const VPAD_BUTTON: Record<string, number> = {
+  A: 1, B: 2, X: 3, Y: 4, L: 5, R: 6, ZL: 7, ZR: 8, Plus: 9, Minus: 10, Up: 11, Down: 12, Left: 13, Right: 14,
+  StickL: 15, StickR: 16, StickL_Up: 17, StickL_Down: 18, StickL_Left: 19, StickL_Right: 20,
+  StickR_Up: 21, StickR_Down: 22, StickR_Left: 23, StickR_Right: 24, Home: 27
+}
+
+/** Une entrée `<mapping>{vpad}</mapping><button>{physique}</button>` du profil (voir InputManager::save, Cemu). */
+const cemuEntry = (vpad: keyof typeof VPAD_BUTTON, physical: number): string => `      <entry><mapping>${VPAD_BUTTON[vpad]}</mapping><button>${physical}</button></entry>`
+
+/** Un bloc `<controller>` du profil (api/uuid/display_name fixes à la source de chaque backend de Cemu). */
+const cemuController = (api: string, uuid: string, displayName: string, deadzone: number, entries: string): string => `    <controller>
+      <api>${api}</api>
+      <uuid>${uuid}</uuid>
+      <display_name>${displayName}</display_name>
+      <axis><deadzone>${deadzone}</deadzone><range>1</range></axis>
+      <rotation><deadzone>${deadzone}</deadzone><range>1</range></rotation>
+      <trigger><deadzone>${deadzone}</deadzone><range>1</range></trigger>
+      <mappings>
+${entries}
+      </mappings>
+    </controller>`
+
+/**
+ * Profil par défaut du Pad 1 (Wii U GamePad) : clavier (mêmes touches que le schéma PlayStation de ce fichier — IJKL pour
+ * les boutons, WASD pour le stick gauche, THGF pour le droit, flèches pour la croix) + 1ère manette XInput détectée
+ * (identifiants génériques Cemu, valides même sans manette branchée à l'installation — comme pour Dolphin, voir
+ * `applyDolphinPad`). Écrit une seule fois : Cemu réécrit ensuite lui-même ce fichier dès que l'utilisateur retouche ses
+ * réglages de manette, jamais RomVault.
+ */
+const CEMU_GAMEPAD_PROFILE = `<?xml version="1.0" encoding="UTF-8"?>
+<emulated_controller>
+  <type>Wii U GamePad</type>
+  <toggle_display>0</toggle_display>
+${cemuController('Keyboard', 'keyboard', 'Keyboard', 0.25, [
+    cemuEntry('A', 76), cemuEntry('B', 75), cemuEntry('X', 73), cemuEntry('Y', 74),
+    cemuEntry('L', 81), cemuEntry('R', 69), cemuEntry('ZL', 49), cemuEntry('ZR', 51),
+    cemuEntry('Plus', 13), cemuEntry('Minus', 8),
+    cemuEntry('Up', 38), cemuEntry('Down', 40), cemuEntry('Left', 37), cemuEntry('Right', 39),
+    cemuEntry('StickL', 50), cemuEntry('StickR', 52),
+    cemuEntry('StickL_Up', 87), cemuEntry('StickL_Down', 83), cemuEntry('StickL_Left', 65), cemuEntry('StickL_Right', 68),
+    cemuEntry('StickR_Up', 84), cemuEntry('StickR_Down', 71), cemuEntry('StickR_Left', 70), cemuEntry('StickR_Right', 72),
+    cemuEntry('Home', 27)
+  ].join('\n'))}
+${cemuController('XInput', '0', 'Controller 1', 0.15, [
+    // Table par défaut de Cemu pour XInput (VPADController::set_default_mapping) : kButton0..15 = boutons XInput, kAxis/kRotation/kTrigger = sticks/gâchettes.
+    cemuEntry('Up', 0), cemuEntry('Down', 1), cemuEntry('Left', 2), cemuEntry('Right', 3),
+    cemuEntry('Plus', 4), cemuEntry('Minus', 5), cemuEntry('StickL', 6), cemuEntry('StickR', 7),
+    cemuEntry('L', 8), cemuEntry('R', 9), cemuEntry('B', 12), cemuEntry('A', 13), cemuEntry('Y', 14), cemuEntry('X', 15),
+    cemuEntry('StickL_Right', 38), cemuEntry('StickL_Up', 39), cemuEntry('StickR_Right', 40), cemuEntry('StickR_Up', 41),
+    cemuEntry('ZL', 42), cemuEntry('ZR', 43), cemuEntry('StickL_Left', 44), cemuEntry('StickL_Down', 45),
+    cemuEntry('StickR_Left', 46), cemuEntry('StickR_Down', 47)
+  ].join('\n'))}
+</emulated_controller>
+`
+
 /**
  * Rend un émulateur directement utilisable : langue de l'app, plein écran, résolution interne ≥ 1080p (adaptée à l'écran), BIOS, manette.
  * Appelé une seule fois, à l'installation : une mise à jour ne réécrit jamais les réglages de l'utilisateur.
@@ -293,19 +370,35 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
         InputSources: { SDL: true },
         Pad1: { Type: 'DualShock2', ...psPad(['Keyboard/Up', 'Keyboard/Right', 'Keyboard/Down', 'Keyboard/Left'], 'Keyboard/Return') }
       })
-    case 'melonds':
-      return createOnce(join(dir, 'melonDS.toml'), [
-        '[3D]', 'Renderer = 1', '',
-        '[3D.GL]', `ScaleFactor = ${pick(tier, [6, 8, 12])}`, '',
-        '[Instance0.Firmware]', 'OverrideSettings = true', `Language = ${fr ? 2 : 1}`, ''
-      ].join('\n'))
+    case 'melonds': {
+      // Fusion (pas createOnce) : un melonDS.toml partiel peut déjà exister (lancement manuel de l'utilisateur avant
+      // installation via RomVault), sinon Renderer/langue/manette ne seraient jamais écrits. Touches : mêmes conventions
+      // que le schéma PlayStation de ce fichier (IJKL boutons, flèches croix, Retour/Retour arrière Start/Select).
+      const file = join(dir, 'melonDS.toml')
+      let text = await readText(file)
+      text = setTomlKeys(text, '3D', { Renderer: 1 })
+      text = setTomlKeys(text, '3D.GL', { ScaleFactor: pick(tier, [6, 8, 12]) })
+      text = setTomlKeys(text, 'Instance0.Firmware', { OverrideSettings: true, Language: fr ? 2 : 1 })
+      // Valeurs Qt::Key (pas les codes VK de Windows) : lettres = même valeur que l'ASCII majuscule, touches spéciales
+      // = 0x0100_0000 + offset (Qt::Key_Backspace=16777219, Key_Return=16777220, Key_Left=16777234, Key_Up=16777235, Key_Right=16777236, Key_Down=16777237).
+      text = setTomlKeys(text, 'Instance0.Keyboard', {
+        A: 76, B: 75, X: 73, Y: 74, L: 81, R: 69, Select: 16777219, Start: 16777220, Up: 16777235, Down: 16777237, Left: 16777234, Right: 16777236
+      })
+      await mkdir(dirname(file), { recursive: true })
+      return writeFile(file, text)
+    }
     case 'azahar':
       return writeIni(join(dir, 'user', 'config', 'qt-config.ini'), {
         Renderer: qt({ resolution_factor: pick(tier, [5, 7, 10]) }),
         UI: qt({ fullscreen: true, language: fr ? 'fr' : 'en' })
       }, '=')
     case 'cemu':
-      return createOnce(join(dir, 'settings.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<content>\n  <fullscreen>true</fullscreen>\n  <console_language>${fr ? 2 : 1}</console_language>\n</content>\n`)
+      // « default » (pas un GUID) : identifiant que DirectSoundAPI donne au pilote son par défaut de Windows (voir
+      // DirectSoundDeviceDescription::GetIdentifier) — le seul qui ne dépend pas du matériel de la machine. Sans lui,
+      // TVDevice/PadDevice vides = Cemu ne joue aucun son (IAudioAPI::CreateDeviceFromConfig renvoie null).
+      // TVVolume par défaut de Cemu = 20 (sur 100) si absent : très bas, on met le plein volume.
+      await createOnce(join(dir, 'settings.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<content>\n  <fullscreen>true</fullscreen>\n  <console_language>${fr ? 2 : 1}</console_language>\n  <Audio>\n    <TVVolume>100</TVVolume>\n    <TVDevice>default</TVDevice>\n    <PadDevice>default</PadDevice>\n  </Audio>\n</content>\n`)
+      return createOnce(join(dir, 'controllerProfiles', 'controller0.xml'), CEMU_GAMEPAD_PROFILE)
     case 'eden':
       return writeIni(join(dir, 'user', 'config', 'qt-config.ini'), {
         Renderer: qt({ resolution_setup: pick(tier, [2, 3, 5]) }),

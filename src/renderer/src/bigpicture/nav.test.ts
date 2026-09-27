@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { heldActions, pickNext, Repeater, type Box } from './nav'
+import { heldActions, pickNext, Repeater, rightStickScroll, type Box } from './nav'
 
 const box = (x: number, y: number): Box => ({ x, y, w: 100, h: 100 })
 
@@ -34,6 +34,18 @@ describe('manette', () => {
     expect([...heldActions(pad([2]), { swapAB: true })]).toEqual(['x'])
     expect([...heldActions(pad([], [0.4, 0]), { threshold: 0.3 })]).toEqual(['right'])
     expect(heldActions(pad([], [0.4, 0]), { threshold: 0.6 }).size).toBe(0)
+  })
+  it('stick droit : zone morte respectée, vitesse proportionnelle, sans effet sur le stick gauche', () => {
+    const pad = (axes: number[]) => ({ buttons: [], axes })
+    expect(rightStickScroll([pad([0, 0, 0, 0])], 0.15, 22)).toBe(0)
+    expect(rightStickScroll([pad([0, 0, 0, 0.1])], 0.15, 22)).toBe(0)
+    expect(rightStickScroll([pad([0, 0, 0, 0.5])], 0.15, 22)).toBeCloseTo(11)
+    expect(rightStickScroll([pad([0, 0, 0, -0.5])], 0.15, 22)).toBeCloseTo(-11)
+    // Stick gauche (axes 0/1) dévié n'a aucun effet : seul l'axe 3 (stick droit vertical) compte.
+    expect(rightStickScroll([pad([0.9, 0.9, 0, 0])], 0.15, 22)).toBe(0)
+    // Aucune manette / manette débranchée (null) : pas d'erreur, 0.
+    expect(rightStickScroll([null], 0.15, 22)).toBe(0)
+    expect(rightStickScroll([], 0.15, 22)).toBe(0)
   })
   it('déclenche une fois, puis répète les directions seulement', () => {
     const r = new Repeater(400, 100)

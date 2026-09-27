@@ -43,7 +43,9 @@ export function Emulators() {
                 </div>
               )}
               {errors[def.id] && <div className="muted" style={{ color: 'var(--danger, #e5484d)', marginTop: 8 }}>{errors[def.id]}</div>}
-              {biosSlotsFor(def.id).length > 0 && <BiosPanel emulator={def.id} />}
+              {/* Reclé sur installedAt : un (dés)install ailleurs sur la page ne notifie pas ce panneau autrement (coche verte qui reste
+                  affichée après une désinstallation, jusqu'à un remontage — ex. changer d'onglet et revenir). */}
+              {biosSlotsFor(def.id).length > 0 && <BiosPanel key={s?.installedAt ?? 'none'} emulator={def.id} />}
               <div className="emu-foot">
                 <Tag>{status}</Tag>
                 <div className="row">

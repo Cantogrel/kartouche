@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parseFirmwareUrl } from './official'
 import { DatabaseSync } from 'node:sqlite'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { BIOS_SLOTS, matchBios } from '@shared/bios'
@@ -86,6 +86,46 @@ describe('bios : import et détection', () => {
     expect(await importBiosFile({ db, paths }, 'eden', keys)).toMatchObject({ ok: true, slot: 'switch-keys' })
     expect(existsSync(join(emu, 'user', 'keys', 'prod.keys'))).toBe(true)
     expect((await biosStatus({ db, paths })).find((s) => s.id === 'switch-keys')?.state).toBe('ok')
+  })
+
+  it('Cemu : la clé d’exemple fournie par défaut ne compte pas comme présente, une vraie clé si', async () => {
+    const emu = join(dir, 'emulators', 'cemu')
+    mkdirSync(emu, { recursive: true })
+    saveEmulator(db, { id: 'cemu', version: '1', dir: emu, exe: join(emu, 'Cemu.exe'), custom: false })
+    writeFileSync(join(emu, 'keys.txt'), '# doc\n541b9889519b27d363cd21604b97c67a # example key (can be deleted)\n')
+    expect((await biosStatus({ db, paths })).find((s) => s.id === 'wiiu-keys')?.state).toBe('missing')
+    const key = 'a'.repeat(32)
+    const src = join(dir, 'ma-cle.txt')
+    writeFileSync(src, key)
+    expect(await importBiosFile({ db, paths }, 'cemu', src)).toMatchObject({ ok: true, slot: 'wiiu-keys' })
+    const text = readFileSync(join(emu, 'keys.txt'), 'utf8')
+    expect(text).toContain('# example key')
+    expect(text).toContain(key)
+    expect((await biosStatus({ db, paths })).find((s) => s.id === 'wiiu-keys')?.state).toBe('ok')
+  })
+
+  it('Cemu : refuse un fichier sans clé valide', async () => {
+    const emu = join(dir, 'emulators', 'cemu')
+    mkdirSync(emu, { recursive: true })
+    saveEmulator(db, { id: 'cemu', version: '1', dir: emu, exe: join(emu, 'Cemu.exe'), custom: false })
+    const src = join(dir, 'rien.txt')
+    writeFileSync(src, 'pas une clé')
+    expect(await importBiosFile({ db, paths }, 'cemu', src)).toMatchObject({ ok: false, error: 'unknown' })
+  })
+
+  it('Azahar : les deux clés minimales sont requises, une seule ne suffit pas', async () => {
+    const emu = join(dir, 'emulators', 'azahar')
+    mkdirSync(emu, { recursive: true })
+    saveEmulator(db, { id: 'azahar', version: '1', dir: emu, exe: join(emu, 'azahar.exe'), custom: false })
+    const src1 = join(dir, 'cle1.txt')
+    writeFileSync(src1, `slot0x25KeyX=${'c'.repeat(32)}\n`)
+    expect(await importBiosFile({ db, paths }, 'azahar', src1)).toMatchObject({ ok: true, slot: '3ds-keys' })
+    expect((await biosStatus({ db, paths })).find((s) => s.id === '3ds-keys')?.state).toBe('missing')
+    const src2 = join(dir, 'cle2.txt')
+    writeFileSync(src2, `slot0x2CKeyX=${'d'.repeat(32)}\n`)
+    expect(await importBiosFile({ db, paths }, 'azahar', src2)).toMatchObject({ ok: true, slot: '3ds-keys' })
+    expect((await biosStatus({ db, paths })).find((s) => s.id === '3ds-keys')?.state).toBe('ok')
+    expect(existsSync(join(emu, 'user', 'sysdata', 'aes_keys.txt'))).toBe(true)
   })
 })
 

@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream, existsSync } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { BIOS_SLOTS, fitsSlot, matchBios, needsMd5, type BiosImportResult, type BiosSlot, type BiosSlotStatus } from '@shared/bios'
 import { emulatorById } from '@shared/emulators'
@@ -11,6 +11,9 @@ import type { AppPaths } from '@shared/ipc'
 import { readZip } from '../library/hash'
 import { getRow } from '../emulators/emulatorStore'
 import { extract } from '../emulators/installer'
+import { setTomlKeys } from '../emulators/configure'
+
+export { setTomlKeys }
 
 const md5File = (path: string): Promise<string> => new Promise((resolve, reject) => {
   const h = createHash('md5')
@@ -31,6 +34,41 @@ async function vitaPrefPath(emuDir: string): Promise<string | null> {
 
 const edenKeys = (dir: string): string => join(dir, 'user', 'keys', 'prod.keys')
 const edenRegistered = (dir: string): string => join(dir, 'user', 'nand', 'system', 'Contents', 'registered')
+
+const cemuKeys = (dir: string): string => join(dir, 'keys.txt')
+const azaharKeys = (dir: string): string => join(dir, 'user', 'sysdata', 'aes_keys.txt')
+
+// Cemu fournit un fichier keys.txt d'exemple avec cette clé factice (« # example key, can be deleted ») : elle ne déchiffre jamais rien.
+const CEMU_PLACEHOLDER_KEY = '541b9889519b27d363cd21604b97c67a'
+const HEX32 = /^[0-9a-f]{32}$/i
+// Clés minimales pour déchiffrer un jeu 3DS de vente au détail (hors New 3DS exclusif) — https://citra.azahar-emu.org/wiki/aes-keys/
+const AZAHAR_REQUIRED_KEYS = ['slot0x25keyx', 'slot0x2ckeyx']
+const AZAHAR_KEY_LINE = /^\s*(slot0x[0-9a-f]+key[xyn])\s*=\s*([0-9a-f]{32})\s*$/i
+
+/** Lignes de clé valides d'un keys.txt façon Cemu (un hex 128 bits par ligne, commentaire après `#`), sans la clé d'exemple. */
+function parseCemuKeys(text: string): string[] {
+  return text.split(/\r?\n/)
+    .map((l) => l.split('#')[0].trim().toLowerCase())
+    .filter((l) => HEX32.test(l) && l !== CEMU_PLACEHOLDER_KEY)
+}
+
+/** Emplacements de clé (slot0x..Key[XYN]) valides d'un aes_keys.txt façon Citra/Azahar. */
+function parseAzaharKeys(text: string): Map<string, string> {
+  const found = new Map<string, string>()
+  for (const line of text.split(/\r?\n/)) {
+    const m = AZAHAR_KEY_LINE.exec(line)
+    if (m) found.set(m[1].toLowerCase(), line.trim())
+  }
+  return found
+}
+
+/** Fusionne des lignes « clé » nouvelles dans un fichier existant : remplace celles de même identité, garde le reste (en-têtes, commentaires). */
+function mergeKeyLines(existing: string, newLines: string[], identityOf: (line: string) => string | null): string {
+  const newIds = new Set(newLines.map(identityOf).filter((k): k is string => k !== null))
+  const kept = existing.split(/\r?\n/).filter((l) => { const id = identityOf(l); return id === null || !newIds.has(id) })
+  while (kept.length && kept[kept.length - 1].trim() === '') kept.pop()
+  return [...kept, ...newLines].join('\n') + '\n'
+}
 
 interface Ctx { db: DatabaseSync; paths: AppPaths }
 
@@ -54,6 +92,8 @@ export async function biosStatus(ctx: Ctx): Promise<BiosSlotStatus[]> {
     else if (slot.id === 'vita') { const p = await vitaPrefPath(dir); ok = !!p && await nonEmptyDir(join(p, 'vs0')) }
     else if (slot.id === 'switch-keys') ok = existsSync(edenKeys(dir))
     else if (slot.id === 'switch-firmware') ok = await nonEmptyDir(edenRegistered(dir), (n) => n.toLowerCase().endsWith('.nca'))
+    else if (slot.id === 'wiiu-keys') ok = parseCemuKeys(await readOpt(cemuKeys(dir))).length > 0
+    else if (slot.id === '3ds-keys') { const k = parseAzaharKeys(await readOpt(azaharKeys(dir))); ok = AZAHAR_REQUIRED_KEYS.every((id) => k.has(id)) }
     out.push({ ...base, state: ok ? 'ok' : 'missing' })
   }
   return out
@@ -135,6 +175,8 @@ export async function removeBios(ctx: Ctx, slotId: string): Promise<boolean> {
     else if (slot.id === 'vita') { const p = await vitaPrefPath(row.dir); if (!p) return false; await rm(join(p, 'vs0'), { recursive: true, force: true }) }
     else if (slot.id === 'switch-keys') await rm(edenKeys(row.dir), { force: true })
     else if (slot.id === 'switch-firmware') await rm(edenRegistered(row.dir), { recursive: true, force: true })
+    else if (slot.id === 'wiiu-keys') await rm(cemuKeys(row.dir), { force: true })
+    else if (slot.id === '3ds-keys') await rm(azaharKeys(row.dir), { force: true })
     return true
   } catch { return false }
 }
@@ -196,6 +238,26 @@ export async function importBiosFile(ctx: Ctx, emulator: string, path: string): 
       await copyFile(path, edenKeys(row.dir))
       return result()
     }
+    // Cemu/Azahar : le fichier déposé peut être une clé seule ou un keys.txt/aes_keys.txt complet — on n'y garde que les lignes reconnues,
+    // fusionnées dans le fichier de l'émulateur (jamais un remplacement complet : on ne touche pas à ses en-têtes ni aux autres clés déjà là).
+    if (slot.id === 'wiiu-keys') {
+      const text = await readFile(path, 'utf8').catch(() => '')
+      const newLines = parseCemuKeys(text)
+      if (!newLines.length) return { path, ok: false, slot: slot.id, error: 'unknown' }
+      const dest = cemuKeys(row.dir)
+      await mkdir(dirname(dest), { recursive: true })
+      await writeFile(dest, mergeKeyLines(await readOpt(dest), newLines, (l) => { const v = l.split('#')[0].trim().toLowerCase(); return HEX32.test(v) ? v : null }))
+      return result()
+    }
+    if (slot.id === '3ds-keys') {
+      const text = await readFile(path, 'utf8').catch(() => '')
+      const found = parseAzaharKeys(text)
+      if (!found.size) return { path, ok: false, slot: slot.id, error: 'unknown' }
+      const dest = azaharKeys(row.dir)
+      await mkdir(dirname(dest), { recursive: true })
+      await writeFile(dest, mergeKeyLines(await readOpt(dest), [...found.values()], (l) => { const m = AZAHAR_KEY_LINE.exec(l); return m ? m[1].toLowerCase() : null }))
+      return result()
+    }
     if (slot.id === 'switch-firmware') {
       const entries = await readZip(path)
       if (!entries || entries.filter((e) => e.name.toLowerCase().endsWith('.nca')).length < 10) return { path, ok: false, slot: slot.id, error: 'unknown' }
@@ -224,22 +286,6 @@ export async function importBiosFile(ctx: Ctx, emulator: string, path: string): 
   } catch (e) {
     return { path, ok: false, slot: slot.id, error: 'failed', detail: e instanceof Error ? e.message : String(e) }
   }
-}
-
-/** Fichier de BIOS de la DS : melonDS le cherche là où le lui indique melonDS.toml (section [DS]). */
-export function setTomlKeys(text: string, section: string, values: Record<string, string | boolean>): string {
-  const fmt = (v: string | boolean): string => (typeof v === 'boolean' ? String(v) : JSON.stringify(v))
-  const lines = text.split(/\r?\n/)
-  const head = lines.findIndex((l) => l.trim() === `[${section}]`)
-  if (head < 0) return `${text.replace(/\s*$/, '')}\n\n[${section}]\n${Object.entries(values).map(([k, v]) => `${k} = ${fmt(v)}`).join('\n')}\n`
-  let end = lines.findIndex((l, i) => i > head && /^\s*\[/.test(l))
-  if (end < 0) end = lines.length
-  for (const [k, v] of Object.entries(values)) {
-    const at = lines.findIndex((l, i) => i > head && i < end && new RegExp(`^\\s*${k}\\s*=`).test(l))
-    if (at >= 0) lines[at] = `${k} = ${fmt(v)}`
-    else { lines.splice(end, 0, `${k} = ${fmt(v)}`); end++ }
-  }
-  return lines.join('\n')
 }
 
 async function patchMelonDs(emuDir: string, biosDir: string): Promise<void> {

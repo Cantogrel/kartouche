@@ -188,6 +188,8 @@
   "bios.slot.nds7": "DS ARM7 BIOS (bios7.bin)",
   "bios.slot.nds9": "DS ARM9 BIOS (bios9.bin)",
   "bios.slot.ndsfw": "DS firmware (firmware.bin)",
+  "bios.slot.wiiu-keys": "Wii U disc key (Cemu keys.txt)",
+  "bios.slot.3ds-keys": "3DS AES keys (Azahar aes_keys.txt)",
   "bios.auto": "Install automatically",
   "bios.autoFailed": "Automatic install failed — import the file yourself",
   "bios.downloading": "Downloading firmware {done} / {total} MB",

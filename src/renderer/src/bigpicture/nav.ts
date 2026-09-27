@@ -51,6 +51,13 @@ export function heldActions(pad: PadLike, opts: { swapAB?: boolean; threshold?: 
   return out
 }
 
+/** Défilement à appliquer (pixels) pour le stick droit (axe 3, vertical) de la première manette qui le sort de sa zone morte. */
+export function rightStickScroll(pads: Iterable<PadLike | null>, deadzone: number, speed: number): number {
+  let ay = 0
+  for (const pad of pads) { const v = pad?.axes[3] ?? 0; if (Math.abs(v) > Math.abs(ay)) ay = v }
+  return Math.abs(ay) > deadzone ? ay * speed : 0
+}
+
 const DIRS: PadAction[] = ['up', 'down', 'left', 'right']
 
 /** Transforme l'état maintenu en évènements : un par appui, et une répétition des directions en maintien. */
