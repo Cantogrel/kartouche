@@ -231,6 +231,76 @@ async function dolphinCreateSysconf(dir: string): Promise<string | null> {
   return existsSync(sysconf) ? sysconf : null
 }
 
+// --- Azahar : langue de la console 3DS (binaire, dans le NAND émulé) + manette SDL ---------------------------------------
+
+/**
+ * Langue de la console 3DS : contrairement à l'appli (réglage texte `[UI] language`), c'est un bloc du fichier `config`
+ * émulé du NAND (service CFG, bloc 0x000A0002 « LanguageBlockID ») — la même idée que SYSCONF pour la Wii, un format
+ * différent. Structure (vérifiée sur un fichier réel) : u16 total_entries, u16 data_entries_offset, puis `total_entries`
+ * entrées de 12 octets (u32 block_id, u32 offset_or_data, u16 size, u16 access_flags) ; un bloc de 4 octets ou moins loge
+ * sa valeur directement dans `offset_or_data` (poids faible) plutôt qu'à un offset séparé — c'est le cas de la langue (1 octet).
+ * 0 japonais, 1 anglais, 2 français, 3 allemand, 4 italien, 5 espagnol, 6 chinois simplifié, 7 coréen, 8 néerlandais, 9 portugais, 10 russe, 11 chinois traditionnel.
+ */
+export function setCfgLanguage(data: Buffer, language: number): boolean {
+  if (data.length < 4) return false
+  const totalEntries = data.readUInt16LE(0)
+  for (let i = 0; i < totalEntries; i++) {
+    const at = 4 + i * 12
+    if (at + 12 > data.length) break
+    if (data.readUInt32LE(at) === 0x000a0002 && data.readUInt16LE(at + 8) <= 4) { data.writeUInt8(language, at + 4); return true }
+  }
+  return false
+}
+
+/**
+ * Chemin du fichier `config` du NAND émulé : n'existe qu'après qu'Azahar ait démarré au moins un jeu (le service CFG
+ * s'initialise pendant le chargement d'un titre, pas au simple démarrage de l'appli — contrairement au SYSCONF de
+ * Dolphin). On ne peut donc pas le créer à l'installation comme pour la Wii : la langue est patchée à chaque lancement
+ * de jeu si le fichier existe déjà (voir `launcher.ts`), quitte à ce que le tout premier lancement reste en anglais.
+ */
+export const azaharCfgPath = (dir: string): string => join(dir, 'user', 'nand', 'data', '00000000000000000000000000000000', 'sysdata', '00010017', '00000000', 'config')
+
+/** Bouton et axe SDL_GameController (indices de l'API publique SDL2, stables depuis sa création). */
+const SDL_BUTTON: Record<string, number> = {
+  A: 0, B: 1, X: 2, Y: 3, Back: 4, Start: 6, LeftStick: 7, RightStick: 8, L: 9, R: 10, Up: 11, Down: 12, Left: 13, Right: 14
+}
+const SDL_AXIS = { LeftX: 0, LeftY: 1, RightX: 2, RightY: 3, TriggerLeft: 4, TriggerRight: 5 }
+
+// GUID SDL réservée à Windows pour « n'importe quel périphérique XInput » (couvre la quasi-totalité des manettes utilisées
+// sur PC) : SDL2 la documente comme fixe, indépendante du matériel réel — https://wiki.libsdl.org/SDL2/SDL_GameControllerAddMapping.
+// `maptype:all` fait en plus répondre à n'importe quel port, donc aucune détection n'est nécessaire au lancement,
+// contrairement à Dolphin dont le format de liaison exige un index XInput explicite. Format vérifié contre le générateur
+// de RetroBat pour Azahar (emulatorLauncher/Generators/Azahar.Controllers.cs, en usage réel) : ni GUID vide ni champ
+// `api` superflu — une valeur `guid` vide fait qu'Azahar rejette silencieusement la liaison et revient au clavier par défaut.
+const XINPUT_GUID = '78696e70757401000000000000000000'
+const sdlButton = (button: number): string => `button:${button},engine:sdl,guid:${XINPUT_GUID},maptype:all,port:0`
+const sdlTrigger = (axis: number): string => `axis:${axis},direction:+,threshold:0.5,engine:sdl,guid:${XINPUT_GUID},maptype:all,port:0`
+const sdlAnalog = (axisX: number, axisY: number): string => `axis_x:${axisX},axis_y:${axisY},deadzone:0.100000,engine:sdl,guid:${XINPUT_GUID},maptype:all,port:0`
+
+/**
+ * Second profil de manette d'Azahar (profil 1 = celui créé par Azahar lui-même au clavier, jamais touché) : boutons
+ * croisés sur la position physique d'une manette Xbox (3DS A ↔ Xbox B, à droite ; 3DS Y ↔ Xbox X, à gauche), ZL/ZR sur
+ * les gâchettes analogiques, sticks en direct (pas émulés depuis des boutons). Activé par défaut (`profile=1`) ; le
+ * profil clavier d'origine reste disponible dans le sélecteur de profil d'Azahar.
+ */
+const AZAHAR_CONTROLLER_PROFILE: Record<string, string | number> = {
+  'profiles\\2\\name': 'Manette',
+  'profiles\\2\\input_maptype': 1,
+  'profiles\\2\\button_a': sdlButton(SDL_BUTTON.B), 'profiles\\2\\button_b': sdlButton(SDL_BUTTON.A),
+  'profiles\\2\\button_x': sdlButton(SDL_BUTTON.Y), 'profiles\\2\\button_y': sdlButton(SDL_BUTTON.X),
+  'profiles\\2\\button_up': sdlButton(SDL_BUTTON.Up), 'profiles\\2\\button_down': sdlButton(SDL_BUTTON.Down),
+  'profiles\\2\\button_left': sdlButton(SDL_BUTTON.Left), 'profiles\\2\\button_right': sdlButton(SDL_BUTTON.Right),
+  'profiles\\2\\button_l': sdlButton(SDL_BUTTON.L), 'profiles\\2\\button_r': sdlButton(SDL_BUTTON.R),
+  'profiles\\2\\button_start': sdlButton(SDL_BUTTON.Start), 'profiles\\2\\button_select': sdlButton(SDL_BUTTON.Back),
+  'profiles\\2\\button_zl': sdlTrigger(SDL_AXIS.TriggerLeft), 'profiles\\2\\button_zr': sdlTrigger(SDL_AXIS.TriggerRight),
+  'profiles\\2\\button_home': sdlButton(SDL_BUTTON.LeftStick),
+  'profiles\\2\\circle_pad': sdlAnalog(SDL_AXIS.LeftX, SDL_AXIS.LeftY),
+  'profiles\\2\\c_stick': sdlAnalog(SDL_AXIS.RightX, SDL_AXIS.RightY),
+  'profiles\\2\\motion_device': 'engine:motion_emu,update_period:100,sensitivity:0.01,tilt_clamp:90.0',
+  'profiles\\2\\touch_device': 'engine:emu_window',
+  'profiles\\2\\udp_input_address': '127.0.0.1', 'profiles\\2\\udp_input_port': 26760, 'profiles\\2\\udp_pad_index': 0
+}
+
 async function configureDolphin(dir: string, ctx: ConfigContext, tier: 1 | 2 | 3): Promise<void> {
   const fr = ctx.lang === 'fr'
   const cfg = join(dir, 'User', 'Config')
@@ -397,9 +467,13 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
       return writeFile(file, text)
     }
     case 'azahar':
+      // La langue de la console (pas celle de l'appli, ci-dessous) vit dans le NAND émulé : voir `azaharCfgPath`, patchée au lancement.
+      // confirmClose : sans ça, une fermeture demandée par RomVault (bouton, manette) ouvre la boîte de confirmation
+      // d'Azahar au lieu de fermer — comme ConfirmStop/ConfirmPowerOff/ConfirmShutdown pour Dolphin/DuckStation/PCSX2.
       return writeIni(join(dir, 'user', 'config', 'qt-config.ini'), {
         Renderer: qt({ resolution_factor: pick(tier, [5, 7, 10]) }),
-        UI: qt({ fullscreen: true, language: fr ? 'fr' : 'en' })
+        UI: qt({ fullscreen: true, language: fr ? 'fr' : 'en', confirmClose: false }),
+        Controls: { ...qt({ profile: 1, ...AZAHAR_CONTROLLER_PROFILE }), 'profiles\\size': 2 }
       }, '=')
     case 'cemu':
       // « default » (pas un GUID) : identifiant que DirectSoundAPI donne au pilote son par défaut de Windows (voir

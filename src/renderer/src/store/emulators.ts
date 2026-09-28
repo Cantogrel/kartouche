@@ -48,9 +48,15 @@ export const useEmulators = create<EmulatorsState>((set, get) => ({
       set({ latest: Object.fromEntries(res.map((r) => [r.id, r.version])) })
     } finally { set({ checking: false }) }
   },
-  play: (entryId) => {
+  play: async (entryId) => {
     get().dismissQuickExit(entryId)
-    return window.api.invoke('game:play', entryId)
+    const r = await window.api.invoke('game:play', entryId)
+    // Échec connu avant même le lancement (zip illisible, .cia refusé…) : même vitrine que les fermetures rapides,
+    // plutôt qu'un texte perdu à côté du bouton — l'utilisateur ne l'associe pas sinon au bon message.
+    if (!r.ok && r.error && r.error !== 'running') {
+      set((s) => ({ quickExits: { ...s.quickExits, [entryId]: { elapsedMs: 0, immediate: r.error, log: r.detail } } }))
+    }
+    return r
   },
   dismissQuickExit: (entryId) => set((s) => {
     if (!(entryId in s.quickExits)) return s

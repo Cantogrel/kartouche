@@ -12,6 +12,10 @@ describe('matchKey', () => {
     expect(matchKey('Legend of Zelda, The - A Link to the Past (USA)')).toBe(matchKey('The Legend of Zelda: A Link to the Past'))
     expect(matchKey('Pokémon Emerald (USA, Europe) (Rev 1)')).toBe(matchKey('Pokemon Emerald'))
   })
+  it('ignore un mot d’état de dump 3DS accolé après les tags (pas un tag entre parenthèses)', () => {
+    expect(matchKey('Pokemon Omega Ruby (Europe) (En,Ja,Fr,De,Es,It,Ko) (Rev 2) Decrypted')).toBe(matchKey('Pokemon Omega Ruby'))
+    expect(matchKey('Some Game (USA) Trimmed')).toBe(matchKey('Some Game'))
+  })
 })
 
 describe('consoles prises en charge', () => {

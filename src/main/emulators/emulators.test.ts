@@ -1,15 +1,39 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { crc32, deflateRawSync } from 'node:zlib'
 import { EMULATORS, buildArgs, compareVersions, emulatorById, emulatorForConsole, explainFailure } from '@shared/emulators'
 import { CONSOLES } from '@shared/consoles'
 import { migrate } from '../db/migrations'
 import { pickRelease, retroarchVersion } from './source'
 import { findExe, flattenRoot, isFreshInstall } from './installer'
 import { listEmulators, saveEmulator } from './emulatorStore'
-import { relevantLogLines, sessionMinutes } from './launcher'
+import { relevantLogLines, resolveZippedRom, sessionMinutes } from './launcher'
+
+/** Zip à plusieurs entrées (méthode déflate) ; un seul fichier suffit à simuler une ROM zippée. */
+function makeZip(files: { name: string; data: Buffer }[]): Buffer {
+  const locals: Buffer[] = []
+  const centrals: Buffer[] = []
+  let off = 0
+  for (const { name, data } of files) {
+    const comp = deflateRawSync(data), nm = Buffer.from(name), crc = crc32(data)
+    const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(8, 8)
+    lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(nm.length, 26)
+    const cd = Buffer.alloc(46); cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(20, 4); cd.writeUInt16LE(20, 6); cd.writeUInt16LE(8, 10)
+    cd.writeUInt32LE(crc, 16); cd.writeUInt32LE(comp.length, 20); cd.writeUInt32LE(data.length, 24); cd.writeUInt16LE(nm.length, 28)
+    cd.writeUInt32LE(off, 42)
+    locals.push(lh, nm, comp)
+    centrals.push(cd, nm)
+    off += lh.length + nm.length + comp.length
+  }
+  const cdStart = off
+  const cdBuf = Buffer.concat(centrals)
+  const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10)
+  end.writeUInt32LE(cdBuf.length, 12); end.writeUInt32LE(cdStart, 16)
+  return Buffer.concat([...locals, cdBuf, end])
+}
 
 describe('émulateurs : définitions', () => {
   it('chaque console du catalogue a un émulateur, et un seul', () => {
@@ -88,6 +112,8 @@ describe('émulateurs : installation', () => {
     expect(explainFailure('W(CheckForRequiredSubQ): SBI file missing but required for SCES-02835')).toBe('play.quickExitSbi')
     expect(explainFailure('E BIOS: no bios file found for region')).toBe('play.quickExitBios')
     expect(explainFailure('firmware not found, aborting')).toBe('play.quickExitFirmware')
+    // Constaté en vrai sur un .3ds : Azahar plante avec ce message précis quand il ne peut pas déchiffrer le contenu (clés ou graine manquantes).
+    expect(explainFailure('Core <Critical> core\\core.cpp:Core::System::Load:353: Failed to determine system mode (Error 8)!')).toBe('play.quickExit3dsCrypto')
     expect(explainFailure('I/Core: démarrage normal')).toBeUndefined()
     expect(explainFailure(undefined)).toBeUndefined()
   })
@@ -96,5 +122,26 @@ describe('émulateurs : installation', () => {
     expect(relevantLogLines(log)).toBe('W(CheckForRequiredSubQ): SBI file missing but required for SCES-02835')
     const noisy = Array.from({ length: 30 }, (_, i) => `I/Core: ligne ${i}`).join('\n')
     expect(relevantLogLines(noisy, 5)).toBe(Array.from({ length: 5 }, (_, i) => `I/Core: ligne ${25 + i}`).join('\n'))
+  })
+  // Certains .zip (constaté sur des .gbc No-Intro avec le drapeau EFS/UTF-8) ne sont pas décompressés par le lecteur
+  // d'archive intégré à RetroArch, qui tente alors d'ouvrir le .zip lui-même comme ROM et se ferme aussitôt ; d'autres
+  // émulateurs (Azahar…) ne savent tout simplement pas lire un .zip. On extrait donc toujours nous-mêmes.
+  it('extrait elle-même le fichier d’un zip à une entrée, quel que soit l’émulateur visé', async () => {
+    const data = Buffer.from('cartouche gbc')
+    const zip = join(dir, 'Jeu.zip')
+    writeFileSync(zip, makeZip([{ name: 'Jeu.gbc', data }]))
+    const out = await resolveZippedRom(zip, dir)
+    expect(out).toBe(join(dir, 'extracted-rom', 'Jeu.gbc'))
+    expect(readFileSync(out!)).toEqual(data)
+  })
+  it('laisse passer un chemin qui n’est pas un zip', async () => {
+    expect(await resolveZippedRom(join(dir, 'a.gba'), dir)).toBe(join(dir, 'a.gba'))
+  })
+  it('renvoie null pour un zip illisible ou qui contient plus d’un fichier', async () => {
+    const bad = join(dir, 'bad.zip'); writeFileSync(bad, 'pas un zip')
+    expect(await resolveZippedRom(bad, dir)).toBeNull()
+    const multi = join(dir, 'multi.zip')
+    writeFileSync(multi, makeZip([{ name: 'a.gb', data: Buffer.from('a') }, { name: 'b.gb', data: Buffer.from('b') }]))
+    expect(await resolveZippedRom(multi, dir)).toBeNull()
   })
 })

@@ -4,10 +4,15 @@ import { CONSOLES } from '@shared/consoles'
 import { mainGenre } from '@shared/genres'
 import { IGDB_FIELDS, companyOf, igdbQuery, igdbToken, platformYear, type IgdbRow } from './igdb'
 
-/** Clé de rapprochement entre un titre No-Intro/Redump et un nom IGDB : « Legend of Zelda, The - Link (USA) » ≈ « The Legend of Zelda: Link ». */
+/**
+ * Clé de rapprochement entre un titre No-Intro/Redump et un nom IGDB : « Legend of Zelda, The - Link (USA) » ≈ « The Legend of Zelda: Link ».
+ * Les dumps 3DS ajoutent parfois un mot d'état après les tags entre parenthèses (« … (Rev 2) Decrypted ») : ce n'est pas
+ * du titre, sinon le nom ne rapproche plus jamais rien du catalogue.
+ */
 export function matchKey(title: string): string {
   return title
     .replace(/\s*[([][^)\]]*[)\]]/g, '')
+    .replace(/\b(decrypted|trimmed|reencrypted)\b/gi, '')
     .replace(/^(.*?), (The|A|An)\b(.*)$/i, '$2 $1$3')
     .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '')
 }

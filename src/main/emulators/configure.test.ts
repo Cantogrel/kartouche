@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EMULATORS, emulatorMaker, emulatorRank } from '@shared/emulators'
-import { applyDolphinPad, configureEmulator, isUntouchedPadFile, patchCfg, patchIni, patchYaml, resolutionTier, setSysconfLanguage, type ConfigContext } from './configure'
+import { applyDolphinPad, configureEmulator, isUntouchedPadFile, patchCfg, patchIni, patchYaml, resolutionTier, setCfgLanguage, setSysconfLanguage, type ConfigContext } from './configure'
 
 describe('patchIni / patchCfg', () => {
   it('met à jour, ajoute et conserve le reste', () => {
@@ -139,6 +139,18 @@ describe('configuration automatique des émulateurs', () => {
     await configureEmulator('melonds', dir, ctx({ lang: 'en', displayHeight: 2160 }))
     expect(read('melonDS.toml')).toContain('[3D]\nRenderer = 1')
   })
+  it('Azahar : plein écran, pas de confirmation de fermeture, profil manette activé sans toucher au clavier', async () => {
+    await configureEmulator('azahar', dir, ctx())
+    const t = read('user', 'config', 'qt-config.ini')
+    expect(t).toContain('fullscreen=true')
+    expect(t).toContain('language=fr')
+    // Sans ça, un « Fermer le jeu » de RomVault ouvre la boîte de confirmation d'Azahar plutôt que de fermer.
+    expect(t).toContain('confirmClose=false')
+    expect(t).toContain('profiles\\size=2')
+    expect(t).toContain('profile=1')
+    expect(t).toContain('profiles\\2\\name=Manette')
+    expect(t).toMatch(/profiles\\2\\circle_pad=axis_x:0,axis_y:1,deadzone:0\.100000,engine:sdl,guid:78696e70757401000000000000000000,maptype:all,port:0/)
+  })
   it('Cemu : sortie audio par défaut, clavier ET 1ère manette XInput sur le Pad 1', async () => {
     await configureEmulator('cemu', dir, ctx())
     const settings = read('settings.xml')
@@ -174,6 +186,29 @@ describe('SYSCONF de la Wii', () => {
     expect(b[32]).toBe(3)
     expect(b[18]).toBe(21)
     expect(setSysconfLanguage(Buffer.from('nope'), 3)).toBe(false)
+  })
+})
+
+describe('config du NAND émulé de la 3DS (Azahar)', () => {
+  /** Table à 2 entrées (12 octets chacune) façon service CFG : un bloc quelconque puis la langue (0x000A0002). */
+  function makeCfg(languageValue: number): Buffer {
+    const b = Buffer.alloc(4 + 2 * 12)
+    b.writeUInt16LE(2, 0); b.writeUInt16LE(28, 2)
+    b.writeUInt32LE(0x000a0000, 4); b.writeUInt32LE(0x1234, 8); b.writeUInt16LE(28, 12); b.writeUInt16LE(0xe, 14)
+    b.writeUInt32LE(0x000a0002, 16); b.writeUInt32LE(languageValue, 20); b.writeUInt16LE(1, 24); b.writeUInt16LE(0xe, 26)
+    return b
+  }
+  it('change la langue (bloc 0x000A0002) sans toucher aux autres blocs', () => {
+    const b = makeCfg(1)
+    expect(setCfgLanguage(b, 2)).toBe(true)
+    expect(b.readUInt32LE(20)).toBe(2)
+    expect(b.readUInt32LE(8)).toBe(0x1234) // bloc précédent intact
+  })
+  it('renvoie faux si le bloc langue est absent ou le fichier trop court', () => {
+    const b = makeCfg(1)
+    b.writeUInt32LE(0x11111111, 16) // masque le block_id de la langue
+    expect(setCfgLanguage(b, 2)).toBe(false)
+    expect(setCfgLanguage(Buffer.alloc(2), 2)).toBe(false)
   })
 })
 

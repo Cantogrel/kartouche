@@ -51,7 +51,9 @@ export const MIGRATIONS: readonly string[] = [
   `CREATE TABLE ra_games (console TEXT NOT NULL, ra_id INTEGER NOT NULL, title TEXT NOT NULL, norm TEXT NOT NULL, PRIMARY KEY (console, ra_id));
   CREATE INDEX ra_games_norm ON ra_games (console, norm);
   CREATE TABLE ra_sync (console TEXT PRIMARY KEY, fetched_at INTEGER NOT NULL);
-  CREATE TABLE ra_progress (library_id INTEGER PRIMARY KEY REFERENCES library(id) ON DELETE CASCADE, json TEXT NOT NULL, fetched_at INTEGER NOT NULL)`
+  CREATE TABLE ra_progress (library_id INTEGER PRIMARY KEY REFERENCES library(id) ON DELETE CASCADE, json TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
+  // v10 : un .cia 3DS doit être installé une fois dans le NAND virtuel d'Azahar avant de pouvoir être lancé
+  `ALTER TABLE library ADD COLUMN cia_installed INTEGER NOT NULL DEFAULT 0`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

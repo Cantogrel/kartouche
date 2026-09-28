@@ -37,6 +37,7 @@ const edenRegistered = (dir: string): string => join(dir, 'user', 'nand', 'syste
 
 const cemuKeys = (dir: string): string => join(dir, 'keys.txt')
 const azaharKeys = (dir: string): string => join(dir, 'user', 'sysdata', 'aes_keys.txt')
+const azaharSeeddb = (dir: string): string => join(dir, 'user', 'sysdata', 'seeddb.bin')
 
 // Cemu fournit un fichier keys.txt d'exemple avec cette clé factice (« # example key, can be deleted ») : elle ne déchiffre jamais rien.
 const CEMU_PLACEHOLDER_KEY = '541b9889519b27d363cd21604b97c67a'
@@ -94,6 +95,7 @@ export async function biosStatus(ctx: Ctx): Promise<BiosSlotStatus[]> {
     else if (slot.id === 'switch-firmware') ok = await nonEmptyDir(edenRegistered(dir), (n) => n.toLowerCase().endsWith('.nca'))
     else if (slot.id === 'wiiu-keys') ok = parseCemuKeys(await readOpt(cemuKeys(dir))).length > 0
     else if (slot.id === '3ds-keys') { const k = parseAzaharKeys(await readOpt(azaharKeys(dir))); ok = AZAHAR_REQUIRED_KEYS.every((id) => k.has(id)) }
+    else if (slot.id === '3ds-seeddb') ok = existsSync(azaharSeeddb(dir))
     out.push({ ...base, state: ok ? 'ok' : 'missing' })
   }
   return out
@@ -177,6 +179,7 @@ export async function removeBios(ctx: Ctx, slotId: string): Promise<boolean> {
     else if (slot.id === 'switch-firmware') await rm(edenRegistered(row.dir), { recursive: true, force: true })
     else if (slot.id === 'wiiu-keys') await rm(cemuKeys(row.dir), { force: true })
     else if (slot.id === '3ds-keys') await rm(azaharKeys(row.dir), { force: true })
+    else if (slot.id === '3ds-seeddb') await rm(azaharSeeddb(row.dir), { force: true })
     return true
   } catch { return false }
 }
@@ -256,6 +259,14 @@ export async function importBiosFile(ctx: Ctx, emulator: string, path: string): 
       const dest = azaharKeys(row.dir)
       await mkdir(dirname(dest), { recursive: true })
       await writeFile(dest, mergeKeyLines(await readOpt(dest), [...found.values()], (l) => { const m = AZAHAR_KEY_LINE.exec(l); return m ? m[1].toLowerCase() : null }))
+      return result()
+    }
+    if (slot.id === '3ds-seeddb') {
+      // Format binaire opaque (agrégat de graines par titre) : aucune structure à valider, juste une taille non nulle.
+      if (size < 16) return { path, ok: false, slot: slot.id, error: 'unknown' }
+      const dest = azaharSeeddb(row.dir)
+      await mkdir(dirname(dest), { recursive: true })
+      await copyFile(path, dest)
       return result()
     }
     if (slot.id === 'switch-firmware') {

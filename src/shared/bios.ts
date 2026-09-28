@@ -41,6 +41,9 @@ export const BIOS_SLOTS: readonly BiosSlot[] = [
   { id: 'switch-keys', emulator: 'eden', kind: 'keys', required: true, names: ['prod.keys'] },
   { id: 'switch-firmware', emulator: 'eden', kind: 'firmware', required: true, exts: ['.zip'], minSize: 100 * MB },
   { id: 'wiiu-keys', emulator: 'cemu', kind: 'keys', required: true },
+  // Doit précéder 3ds-keys : ce dernier n'a ni nom ni extension et accepterait sinon n'importe quel fichier déposé en premier.
+  // Seulement requis pour certains jeux (chiffrement par graine, surtout des titres après la 9.6.0-24) : sans lui, ces jeux précis refusent de se lancer même avec les bonnes clés.
+  { id: '3ds-seeddb', emulator: 'azahar', kind: 'keys', required: false, names: ['seeddb.bin'] },
   { id: '3ds-keys', emulator: 'azahar', kind: 'keys', required: true },
   { id: 'nds7', emulator: 'melonds', kind: 'bios', required: false, names: ['bios7.bin'], sizes: [16384], md5: { df692a80a5b1bc90728bc3dfc76cd948: 'ARM7' } },
   { id: 'nds9', emulator: 'melonds', kind: 'bios', required: false, names: ['bios9.bin'], sizes: [4096], md5: { a392174eb3e572fed6447e956bde4b25: 'ARM9' } },

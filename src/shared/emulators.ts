@@ -102,10 +102,15 @@ export interface EmulatorProgress {
 
 export interface LatestVersion { id: string; version: string | null; error?: string }
 
-export interface LaunchResult { ok: boolean; error?: 'noEmulator' | 'notInstalled' | 'noFile' | 'spawn' | 'unsupported' | 'running'; detail?: string }
+export interface LaunchResult { ok: boolean; error?: 'noEmulator' | 'notInstalled' | 'noFile' | 'spawn' | 'unsupported' | 'running' | 'zipUnreadable' | 'ciaInstallFailed'; detail?: string }
 
 /** Présent quand le jeu s'est fermé (ou a planté) très vite après son lancement, sans que l'utilisateur ne l'ait fermé lui-même. */
-export interface QuickExit { elapsedMs: number; log?: string }
+export interface QuickExit {
+  elapsedMs: number
+  log?: string
+  /** Renseigné pour un échec connu avant même le lancement (LaunchResult.error) : la clé i18n `play.<code>` est déjà la bonne, pas besoin d'analyser un journal. */
+  immediate?: string
+}
 
 export interface GameSession { entryId: number; running: boolean; playMinutes?: number; quickExit?: QuickExit }
 
@@ -116,7 +121,9 @@ export interface GameSession { entryId: number; running: boolean; playMinutes?: 
 const KNOWN_FAILURES: readonly { pattern: RegExp; key: string }[] = [
   { pattern: /subq|\.sbi\b/i, key: 'play.quickExitSbi' },
   { pattern: /bios.*(missing|invalid|not found|refused)|no bios|aucun bios/i, key: 'play.quickExitBios' },
-  { pattern: /firmware.*(missing|invalid|not found)/i, key: 'play.quickExitFirmware' }
+  { pattern: /firmware.*(missing|invalid|not found)/i, key: 'play.quickExitFirmware' },
+  // Azahar (3DS) : échec de déchiffrement du contenu (clés AES incomplètes, ou graine manquante pour ce jeu précis).
+  { pattern: /failed to determine system mode/i, key: 'play.quickExit3dsCrypto' }
 ]
 
 /** Clé i18n d'une cause connue reconnue dans le journal, ou undefined si rien de reconnu (le journal brut reste la seule piste). */

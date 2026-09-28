@@ -12,17 +12,14 @@ export function PlayButton({ entry }: { entry: LibraryEntry }) {
   const play = useEmulators((s) => s.play)
   const installed = useEmulators((s) => s.list.find((e) => e.id === emulatorForConsole(entry.console)?.id)?.installed)
   const navigate = useApp((s) => s.go)
-  const [error, setError] = useState<string | null>(null)
   const def = emulatorForConsole(entry.console)
   const click = async (): Promise<void> => {
     if (def && installed === false) { navigate('emulators'); return }
-    setError(null)
-    const r = await play(entry.id)
-    setError(r.ok ? null : t(`play.${r.error ?? 'spawn'}`) + (r.detail && r.error === 'spawn' ? ` (${r.detail})` : ''))
+    // Un échec est affiché via QuickExitNotice (même vitrine qu'une fermeture rapide) : voir useEmulators.play.
+    await play(entry.id)
   }
   return (
     <>
-      {error && <span className="muted">{error}</span>}
       {running
         ? <Button onClick={() => void window.api.invoke('game:stop', entry.id)}>■ {t('play.stop')}</Button>
         : <Button variant="primary" onClick={() => void click()}>{installed === false && def ? t('play.installFirst', { name: def.name }) : `▶ ${t('play')}`}</Button>}
@@ -40,7 +37,12 @@ export function QuickExitNotice({ entryId }: { entryId: number }) {
   const dismiss = useEmulators((s) => s.dismissQuickExit)
   const [copied, setCopied] = useState(false)
   if (!quickExit) return null
-  const reasonKey = explainFailure(quickExit.log)
+  // Un échec connu avant même le lancement (LaunchResult.error) porte déjà sa clé i18n ; sinon on cherche une cause
+  // connue dans le journal d'une vraie fermeture rapide du processus.
+  const reasonKey = quickExit.immediate ? `play.${quickExit.immediate}` : explainFailure(quickExit.log)
+  // Le journal technique n'a de sens que pour une vraie fermeture de processus, ou l'exception de démarrage (spawn) :
+  // pour les autres échecs immédiats (zip illisible, pas de fichier…), le message ci-dessus dit déjà tout.
+  const showLog = !!quickExit.log && (!quickExit.immediate || quickExit.immediate === 'spawn')
   const copy = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(quickExit.log ?? '')
@@ -51,12 +53,13 @@ export function QuickExitNotice({ entryId }: { entryId: number }) {
   return (
     <div className="panel quick-exit">
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>{t('play.quickExitHeader', { seconds: Math.round(quickExit.elapsedMs / 1000) })}</div>
+        <div>{t(quickExit.immediate ? 'play.launchFailedHeader' : 'play.quickExitHeader', { seconds: Math.round(quickExit.elapsedMs / 1000) })}</div>
         <Button variant="icon" title={t('play.dismiss')} aria-label={t('play.dismiss')} onClick={() => dismiss(entryId)}>✕</Button>
       </div>
       {reasonKey && <strong>{t(reasonKey)}</strong>}
       {reasonKey === 'play.quickExitSbi' && <SbiImportControl entryId={entryId} />}
-      {quickExit.log ? (
+      {reasonKey === 'play.quickExit3dsCrypto' && <AzaharKeysImportControl />}
+      {showLog ? (
         <>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="muted">{t('play.quickExitLog')}</span>
@@ -64,7 +67,7 @@ export function QuickExitNotice({ entryId }: { entryId: number }) {
           </div>
           <pre>{quickExit.log}</pre>
         </>
-      ) : <span className="muted">{t('play.quickExitNoLog')}</span>}
+      ) : (!quickExit.immediate && <span className="muted">{t('play.quickExitNoLog')}</span>)}
     </div>
   )
 }
@@ -97,6 +100,39 @@ function SbiImportControl({ entryId }: { entryId: number }) {
     <div className={`bios-panel${over ? ' over' : ''}`} onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={drop}>
       <span className="muted">{t('play.sbiDrop')}</span>
       <Button onClick={() => void pick()} disabled={busy}>{t('play.sbiPick')}</Button>
+      {message && <span className="muted">{message}</span>}
+    </div>
+  )
+}
+
+/** Glisser-déposer ou sélectionner un aes_keys.txt / seeddb.bin pour Azahar : même reconnaissance et placement automatique que le panneau BIOS (bios:import gère déjà les deux emplacements). */
+function AzaharKeysImportControl() {
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [over, setOver] = useState(false)
+  const doImport = async (path: string): Promise<void> => {
+    if (busy) return
+    setBusy(true)
+    setMessage(null)
+    try {
+      const [r] = await window.api.invoke('bios:import', { emulator: 'azahar', paths: [path] })
+      setMessage(r?.ok ? t('play.azaharKeysImported', { slot: t(`bios.slot.${r.slot}`) }) : t('play.azaharKeysFailed'))
+    } finally { setBusy(false) }
+  }
+  const pick = async (): Promise<void> => {
+    const paths = await window.api.invoke('bios:pick', 'azahar')
+    if (paths[0]) void doImport(paths[0])
+  }
+  const drop = (e: DragEvent): void => {
+    e.preventDefault()
+    setOver(false)
+    const path = e.dataTransfer.files[0] && window.api.pathOf(e.dataTransfer.files[0])
+    if (path) void doImport(path)
+  }
+  return (
+    <div className={`bios-panel${over ? ' over' : ''}`} onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={drop}>
+      <span className="muted">{t('play.azaharKeysDrop')}</span>
+      <Button onClick={() => void pick()} disabled={busy}>{t('play.azaharKeysPick')}</Button>
       {message && <span className="muted">{message}</span>}
     </div>
   )

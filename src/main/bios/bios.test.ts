@@ -127,6 +127,23 @@ describe('bios : import et détection', () => {
     expect((await biosStatus({ db, paths })).find((s) => s.id === '3ds-keys')?.state).toBe('ok')
     expect(existsSync(join(emu, 'user', 'sysdata', 'aes_keys.txt'))).toBe(true)
   })
+
+  it('Azahar : seeddb.bin (facultatif, requis seulement pour certains jeux à chiffrement par graine)', async () => {
+    const emu = join(dir, 'emulators', 'azahar')
+    mkdirSync(emu, { recursive: true })
+    saveEmulator(db, { id: 'azahar', version: '1', dir: emu, exe: join(emu, 'azahar.exe'), custom: false })
+    expect((await biosStatus({ db, paths })).find((s) => s.id === '3ds-seeddb')).toMatchObject({ state: 'missing', required: false })
+    mkdirSync(join(dir, 'trop-petit'))
+    const tooSmall = join(dir, 'trop-petit', 'seeddb.bin')
+    writeFileSync(tooSmall, Buffer.alloc(4))
+    expect(await importBiosFile({ db, paths }, 'azahar', tooSmall)).toMatchObject({ ok: false, error: 'unknown' })
+    mkdirSync(join(dir, 'bon'))
+    const src = join(dir, 'bon', 'seeddb.bin')
+    writeFileSync(src, Buffer.alloc(32))
+    expect(await importBiosFile({ db, paths }, 'azahar', src)).toMatchObject({ ok: true, slot: '3ds-seeddb' })
+    expect((await biosStatus({ db, paths })).find((s) => s.id === '3ds-seeddb')?.state).toBe('ok')
+    expect(existsSync(join(emu, 'user', 'sysdata', 'seeddb.bin'))).toBe(true)
+  })
 })
 
 describe('bios : configuré dans l’émulateur', () => {
