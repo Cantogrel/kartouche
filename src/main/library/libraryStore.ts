@@ -48,12 +48,14 @@ export function listLibrary(db: DatabaseSync): LibraryEntry[] {
 }
 
 /**
- * Retente l'identification des entrées sans fiche (`game_id` NULL) : un jeu absent du catalogue au moment de
- * l'import (ex. filtre IGDB Switch alors trop strict) peut y être apparu depuis une resynchro. Ne touche jamais
- * une entrée déjà reliée ; n'accepte qu'un résultat sur la MÊME console (jamais de réassignation de console).
+ * Retente l'identification des entrées sans fiche VALIDE : `game_id` NULL (jeu absent du catalogue au moment de
+ * l'import, ex. filtre IGDB Switch alors trop strict) OU `game_id` orphelin (pointe vers une ligne de `catalog_games`
+ * qui n'existe plus : `replaceConsole` réinsère ses lignes avec de nouveaux id à chaque resynchro — voir sa note).
+ * N'accepte qu'un résultat sur la MÊME console (jamais de réassignation de console).
  */
 export function relinkUnmatched(db: DatabaseSync): number {
-  const rows = db.prepare('SELECT id, console, title, crc, sha1 FROM library WHERE game_id IS NULL').all() as
+  const rows = db.prepare(`SELECT id, console, title, crc, sha1 FROM library
+    WHERE game_id IS NULL OR NOT EXISTS (SELECT 1 FROM catalog_games c WHERE c.id = library.game_id)`).all() as
     { id: number; console: string; title: string; crc: string | null; sha1: string | null }[]
   const upd = db.prepare('UPDATE library SET game_id = ?, title = ?, match = ? WHERE id = ?')
   let relinked = 0

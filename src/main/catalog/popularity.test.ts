@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS } from '@shared/settings'
 import { CONSOLES } from '@shared/consoles'
 import { matchKey, syncPopularity } from './popularity'
 import { platformYear, companyOf } from './igdb'
-import { queryCatalog, replaceConsole } from './catalogStore'
+import { getGame, queryCatalog, replaceConsole } from './catalogStore'
 
 describe('matchKey', () => {
   it('rapproche les conventions de nommage No-Intro et IGDB', () => {
@@ -72,6 +72,23 @@ describe('syncPopularity', () => {
     try { await syncPopularity(db, settings, undefined, query) } finally { globalThis.fetch = realFetch }
     replaceConsole(db, 'snes', [row('Super Mario World (Europe)')], null)
     expect(queryCatalog(db, {}).games[0]).toMatchObject({ popularity: 900, genre: 'platform', developer: 'Nintendo', year: 1991 })
+  })
+  it('garde le même id pour un jeu qui existe encore à la resynchro suivante (une ROM déjà importée reste reliée)', () => {
+    const db = new DatabaseSync(':memory:'); migrate(db)
+    replaceConsole(db, 'switch', [row('Mario Kart 8 Deluxe')], null)
+    const id = queryCatalog(db, {}).games[0].id
+    db.prepare("INSERT INTO library (game_id, console, title, path, size, match, added_at) VALUES (?, 'switch', 'Mario Kart 8 Deluxe', 'x', 0, 'name', 0)").run(id)
+    replaceConsole(db, 'switch', [row('Mario Kart 8 Deluxe'), row('Splatoon 3')], null) // resynchro : même jeu + un nouveau
+    expect(queryCatalog(db, {}).games.find((g) => g.name === 'Mario Kart 8 Deluxe')!.id).toBe(id) // id stable, pas régénéré
+    expect((db.prepare('SELECT game_id FROM library').get() as { game_id: number }).game_id).toBe(id) // toujours reliée
+  })
+  it('ne supprime pas un jeu disparu de la source tant qu’une entrée de bibliothèque le référence', () => {
+    const db = new DatabaseSync(':memory:'); migrate(db)
+    replaceConsole(db, 'switch', [row('Old Game')], null)
+    const id = queryCatalog(db, {}).games[0].id
+    db.prepare("INSERT INTO library (game_id, console, title, path, size, match, added_at) VALUES (?, 'switch', 'Old Game', 'x', 0, 'name', 0)").run(id)
+    replaceConsole(db, 'switch', [row('New Game')], null) // « Old Game » a disparu de la source
+    expect(getGame(db, id)).toMatchObject({ title: 'Old Game' }) // conservé : encore référencé par la bibliothèque
   })
   it('trie dans les deux sens, valeurs inconnues toujours en dernier', () => {
     const db = new DatabaseSync(':memory:'); migrate(db)

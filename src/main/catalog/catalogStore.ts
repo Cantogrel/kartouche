@@ -11,20 +11,37 @@ export interface CatalogRow {
   popularity?: number | null; img?: string | null
 }
 
-/** Remplace le contenu d'une console dans une seule transaction. */
+/**
+ * Remplace le contenu d'une console dans une seule transaction, en gardant le même `id` pour un jeu qui existait déjà
+ * (upsert sur la clé naturelle `UNIQUE (console, title)`) : `library.game_id` n'est PAS une clé étrangère déclarée
+ * (une ROM peut être importée avant que son jeu existe au catalogue), donc rien n'empêchait un ancien DELETE + INSERT
+ * de changer les id et d'orpheliner silencieusement tous les jeux déjà importés à chaque resynchro — voir
+ * `relinkUnmatched`, qui rattrape après coup les entrées restées orphelines malgré tout (jeu renommé à la source…).
+ * Un jeu disparu de la source n'est supprimé que s'il n'est référencé par aucune entrée de bibliothèque.
+ */
 export function replaceConsole(db: DatabaseSync, consoleId: string, rows: CatalogRow[], version: string | null, now = Date.now()): void {
   db.exec('BEGIN')
   try {
     // Popularité, genre, développeur et année viennent en partie d'IGDB, pas des DAT : on les conserve à travers une resynchronisation.
     type Prev = { popularity: number | null; genre: string | null; developer: string | null; year: number | null }
     const prev = new Map((db.prepare('SELECT title, popularity, genre, developer, year FROM catalog_games WHERE console = ?').all(consoleId) as (Prev & { title: string })[]).map((r) => [r.title, r]))
-    db.prepare('DELETE FROM catalog_games WHERE console = ?').run(consoleId)
-    const ins = db.prepare(`INSERT OR IGNORE INTO catalog_games (console, title, name, region, year, genre, developer, crc, sha1, size, variant, popularity, base, img)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    const upsert = db.prepare(`INSERT INTO catalog_games (console, title, name, region, year, genre, developer, crc, sha1, size, variant, popularity, base, img)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (console, title) DO UPDATE SET
+        name = excluded.name, region = excluded.region, year = excluded.year, genre = excluded.genre, developer = excluded.developer,
+        crc = excluded.crc, sha1 = excluded.sha1, size = excluded.size, variant = excluded.variant, popularity = excluded.popularity,
+        base = excluded.base, img = excluded.img`)
+    const seen = new Set<string>()
     for (const r of rows) {
+      seen.add(r.title)
       const p = prev.get(r.title)
-      ins.run(consoleId, r.title, displayTitle(r.title), r.region, r.year ?? p?.year ?? null, canonicalGenre(r.genre) ?? p?.genre ?? null, r.developer ?? p?.developer ?? null,
+      upsert.run(consoleId, r.title, displayTitle(r.title), r.region, r.year ?? p?.year ?? null, canonicalGenre(r.genre) ?? p?.genre ?? null, r.developer ?? p?.developer ?? null,
         r.crc, r.sha1, r.size, r.variant ? 1 : 0, r.popularity ?? p?.popularity ?? null, matchKey(r.title), r.img ?? null)
+    }
+    const gone = [...prev.keys()].filter((title) => !seen.has(title))
+    if (gone.length) {
+      const del = db.prepare('DELETE FROM catalog_games WHERE console = ? AND title = ? AND NOT EXISTS (SELECT 1 FROM library WHERE game_id = catalog_games.id)')
+      for (const title of gone) del.run(consoleId, title)
     }
     db.prepare(`INSERT INTO catalog_sync (console, version, synced_at, count) VALUES (?, ?, ?, ?)
       ON CONFLICT(console) DO UPDATE SET version = excluded.version, synced_at = excluded.synced_at, count = excluded.count`)

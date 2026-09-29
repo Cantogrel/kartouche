@@ -212,6 +212,15 @@ describe('bibliothèque', () => {
     expect(listLibrary(db)[0]).toMatchObject({ gameId: id, match: 'name' })
     expect(relinkUnmatched(db)).toBe(0) // déjà relié : idempotent
   })
+  it('relie aussi une entrée dont le game_id est orphelin (pointe vers une ligne de catalogue qui n’existe plus)', async () => {
+    await importPaths(db, [rom('Mario Kart 8 Deluxe.nsp', '123456789')], opt())
+    // game_id orphelin : simule une resynchro qui aurait régénéré les id (bug corrigé côté replaceConsole, testé ici en défense).
+    db.prepare('UPDATE library SET game_id = 999999 WHERE id = 1').run()
+    expect(listLibrary(db)[0].gameId).toBe(999999)
+    const newId = addGame('switch', 'Mario Kart 8 Deluxe', 'mariokart8deluxe', null, null)
+    expect(relinkUnmatched(db)).toBe(1)
+    expect(listLibrary(db)[0]).toMatchObject({ gameId: newId, match: 'name' })
+  })
 })
 
 describe('sbi', () => {

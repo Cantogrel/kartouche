@@ -14,6 +14,9 @@ Une section `## <version>` par version ; le texte est repris tel quel dans le po
 - Catalogue resynchronisé tout seul après une mise à jour, et jeux déjà importés reliés à leur fiche dès qu'elle apparaît.
 - Changelog affiché même après une installation manuelle (pas seulement via la mise à jour automatique).
 - Barre de progression fantôme au bas de la fenêtre pendant l'installation d'un émulateur, corrigée.
+- Corrigé : la resynchro du catalogue ci-dessus changeait l'identifiant de chaque jeu à chaque fois, ce qui déliait
+  toute la bibliothèque déjà importée (les jeux avaient l'air d'avoir disparu). Si ça vous est arrivé avec cette
+  version, un clic sur « Actualiser » dans le Catalogue répare les jeux concernés sans rien réimporter.
 
 ## 0.1.5
 
