@@ -14,6 +14,10 @@ Une section `## <version>` par version ; le texte est repris tel quel dans le po
 - Sélection de texte dans ces fiches limitée au texte utile (plus d'icônes ou de texte d'intro sélectionnés par erreur).
 - Mises à jour et DLC Switch : détectés à l'import et refusés avec un message clair (à installer soi-même dans
   l'émulateur via son menu « Install Files to NAND… »), plutôt que mal identifiés comme un jeu à part.
+- Corrigé : le badge de mise à jour en haut à droite redirigeait vers les paramètres généraux au lieu d'ouvrir
+  directement « À propos », là où se fait la mise à jour.
+- Corrigé : en mode Big Picture, les jaquettes des jeux laissaient un écart de chaque côté au lieu de remplir
+  la tuile comme en mode classique.
 
 ## 0.1.6
 

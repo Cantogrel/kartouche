@@ -64,7 +64,7 @@ export default function App() {
         <span>RomVault</span>
         <div className="right">
           {(updateStatus === 'available' || updateStatus === 'downloading' || updateStatus === 'ready') && (
-            <button className="update-badge" onClick={() => go('settings')}>
+            <button className="update-badge" onClick={() => go('settings', 'about')}>
               ⭳ {t(updateStatus === 'downloading' ? 'update.badgeDownloading' : updateStatus === 'ready' ? 'update.badgeReady' : 'update.badgeAvailable', { percent: useUpdate.getState().state.percent })}
             </button>
           )}

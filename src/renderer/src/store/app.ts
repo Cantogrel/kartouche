@@ -5,6 +5,7 @@ import type { CatalogSort } from '@shared/catalog'
 export interface CatalogView { consoles: string[]; genres: string[]; sort: CatalogSort; /** null = sens par défaut du critère */ dir: 'asc' | 'desc' | null; variants: boolean; limit: number }
 
 export type Route = 'home' | 'catalog' | 'library' | 'emulators' | 'settings' | 'game'
+/** `gameId` = id du jeu pour la route `game` ; section de départ (ex. `about`) pour la route `settings`. */
 interface Loc { route: Route; gameId?: string }
 interface AppState extends Loc {
   history: Loc[]

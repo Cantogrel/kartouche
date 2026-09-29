@@ -3,6 +3,7 @@ import type { ProviderStatus } from '@shared/catalog'
 import type { UpdateChangelog } from '@shared/ipc'
 import { t } from '@/i18n'
 import { Button } from '@/ui'
+import { useApp } from '@/store/app'
 import { useSettings } from '@/store/settings'
 import { useUpdate } from '@/store/update'
 import { useChangelog } from '@/store/changelog'
@@ -11,8 +12,12 @@ import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSettin
 const SECTIONS = ['general', 'import', 'emulation', 'controller', 'appearance', 'apiKeys', 'about'] as const
 type Section = (typeof SECTIONS)[number]
 
+const isSection = (s: string | undefined): s is Section => (SECTIONS as readonly string[]).includes(s ?? '')
+
 export function Settings() {
-  const [section, setSection] = useState<Section>('general')
+  // `gameId` sert de section de départ pour cette route (ex. venant du badge de mise à jour → « À propos »).
+  const requestedSection = useApp((s) => s.gameId)
+  const [section, setSection] = useState<Section>(isSection(requestedSection) ? requestedSection : 'general')
   const { settings, info, update } = useSettings()
   const [restart, setRestart] = useState(false)
 
