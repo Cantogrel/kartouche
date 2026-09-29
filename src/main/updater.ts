@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { DatabaseSync } from 'node:sqlite'
 import type { UpdateChangelog, UpdateState } from '@shared/ipc'
+import changelogMd from '../../CHANGELOG.md?raw'
 
 let state: UpdateState = { status: 'idle', version: null, percent: 0, error: null }
 
@@ -27,6 +28,27 @@ function getRaw(db: DatabaseSync, key: string): unknown {
   try { return JSON.parse(row.value) } catch { return undefined }
 }
 
+/** Notes de `## <version>` dans CHANGELOG.md ; null si la version n'y a pas de section (build de dev entre deux versions). */
+function localNotes(version: string): string | null {
+  const m = new RegExp(`^##\\s*v?${version.replace(/\./g, '\\.')}\\b.*$`, 'm').exec(changelogMd)
+  if (!m) return null
+  const rest = changelogMd.slice(m.index + m[0].length)
+  const next = rest.search(/^##\s/m)
+  return rest.slice(0, next === -1 ? undefined : next).trim()
+}
+
+/**
+ * Renseigne le changelog depuis le fichier local dès qu'on tourne sur une version pas encore vue : contrairement à
+ * `update-downloaded` (déclenché seulement par la mise à jour automatique in-app via GitHub Releases), ça marche
+ * aussi quand l'installateur a été lancé à la main (build local testé avant publication de la release).
+ */
+export function ensureLocalChangelog(db: DatabaseSync): void {
+  const version = app.getVersion()
+  if (lastChangelog(db)?.version === version) return
+  const notes = localNotes(version)
+  if (notes !== null) put(db, 'changelog:data', { version, notes })
+}
+
 /** Dernier changelog connu (celui de la mise à jour la plus récemment téléchargée), quelle que soit la version en cours. */
 export function lastChangelog(db: DatabaseSync): UpdateChangelog {
   const c = getRaw(db, 'changelog:data') as UpdateChangelog | undefined
@@ -50,6 +72,7 @@ const RECHECK_MS = 6 * 3600 * 1000
 
 /** Les mises à jour n'existent que dans l'app installée : en développement, tout est inerte. */
 export function initUpdater(db: DatabaseSync): void {
+  ensureLocalChangelog(db)
   if (!app.isPackaged) return
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true

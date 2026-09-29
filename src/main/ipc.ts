@@ -12,7 +12,7 @@ import { tgdb } from './catalog/tgdb'
 import { syncPopularity } from './catalog/popularity'
 import { localizeDetails } from './catalog/l10n'
 import { importPaths } from './library/importer'
-import { addCatalogGame, entryPath, importSbi, listLibrary, refreshMissing, removeEntry } from './library/libraryStore'
+import { addCatalogGame, entryPath, importSbi, listLibrary, refreshMissing, relinkUnmatched, removeEntry } from './library/libraryStore'
 import { createCollection, deleteCollection, listCollections, renameCollection, setFlags, setMembers, setMembership } from './library/collections'
 import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget } from './saves/saves'
 import { getAchievements } from './achievements/retroachievements'
@@ -37,6 +37,26 @@ const ENRICH_VERSION = '2'
 type Handler<C extends IpcChannel> = (req: IpcChannels[C]['req']) => IpcChannels[C]['res'] | Promise<IpcChannels[C]['res']>
 function handle<C extends IpcChannel>(channel: C, fn: Handler<C>): void {
   ipcMain.handle(channel, (_e, req) => fn(req))
+}
+
+/**
+ * Resynchronise le catalogue tout seul une fois par version installée (ex. un filtre IGDB corrigé ajoute des jeux
+ * à la Switch entre deux versions) : sans ça, rien n'indique à l'utilisateur qu'une actualisation manuelle rendrait
+ * de nouvelles fiches disponibles. Sautée si le catalogue est vide (premier lancement, déjà couvert par la synchro
+ * auto du renderer) ou si une synchro (manuelle ou déjà déclenchée) est en cours.
+ */
+export async function autoSyncCatalogOnUpdate(db: DatabaseSync): Promise<void> {
+  const version = app.getVersion()
+  const stored = db.prepare("SELECT value FROM settings WHERE key = 'catalog:syncedVersion'").get() as { value: string } | undefined
+  if (syncing || stored?.value === version || catalogCount(db) === 0) return
+  syncing = true
+  try {
+    await syncCatalog(db, undefined, (p) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', p)), undefined, loadSettings(db))
+    relinkUnmatched(db)
+  } finally {
+    syncing = false
+    db.prepare("INSERT INTO settings (key, value) VALUES ('catalog:syncedVersion', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(version)
+  }
 }
 
 export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVersion: string }): void {
@@ -74,7 +94,9 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     if (syncing) return { synced: 0, failed: [] }
     syncing = true
     try {
-      return await syncCatalog(db, ids, (p) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', p)), undefined, loadSettings(db))
+      const result = await syncCatalog(db, ids, (p) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', p)), undefined, loadSettings(db))
+      relinkUnmatched(db)
+      return result
     } finally { syncing = false }
   })
   handle('catalog:popularity', async () => {

@@ -8,7 +8,7 @@ import { migrate } from '../db/migrations'
 import { extractZipEntries, hashFile, readZip, readZipEntryText } from './hash'
 import { identify } from './identify'
 import { importPaths } from './importer'
-import { addCatalogGame, importSbi, listLibrary, removeEntry, saveDir, sbiPathFor } from './libraryStore'
+import { addCatalogGame, importSbi, listLibrary, relinkUnmatched, removeEntry, saveDir, sbiPathFor } from './libraryStore'
 
 const hex = (n: number): string => (n >>> 0).toString(16).padStart(8, '0')
 let dir: string
@@ -198,6 +198,19 @@ describe('bibliothèque', () => {
     mkdirSync(saveDir(saves, e2), { recursive: true })
     await removeEntry(db, e2.id, 'all', saves)
     expect(listLibrary(db)).toHaveLength(0); expect(existsSync(e2.path)).toBe(false); expect(existsSync(saveDir(saves, e2))).toBe(false)
+  })
+  it('relie après coup un jeu importé sans fiche, une fois que le catalogue le connaît (rattrape un catalogue Switch incomplet lors de l’import)', async () => {
+    // Le jeu manque encore au catalogue (ex. filtre IGDB alors trop strict) : importé quand même, sans fiche.
+    const r = await importPaths(db, [rom('Mario Kart 8 Deluxe.nsp', '123456789')], opt())
+    expect(r.items[0]).toMatchObject({ status: 'added', console: 'switch', match: 'none' }) // extension .nsp : console connue, jeu non
+    expect(listLibrary(db)[0]).toMatchObject({ gameId: null })
+    expect(relinkUnmatched(db)).toBe(0) // toujours rien à relier : le catalogue ne le connaît pas encore
+
+    // Le catalogue est resynchronisé et le jeu y apparaît désormais.
+    const id = addGame('switch', 'Mario Kart 8 Deluxe', 'mariokart8deluxe', null, null)
+    expect(relinkUnmatched(db)).toBe(1)
+    expect(listLibrary(db)[0]).toMatchObject({ gameId: id, match: 'name' })
+    expect(relinkUnmatched(db)).toBe(0) // déjà relié : idempotent
   })
 })
 

@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { copyFile, rm } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import { cueFiles } from './importer'
+import { identify } from './identify'
 import { deleteGameSaves } from '../saves/saves'
 import type { LibraryEntry, MatchKind, SbiImportResult } from '@shared/library'
 
@@ -44,6 +45,23 @@ export function listLibrary(db: DatabaseSync): LibraryEntry[] {
   refreshMissing(db)
   const mem = membership(db)
   return (db.prepare('SELECT * FROM library ORDER BY title COLLATE NOCASE').all() as unknown as Row[]).map((r) => toEntry(r, mem.get(r.id)))
+}
+
+/**
+ * Retente l'identification des entrées sans fiche (`game_id` NULL) : un jeu absent du catalogue au moment de
+ * l'import (ex. filtre IGDB Switch alors trop strict) peut y être apparu depuis une resynchro. Ne touche jamais
+ * une entrée déjà reliée ; n'accepte qu'un résultat sur la MÊME console (jamais de réassignation de console).
+ */
+export function relinkUnmatched(db: DatabaseSync): number {
+  const rows = db.prepare('SELECT id, console, title, crc, sha1 FROM library WHERE game_id IS NULL').all() as
+    { id: number; console: string; title: string; crc: string | null; sha1: string | null }[]
+  const upd = db.prepare('UPDATE library SET game_id = ?, title = ?, match = ? WHERE id = ?')
+  let relinked = 0
+  for (const r of rows) {
+    const found = identify(db, { name: r.title, ext: '', crc: r.crc ?? undefined, sha1: r.sha1 ?? undefined })
+    if (found.gameId !== null && found.console === r.console) { upd.run(found.gameId, found.title ?? r.title, found.match, r.id); relinked++ }
+  }
+  return relinked
 }
 
 const NO_FILE = 'nofile:'

@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { migrate } from './db/migrations'
 import { buildPaths, ensureDirs, resolveDataDir } from './paths'
-import { registerIpc } from './ipc'
+import { autoSyncCatalogOnUpdate, registerIpc } from './ipc'
 import { getImage, type ImageKind } from './catalog/images'
 import { getGame, rebuildDerived } from './catalog/catalogStore'
 import { loadSettings } from './db/settingsStore'
@@ -78,5 +78,6 @@ app.whenReady().then(() => {
   registerIpc({ db, paths, sqliteVersion: v })
   createWindow(db)
   initUpdater(db)
+  void autoSyncCatalogOnUpdate(db)
 })
 app.on('window-all-closed', () => app.quit())
