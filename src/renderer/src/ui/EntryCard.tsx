@@ -16,7 +16,7 @@ export function EntryCard({ entry: g }: { entry: LibraryEntry }) {
     </div>
   ) : (
     <div className={`card${g.missing ? ' nofile' : ''}`} role="button" tabIndex={0} aria-label={`${g.title} (${label})`} onClick={open} onContextMenu={onEntryContext(g.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() } }}>
-      <Cover className="cover-fill" gameId={g.gameId} title={g.title} kind="card"><span className="card-title">{g.title}</span><Badge>{label}</Badge></Cover>
+      <Cover className="cover-fill" gameId={g.gameId} title={g.title} kind="tile"><span className="card-title">{g.title}</span><Badge>{label}</Badge></Cover>
       {g.favorite && <span className="fav-mark">♥</span>}
     </div>
   )

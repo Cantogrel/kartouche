@@ -12,6 +12,13 @@ export const ROM_EXTENSIONS: Record<string, readonly string[]> = {
   iso: ['gc', 'wii', 'ps1', 'ps2', 'ps3', 'psp'], chd: ['ps1', 'ps2'], cue: ['ps1', 'ps2'], bin: ['ps1', 'ps2'], img: ['ps1', 'ps2']
 }
 
+/** Extensions de ROM acceptées pour un ensemble de consoles (+ `.zip`, toujours accepté). Triées, sans doublon. */
+export function extensionsForConsoles(consoles: readonly string[]): string[] {
+  const set = new Set<string>(['zip'])
+  for (const [ext, consoleList] of Object.entries(ROM_EXTENSIONS)) if (consoleList.some((c) => consoles.includes(c))) set.add(ext)
+  return [...set].sort()
+}
+
 export type MatchKind = 'hash' | 'name' | 'none'
 
 export interface LibraryEntry {
@@ -60,7 +67,9 @@ export interface ImportResult {
   ignored: number
 }
 
-export interface LibraryProgress { done: number; total: number; current: string }
+/** bytesDone/bytesTotal : avancement dans le fichier en cours (empreinte + copie), pour qu'un import d'un seul gros
+ * fichier (ex. une ROM Switch de plusieurs Go) ne reste pas visuellement figé entre le début et la fin. */
+export interface LibraryProgress { done: number; total: number; current: string; bytesDone?: number; bytesTotal?: number }
 
 export interface SbiImportResult {
   ok: boolean

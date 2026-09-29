@@ -8,8 +8,8 @@ export interface FileHash { crc: string; sha1: string; size: number }
 
 const hex8 = (n: number): string => (n >>> 0).toString(16).padStart(8, '0')
 
-/** CRC32 et SHA1 d'un fichier en une seule lecture en flux (les ISO font plusieurs Go). */
-export async function hashFile(path: string): Promise<FileHash> {
+/** CRC32 et SHA1 d'un fichier en une seule lecture en flux (les ISO font plusieurs Go). `onBytes` : octets lus jusqu'ici. */
+export async function hashFile(path: string, onBytes?: (bytes: number) => void): Promise<FileHash> {
   const sha = createHash('sha1')
   let crc = 0
   let size = 0
@@ -18,7 +18,33 @@ export async function hashFile(path: string): Promise<FileHash> {
     sha.update(b)
     crc = crc32(b, crc)
     size += b.length
+    onBytes?.(size)
   }
+  return { crc: hex8(crc), sha1: sha.digest('hex'), size }
+}
+
+/**
+ * Empreinte ET copie en une seule lecture de la source vers `dest` : pour un import avec copie, évite de relire tout
+ * le fichier une 2e fois (empreinte, puis copie) — ~1,5x moins d'E/S sur une ROM de plusieurs Go. `dest` doit être sur
+ * le même volume que le dossier de ROMs final pour que le renommage qui suit (hors de cette fonction) soit instantané.
+ */
+export async function hashAndCopyFile(src: string, dest: string, onBytes?: (bytes: number) => void): Promise<FileHash> {
+  const sha = createHash('sha1')
+  let crc = 0
+  let size = 0
+  await pipeline(
+    createReadStream(src, { highWaterMark: 4 << 20 }),
+    async function* (source: AsyncIterable<Buffer>): AsyncGenerator<Buffer> {
+      for await (const chunk of source) {
+        sha.update(chunk)
+        crc = crc32(chunk, crc)
+        size += chunk.length
+        onBytes?.(size)
+        yield chunk
+      }
+    },
+    createWriteStream(dest)
+  )
   return { crc: hex8(crc), sha1: sha.digest('hex'), size }
 }
 

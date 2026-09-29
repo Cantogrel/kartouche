@@ -16,3 +16,5 @@ Thumbs.db
 graphify-out/
 /server/config.php
 /server/cache/
+# scaffold local d'outillage IA (Studio OS), pas du code du projet
+/vault/

@@ -49,7 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
   padSwapAB: false,
   padThreshold: 0.6,
   uiScale: 1,
-  accent: 'white',
+  accent: 'violet',
   reduceMotion: false
 }
 

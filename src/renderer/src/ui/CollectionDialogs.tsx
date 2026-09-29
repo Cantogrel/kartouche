@@ -14,7 +14,7 @@ type Dialog =
 interface DialogState { dialog: Dialog | null; open: (d: Dialog) => void; close: () => void }
 export const useDialog = create<DialogState>((set) => ({ dialog: null, open: (dialog) => set({ dialog }), close: () => set({ dialog: null }) }))
 
-function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   useEffect(() => {
     const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', key)

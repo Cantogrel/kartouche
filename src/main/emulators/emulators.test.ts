@@ -112,7 +112,9 @@ describe('émulateurs : installation', () => {
     expect(explainFailure('W(CheckForRequiredSubQ): SBI file missing but required for SCES-02835')).toBe('play.quickExitSbi')
     expect(explainFailure('E BIOS: no bios file found for region')).toBe('play.quickExitBios')
     expect(explainFailure('firmware not found, aborting')).toBe('play.quickExitFirmware')
-    // Constaté en vrai sur un .3ds : Azahar plante avec ce message précis quand il ne peut pas déchiffrer le contenu (clés ou graine manquantes).
+    // Constaté en vrai sur un .3ds : Azahar plante avec ce message précis quand le contenu est détecté comme chiffré (le plus souvent
+    // un dump mal étiqueté « decrypted » qui ne l'est pas vraiment — Azahar embarque ses propres clés depuis fin 2024, ce n'est
+    // presque jamais un problème de clés manquantes de notre côté, voir azahar-emu/azahar#1383).
     expect(explainFailure('Core <Critical> core\\core.cpp:Core::System::Load:353: Failed to determine system mode (Error 8)!')).toBe('play.quickExit3dsCrypto')
     expect(explainFailure('I/Core: démarrage normal')).toBeUndefined()
     expect(explainFailure(undefined)).toBeUndefined()

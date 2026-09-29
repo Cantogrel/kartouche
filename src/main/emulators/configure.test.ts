@@ -151,6 +151,19 @@ describe('configuration automatique des émulateurs', () => {
     expect(t).toContain('profiles\\2\\name=Manette')
     expect(t).toMatch(/profiles\\2\\circle_pad=axis_x:0,axis_y:1,deadzone:0\.100000,engine:sdl,guid:78696e70757401000000000000000000,maptype:all,port:0/)
   })
+  it('Eden : plein écran, pas de confirmation de fermeture, manette du joueur 1 sur le GUID XInput générique', async () => {
+    await configureEmulator('eden', dir, ctx())
+    const t = read('user', 'config', 'qt-config.ini')
+    expect(t).toContain('fullscreen=true')
+    expect(t).toContain('language=fr')
+    // ConfirmStop::Ask_Never : sans ça, Retour+Start (fermeture RomVault) ouvre la boîte de confirmation d'Eden.
+    expect(t).toContain('confirmStop=2')
+    expect(t).toContain('confirmStop\\default=false')
+    expect(t).toContain('player_0_button_a\\default=false')
+    expect(t).toMatch(/player_0_button_a=engine:sdl,port:0,guid:78696e70757401000000000000000000,button:0/)
+    expect(t).toMatch(/player_0_button_zl=engine:sdl,port:0,guid:78696e70757401000000000000000000,axis:4,threshold:0\.5,invert:\+/)
+    expect(t).toMatch(/player_0_lstick=engine:sdl,port:0,guid:78696e70757401000000000000000000,axis_x:0,axis_y:1,offset_x:0,offset_y:0,invert_x:\+,invert_y:\+/)
+  })
   it('Cemu : sortie audio par défaut, clavier ET 1ère manette XInput sur le Pad 1', async () => {
     await configureEmulator('cemu', dir, ctx())
     const settings = read('settings.xml')

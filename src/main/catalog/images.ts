@@ -9,8 +9,11 @@ import { thumbnailUrl } from './libretro'
 import { igdbQuery, igdbToken, searchTerm } from './igdb'
 import { recordUse, usedToday } from './providers'
 
-/** `card` : vignette de liste ; `hero` : grande bannière de la fiche (les deux préfèrent le format horizontal) ; `icon` : icône carrée du jeu (menu latéral). */
-export type ImageKind = 'card' | 'hero' | 'icon'
+/**
+ * `card` : vignette horizontale de la liste du catalogue (200x112, `.thumb`) ; `tile` : tuile verticale (ratio 2/3)
+ * de la Bibliothèque/Accueil/Big Picture ; `hero` : grande bannière de la fiche ; `icon` : icône carrée (menu latéral).
+ */
+export type ImageKind = 'card' | 'tile' | 'hero' | 'icon'
 export interface Img { data: Buffer; type: string }
 
 /** Une source renvoie null si elle n'a pas d'image ; elle lève une erreur si le réseau est indisponible (rien n'est alors retenu). */
@@ -87,11 +90,11 @@ async function sgdbId(db: DatabaseSync, game: CatalogGame, key: string): Promise
   return hit?.id ?? null
 }
 
-const sgdbSource = (db: DatabaseSync, game: CatalogGame, s: Settings, kind: 'grids' | 'heroes' | 'icons'): ImageSource => async () => {
+const sgdbSource = (db: DatabaseSync, game: CatalogGame, s: Settings, kind: 'grids' | 'heroes' | 'icons', dims?: string): ImageSource => async () => {
   if (!s.sgdbApiKey) return null
   const id = await sgdbId(db, game, s.sgdbApiKey)
   if (id === null) return null
-  const q = kind === 'grids' ? '?dimensions=460x215,920x430&limit=1' : kind === 'icons' ? '?mimes=image/png&limit=1' : '?limit=1'
+  const q = kind === 'grids' ? `?dimensions=${dims ?? '460x215,920x430'}&limit=1` : kind === 'icons' ? '?mimes=image/png&limit=1' : '?limit=1'
   const list = await sgdbApi<{ url: string }[]>(db, `/${kind}/game/${id}${q}`, s.sgdbApiKey)
   return list?.[0] ? fetchImage(list[0].url) : null
 }
@@ -117,8 +120,14 @@ const libretroSource = (game: CatalogGame, kind: 'Named_Boxarts' | 'Named_Snaps'
 }
 
 /**
- * Ordre de préférence : illustrations horizontales d'abord (SteamGridDB, IGDB, écran-titre/capture Libretro),
- * jaquette verticale Libretro en dernier recours.
+ * Ordre de préférence par format de destination :
+ * - `hero` (bannière large) et `card` (vignette horizontale 200x112 de la liste du catalogue, `.thumb`) : illustrations
+ *   horizontales d'abord (SteamGridDB, IGDB, écran-titre/capture Libretro), jaquette verticale Libretro en dernier
+ *   recours (rendue entière sur fond flouté, cf. `Cover`) — une jaquette portrait y serait de toute façon très rognée.
+ * - `tile` : tuile verticale (ratio 2/3, cf. `.card`/`.bp-tile`/`.bp-detail-cover` en CSS) de la Bibliothèque, de
+ *   l'Accueil et du Big Picture → la jaquette (portrait, cadre exact en capsule SteamGridDB 600x900) est privilégiée
+ *   pour remplir la tuile sans recadrage agressif ; un écran-titre/capture (horizontal) y resterait fortement rogné,
+ *   donc relégué en dernier recours.
  */
 export function imageSources(db: DatabaseSync, game: CatalogGame, kind: ImageKind, s: Settings): ImageSource[] {
   // Icône : uniquement de vraies icônes carrées (SteamGridDB) ; sans icône, l'interface affiche la pastille de la console, jamais une jaquette rognée.
@@ -128,6 +137,10 @@ export function imageSources(db: DatabaseSync, game: CatalogGame, kind: ImageKin
       libretroSource(game, 'Named_Titles'), libretroSource(game, 'Named_Snaps'), libretroSource(game, 'Named_Boxarts')]
   }
   const first = game.img ? [igdbSource(db, game, s, 't_screenshot_big')] : []
+  if (kind === 'tile') {
+    return [sgdbSource(db, game, s, 'grids', '600x900'), libretroSource(game, 'Named_Boxarts'), ...first,
+      libretroSource(game, 'Named_Titles'), libretroSource(game, 'Named_Snaps'), igdbSource(db, game, s, 't_screenshot_big')]
+  }
   return [...first, sgdbSource(db, game, s, 'grids'), libretroSource(game, 'Named_Titles'), libretroSource(game, 'Named_Snaps'),
     igdbSource(db, game, s, 't_screenshot_big'), libretroSource(game, 'Named_Boxarts')]
 }

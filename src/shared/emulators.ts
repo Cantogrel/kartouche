@@ -51,6 +51,9 @@ export const EMULATORS: readonly EmulatorDef[] = [
   { id: 'vita3k', name: 'Vita3K', consoles: ['vita'], source: { kind: 'github', repo: 'Vita3K/Vita3K', asset: '^windows-latest\\.zip$', prerelease: true }, exe: ['Vita3K.exe'], args: [], needsFirmware: true }
 ]
 
+/** Émulateurs encore en rodage : configuration parfois instable, bugs possibles (affiché comme avertissement dans l'UI). */
+export const UNSTABLE_EMULATORS: readonly string[] = ['melonds', 'azahar']
+
 /** Constructeur de l'émulateur (celui de sa première console). */
 export const emulatorMaker = (def: EmulatorDef): string | undefined => consoleById(def.consoles[0])?.maker
 /** Rang de l'émulateur : celui de sa première console dans le catalogue (ordre de sortie des consoles). */

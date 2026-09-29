@@ -69,11 +69,13 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
 
 /** Fichier associé à un jeu de la bibliothèque : emplacement et mode de reconnaissance. */
 export function LibraryFile({ entry }: { entry: LibraryEntry }) {
+  const days = entry.lastPlayed ? Math.floor((Date.now() - entry.lastPlayed) / 86400000) : null
   return (
     <div className="lib-file">
       {entry.missing
         ? <div className="muted">{t('game.noFile')}</div>
         : <><div className="muted">{entry.path}</div><div className="muted">{t(`match.${entry.match}`)} · {(entry.size / 1048576).toFixed(entry.size > 10485760 ? 0 : 1)} MB</div></>}
+      <div className="muted">{days === null ? t('game.neverPlayed') : t('game.lastPlayed', { n: days })}{entry.playMinutes > 0 && ` · ${t('game.playtime', { n: entry.playMinutes })}`}</div>
     </div>
   )
 }

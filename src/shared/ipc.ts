@@ -108,6 +108,10 @@ export interface IpcChannels {
   'update:download': { req: void; res: void }
   /** Ferme l'app et installe la mise à jour téléchargée. */
   'update:install': { req: void; res: void }
+  /** Notes de la dernière mise à jour installée (pour le bouton « voir le changelog » des Paramètres) ; null si aucune. */
+  'update:lastChangelog': { req: void; res: UpdateChangelog }
+  /** Comme `update:lastChangelog`, mais seulement si ce changelog n'a pas déjà été montré pour la version en cours ; le marque montré. */
+  'update:pendingChangelog': { req: void; res: UpdateChangelog }
 }
 
 export interface UpdateState {
@@ -117,6 +121,9 @@ export interface UpdateState {
   percent: number
   error: string | null
 }
+
+/** Notes de version (texte du release GitHub) de la dernière mise à jour téléchargée. */
+export type UpdateChangelog = { version: string; notes: string } | null
 
 /** Événements poussés main → renderer. */
 export interface IpcEvents {

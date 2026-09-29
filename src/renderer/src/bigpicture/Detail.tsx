@@ -48,7 +48,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
     <div className="bp-overlay">
       <div className="bp-detail" data-focus-root>
         {gameId !== null
-          ? <Cover className="bp-detail-cover" gameId={gameId} title={title} kind="card" />
+          ? <Cover className="bp-detail-cover" gameId={gameId} title={title} kind="tile" />
           : <div className="bp-detail-cover" style={artStyle(title)} />}
         <div className="bp-detail-body">
           <h2>{title}</h2>

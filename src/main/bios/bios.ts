@@ -207,7 +207,8 @@ async function runInstall(exe: string, args: string[], cwd: string, done: () => 
   if (!exited) { child.kill(); await new Promise((r) => setTimeout(r, 500)) }
 }
 
-const KEYS_HEADER = /^header_key\s*=\s*[0-9a-f]{32}\s*$/im
+// header_key est une clé AES-256-XTS (32 octets = 64 caractères hex) ; master_key_00 une clé AES-128 (16 octets = 32).
+const KEYS_HEADER = /^header_key\s*=\s*[0-9a-f]{64}\s*$/im
 const KEYS_MASTER = /^master_key_00\s*=\s*[0-9a-f]{32}\s*$/im
 
 /** Importe un fichier fourni par l'utilisateur : le reconnaît, le valide, puis le place (ou l'installe) pour l'émulateur. */

@@ -35,19 +35,21 @@ export function PlayButton({ entry }: { entry: LibraryEntry }) {
 export function QuickExitNotice({ entryId }: { entryId: number }) {
   const quickExit = useEmulators((s) => s.quickExits[entryId])
   const dismiss = useEmulators((s) => s.dismissQuickExit)
-  const [copied, setCopied] = useState(false)
+  const [copiedMsg, setCopiedMsg] = useState(false)
+  const [copiedLog, setCopiedLog] = useState(false)
   if (!quickExit) return null
   // Un échec connu avant même le lancement (LaunchResult.error) porte déjà sa clé i18n ; sinon on cherche une cause
   // connue dans le journal d'une vraie fermeture rapide du processus.
   const reasonKey = quickExit.immediate ? `play.${quickExit.immediate}` : explainFailure(quickExit.log)
-  // Le journal technique n'a de sens que pour une vraie fermeture de processus, ou l'exception de démarrage (spawn) :
-  // pour les autres échecs immédiats (zip illisible, pas de fichier…), le message ci-dessus dit déjà tout.
-  const showLog = !!quickExit.log && (!quickExit.immediate || quickExit.immediate === 'spawn')
-  const copy = async (): Promise<void> => {
+  const hasLog = !!quickExit.log
+  // Le journal technique n'apporte rien de plus quand la cause est déjà expliquée en clair au-dessus : on ne le montre
+  // que pour l'exception de démarrage (spawn, message trop générique pour être utile seul) ou une fermeture non reconnue.
+  const showLog = hasLog && (quickExit.immediate === 'spawn' || (!quickExit.immediate && !reasonKey))
+  const copy = async (text: string, setFlag: (v: boolean) => void): Promise<void> => {
     try {
-      await navigator.clipboard.writeText(quickExit.log ?? '')
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
+      await navigator.clipboard.writeText(text)
+      setFlag(true)
+      setTimeout(() => setFlag(false), 1500)
     } catch { /* presse-papier indisponible : rien à faire de plus */ }
   }
   return (
@@ -56,18 +58,23 @@ export function QuickExitNotice({ entryId }: { entryId: number }) {
         <div>{t(quickExit.immediate ? 'play.launchFailedHeader' : 'play.quickExitHeader', { seconds: Math.round(quickExit.elapsedMs / 1000) })}</div>
         <Button variant="icon" title={t('play.dismiss')} aria-label={t('play.dismiss')} onClick={() => dismiss(entryId)}>✕</Button>
       </div>
-      {reasonKey && <strong>{t(reasonKey)}</strong>}
+      {reasonKey && (
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+          <strong>{t(reasonKey)}</strong>
+          <Button onClick={() => void copy(t(reasonKey), setCopiedMsg)}>{copiedMsg ? t('play.copied') : t('play.copyLog')}</Button>
+        </div>
+      )}
       {reasonKey === 'play.quickExitSbi' && <SbiImportControl entryId={entryId} />}
       {reasonKey === 'play.quickExit3dsCrypto' && <AzaharKeysImportControl />}
       {showLog ? (
         <>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="muted">{t('play.quickExitLog')}</span>
-            <Button onClick={() => void copy()}>{copied ? t('play.copied') : t('play.copyLog')}</Button>
+            <Button onClick={() => void copy(quickExit.log ?? '', setCopiedLog)}>{copiedLog ? t('play.copied') : t('play.copyLog')}</Button>
           </div>
           <pre>{quickExit.log}</pre>
         </>
-      ) : (!quickExit.immediate && <span className="muted">{t('play.quickExitNoLog')}</span>)}
+      ) : (!quickExit.immediate && !reasonKey && !hasLog && <span className="muted">{t('play.quickExitNoLog')}</span>)}
     </div>
   )
 }
@@ -105,7 +112,12 @@ function SbiImportControl({ entryId }: { entryId: number }) {
   )
 }
 
-/** Glisser-déposer ou sélectionner un aes_keys.txt / seeddb.bin pour Azahar : même reconnaissance et placement automatique que le panneau BIOS (bios:import gère déjà les deux emplacements). */
+/**
+ * Repli pour le cas rare où le message « jeu détecté comme chiffré » vient vraiment d'une clé/graine locale
+ * (build d'Azahar sans clés intégrées, ou jeu à graine spécifique) plutôt que d'un fichier mal décrypté — voir
+ * play.quickExit3dsCrypto. Même reconnaissance et placement automatique que le panneau BIOS (bios:import gère
+ * déjà les deux emplacements).
+ */
 function AzaharKeysImportControl() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)

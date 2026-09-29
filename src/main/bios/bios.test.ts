@@ -70,7 +70,7 @@ describe('bios : import et détection', () => {
     writeFileSync(junk, 'rien')
     expect(await importBiosFile({ db, paths }, 'pcsx2', junk)).toMatchObject({ ok: false, error: 'unknown' })
     const keys = join(dir, 'prod.keys')
-    writeFileSync(keys, `header_key = ${'a'.repeat(32)}\nmaster_key_00 = ${'b'.repeat(32)}\n`)
+    writeFileSync(keys, `header_key = ${'a'.repeat(64)}\nmaster_key_00 = ${'b'.repeat(32)}\n`)
     expect(await importBiosFile({ db, paths }, 'eden', keys)).toMatchObject({ ok: false, error: 'notInstalled' })
   })
   it('installe prod.keys dans le dossier d’Eden après validation du contenu', async () => {
@@ -82,7 +82,7 @@ describe('bios : import et détection', () => {
     writeFileSync(join(bad, 'prod.keys'), 'pas des clés')
     expect(await importBiosFile({ db, paths }, 'eden', join(bad, 'prod.keys'))).toMatchObject({ ok: false, error: 'unknown' })
     const keys = join(dir, 'prod.keys')
-    writeFileSync(keys, `header_key = ${'a'.repeat(32)}\nmaster_key_00 = ${'b'.repeat(32)}\n`)
+    writeFileSync(keys, `header_key = ${'a'.repeat(64)}\nmaster_key_00 = ${'b'.repeat(32)}\n`)
     expect(await importBiosFile({ db, paths }, 'eden', keys)).toMatchObject({ ok: true, slot: 'switch-keys' })
     expect(existsSync(join(emu, 'user', 'keys', 'prod.keys'))).toBe(true)
     expect((await biosStatus({ db, paths })).find((s) => s.id === 'switch-keys')?.state).toBe('ok')

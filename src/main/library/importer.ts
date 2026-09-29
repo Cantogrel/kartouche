@@ -1,9 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { copyFile, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { ROM_EXTENSIONS, type ImportItem, type ImportResult, type LibraryProgress } from '@shared/library'
-import { extractZipEntries, hashFile, readZip, readZipEntryText } from './hash'
+import { extractZipEntries, hashAndCopyFile, hashFile, readZip, readZipEntryText } from './hash'
 import { identify } from './identify'
 
 export interface ImportOptions {
@@ -49,7 +49,7 @@ interface Prepared {
   zipEntries?: string[]
 }
 
-async function prepare(file: string, extra: string[]): Promise<Prepared | string> {
+async function prepare(file: string, extra: string[], onBytes?: (bytes: number) => void): Promise<Prepared | string> {
   const ext = extOf(file)
   if (ext === 'zip') {
     const all = await readZip(file)
@@ -75,7 +75,7 @@ async function prepare(file: string, extra: string[]): Promise<Prepared | string
   }
   // Disque .cue : l'empreinte de référence est celle de la première piste.
   const target = ext === 'cue' && extra[0] ? extra[0] : file
-  const h = await hashFile(target)
+  const h = await hashFile(target, onBytes)
   return { crc: h.crc, sha1: h.sha1, size: ext === 'cue' ? h.size : (await stat(file)).size, name: stemOf(file), ext }
 }
 
@@ -112,18 +112,42 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
   const byGame = db.prepare('SELECT id, path FROM library WHERE game_id = ? AND console = ?')
   const relink = db.prepare('UPDATE library SET path = ?, size = ?, crc = ?, sha1 = ?, match = ?, missing = 0 WHERE id = ?')
   const insert = db.prepare('INSERT INTO library (game_id, console, title, path, size, crc, sha1, match, added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+  // Fichiers temporaires du chemin rapide ci-dessous (empreinte + copie en une passe) : nettoyé même après un crash précédent.
+  const tmpDir = join(opt.romsDir, '.import-tmp')
   let done = 0
+  let lastReport = 0
   for (const file of queue) {
-    onProgress({ done, total: queue.length, current: basename(file) })
+    const ext = extOf(file)
+    const refs = extras.get(file) ?? []
+    const inRoms = resolve(file).toLowerCase().startsWith(resolve(opt.romsDir).toLowerCase())
+    // Chemin rapide : fichier seul (pas de zip ni de .cue multi-pistes) copié vers le dossier de ROMs. On lit la source
+    // une seule fois (empreinte + copie simultanées, voir `hashAndCopyFile`) au lieu de deux (empreinte puis copie) :
+    // ~1,5x moins d'E/S sur une ROM de plusieurs Go (Switch, PS2…), et le renommage final est instantané (même volume).
+    const fuse = ext !== 'zip' && ext !== 'cue' && opt.copy && !inRoms
+    const bytesTotal = ext === 'zip' ? undefined : (await stat(file).catch(() => null))?.size
+    const reportBytes = (bytesDone: number): void => {
+      const now = Date.now()
+      if (now - lastReport < 150 && bytesDone !== bytesTotal) return
+      lastReport = now
+      onProgress({ done, total: queue.length, current: basename(file), bytesDone, bytesTotal })
+    }
+    onProgress({ done, total: queue.length, current: basename(file), bytesDone: 0, bytesTotal })
+    let tempPath: string | null = null
     try {
-      const refs = extras.get(file) ?? []
-      const prep = await prepare(file, refs)
+      let prep: Prepared | string
+      if (fuse) {
+        await mkdir(tmpDir, { recursive: true })
+        tempPath = join(tmpDir, `${process.pid}-${Date.now()}-${basename(file)}`)
+        const h = await hashAndCopyFile(file, tempPath, reportBytes)
+        prep = { crc: h.crc, sha1: h.sha1, size: h.size, name: stemOf(file), ext }
+      } else {
+        prep = await prepare(file, refs, reportBytes)
+      }
       if (typeof prep === 'string') { items.push({ file, status: 'error', error: prep }); continue }
       const id = identify(db, prep)
       const cons = id.console ?? (id.candidates.length === 1 ? id.candidates[0] : null)
       if (!cons) { items.push({ file, status: 'ambiguous', error: id.candidates.join(', ') }); continue }
       const title = id.title ?? prep.name
-      const inRoms = resolve(file).toLowerCase().startsWith(resolve(opt.romsDir).toLowerCase())
       const same = sameRom.all(file, cons, prep.crc ?? '', prep.size) as { id: number; path: string }[]
       if (same.some((r) => existsSync(r.path))) { items.push({ file, status: 'duplicate', console: cons, title, match: id.match }); continue }
       // Entrée du même jeu dont le fichier a disparu (ou jamais existé : jeu ajouté depuis le catalogue) : la ROM s'y rattache.
@@ -138,6 +162,14 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
         dest = join(dir, freeName(dir, basename(cueEntry)))
         const mapping = [{ entry: cueEntry, dest }, ...trackEntries.map((t) => ({ entry: t, dest: join(dir, basename(t)) }))]
         if (!(await extractZipEntries(file, mapping))) { await rm(dest, { force: true }); throw new Error('extraction de l’archive échouée') }
+        if (opt.deleteSource) await rm(file, { force: true })
+      } else if (tempPath) {
+        // Déjà empreinté ET copié dans le fichier temporaire ci-dessus : il ne reste qu'à le renommer à sa place finale.
+        const dir = join(opt.romsDir, cons)
+        await mkdir(dir, { recursive: true })
+        dest = join(dir, freeName(dir, basename(file)))
+        await rename(tempPath, dest)
+        tempPath = null
         if (opt.deleteSource) await rm(file, { force: true })
       } else if (opt.copy && !inRoms) {
         const dir = join(opt.romsDir, cons)
@@ -155,9 +187,12 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
       items.push({ file, status: 'added', console: cons, title, match: id.match })
     } catch (e) {
       items.push({ file, status: 'error', error: (e as Error).message })
+    } finally {
+      if (tempPath) await rm(tempPath, { force: true }).catch(() => undefined)
     }
     done++
   }
+  await rm(tmpDir, { recursive: true, force: true }).catch(() => undefined)
   onProgress({ done, total: queue.length, current: '' })
   return { items, ignored }
 }

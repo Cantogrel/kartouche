@@ -28,7 +28,7 @@ function Tile({ id, gameId, title, cons, dim, fav, onOpen }: { id: string; gameI
   return (
     <button data-nav data-tile={id} className={`bp-tile${dim ? ' dim' : ''}`} onClick={() => { lastOpened = id; onOpen() }}>
       {gameId !== null
-        ? <Cover className="cover-fill" gameId={gameId} title={title} kind="card">{name}{tag}</Cover>
+        ? <Cover className="cover-fill" gameId={gameId} title={title} kind="tile">{name}{tag}</Cover>
         : <div className="cover-fill" style={artStyle(title)}>{name}{tag}</div>}
       {fav && <span className="fav-mark">♥</span>}
     </button>

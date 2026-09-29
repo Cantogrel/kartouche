@@ -4,13 +4,13 @@ import { DatabaseSync } from 'node:sqlite'
 import { migrate } from './db/migrations'
 import { buildPaths, ensureDirs, resolveDataDir } from './paths'
 import { registerIpc } from './ipc'
-import { getImage } from './catalog/images'
+import { getImage, type ImageKind } from './catalog/images'
 import { getGame, rebuildDerived } from './catalog/catalogStore'
 import { loadSettings } from './db/settingsStore'
 import { initUpdater } from './updater'
 import { loadWindowState, saveWindowState, type WindowState } from './windowState'
 
-// Images du catalogue servies depuis le cache disque : rvimg://card/<id du jeu> (vignette) et rvimg://hero/<id du jeu> (bannière)
+// Images du catalogue servies depuis le cache disque : rvimg://card|tile|hero|icon/<id du jeu> (vignette catalogue, tuile bibliothèque, bannière, icône)
 protocol.registerSchemesAsPrivileged([{ scheme: 'rvimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 
 /** Faux si les bornes sauvegardées tombent hors de tout écran actuellement branché (moniteur externe débranché…). */
@@ -71,12 +71,12 @@ app.whenReady().then(() => {
   protocol.handle('rvimg', async (req) => {
     const u = new URL(req.url)
     const game = getGame(db, Number(u.pathname.split('/').filter(Boolean)[0]))
-    const kind = u.hostname === 'hero' ? 'hero' : u.hostname === 'icon' ? 'icon' : 'card'
+    const kind: ImageKind = u.hostname === 'hero' || u.hostname === 'icon' || u.hostname === 'tile' ? u.hostname : 'card'
     const img = game ? await getImage(db, paths.cache, game, kind, loadSettings(db)) : null
     return img ? new Response(new Uint8Array(img.data), { headers: { 'content-type': img.type, 'cache-control': 'max-age=86400' } }) : new Response(null, { status: 404 })
   })
   registerIpc({ db, paths, sqliteVersion: v })
   createWindow(db)
-  initUpdater()
+  initUpdater(db)
 })
 app.on('window-all-closed', () => app.quit())

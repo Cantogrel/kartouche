@@ -5,10 +5,13 @@ import { useApp, type Route } from '@/store/app'
 import { PageHead } from '@/ui'
 import { useLibrary } from '@/store/library'
 import { useEmulators } from '@/store/emulators'
+import { useUpdate } from '@/store/update'
+import { useChangelog } from '@/store/changelog'
 import { GameIcon } from '@/ui/ConsoleTile'
 import { EntryMenu, onEntryContext } from '@/ui/EntryMenu'
 import { StatusBar } from '@/ui/StatusBar'
 import { Dialogs } from '@/ui/CollectionDialogs'
+import { ChangelogDialog } from '@/ui/ChangelogDialog'
 import { Library } from '@/pages/Library'
 import { SearchBox } from '@/ui'
 import { Catalog } from '@/pages/Catalog'
@@ -31,6 +34,10 @@ export default function App() {
   const startBp = useSettings((s) => s.settings.startInBigPicture)
   useEffect(() => { if (ready && !started.current) { started.current = true; if (startBp) setBigPicture(true) } }, [ready, startBp, setBigPicture])
   useEffect(() => { void load(); void useLibrary.getState().refresh(); void useEmulators.getState().refresh(); return useEmulators.getState().listen() }, [load])
+  // Mises à jour : état tenu à jour partout (pas seulement pendant que Paramètres est monté), et changelog de la
+  // version qu'on vient de démarrer proposé une seule fois, où que l'utilisateur se trouve dans l'app.
+  useEffect(() => { void useUpdate.getState().refresh(); void useChangelog.getState().showPending(); return useUpdate.getState().listen() }, [])
+  const updateStatus = useUpdate((s) => s.state.status)
 
   const { uiScale, accent, reduceMotion } = useSettings((s) => s.settings)
   useEffect(() => {
@@ -50,6 +57,11 @@ export default function App() {
       <div className="titlebar">
         <span>RomVault</span>
         <div className="right">
+          {(updateStatus === 'available' || updateStatus === 'downloading' || updateStatus === 'ready') && (
+            <button className="update-badge" onClick={() => go('settings')}>
+              ⭳ {t(updateStatus === 'downloading' ? 'update.badgeDownloading' : updateStatus === 'ready' ? 'update.badgeReady' : 'update.badgeAvailable', { percent: useUpdate.getState().state.percent })}
+            </button>
+          )}
           <button className="bp-launch" onClick={() => setBigPicture(true)}>▶ {t('bigpicture')}</button>
           <button aria-label={t('a11y.minimize')} title={t('a11y.minimize')} onClick={() => window.api.window.minimize()}>–</button>
           <button aria-label={t('a11y.maximize')} title={t('a11y.maximize')} onClick={() => window.api.window.maximize()}>▢</button>
@@ -89,7 +101,8 @@ export default function App() {
       </div>
       <EntryMenu />
       <Dialogs />
-      <div className="statusbar" role="status" aria-live="polite">{t('footer.noJob')}</div>
+      <ChangelogDialog />
+      <StatusBar />
     </div>
   )
 }

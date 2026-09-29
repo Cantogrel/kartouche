@@ -1,13 +1,15 @@
 import { useEffect } from 'react'
 import { Button, ProgressBar, Section, Tag } from '@/ui'
 import { t } from '@/i18n'
-import { EMULATORS, compareVersions, emulatorMaker, emulatorRank, type EmulatorDef } from '@shared/emulators'
+import { EMULATORS, UNSTABLE_EMULATORS, compareVersions, emulatorMaker, emulatorRank, type EmulatorDef } from '@shared/emulators'
 import { CONSOLES, MAKERS } from '@shared/consoles'
+import { extensionsForConsoles } from '@shared/library'
 import { useEmulators } from '@/store/emulators'
 import { BiosPanel } from '@/ui/BiosPanel'
 import { biosSlotsFor } from '@shared/bios'
 
 const consoleNames = (def: EmulatorDef): string => def.consoles.map((c) => CONSOLES.find((x) => x.id === c)?.label ?? c).join(', ')
+const acceptedFiles = (def: EmulatorDef): string => extensionsForConsoles(def.consoles).map((x) => `.${x}`).join(' ')
 
 const mb = (n: number): string => (n / 1048576).toFixed(n > 10485760 ? 0 : 1)
 
@@ -32,8 +34,9 @@ export function Emulators() {
           const status = !loaded ? '' : p ? t('emu.installing') : !s?.installed ? t('status.notInstalled') : s.missing ? t('emu.missing') : update ? t('emu.updateAvailable', { v: newer ?? '' }) : t('status.installed')
           return (
             <div key={def.id} className="emu-card">
-              <h3>{def.name}</h3>
+              <h3>{def.name}{UNSTABLE_EMULATORS.includes(def.id) && <span className="emu-warn" title={t('emu.unstableHint')} aria-label={t('emu.unstableHint')}>⚠</span>}</h3>
               <div className="muted">{consoleNames(def)}{s?.version ? ` · ${s.version}` : ''}{s?.custom ? ` · ${t('emu.custom')}` : ''}</div>
+              <div className="muted emu-exts">{t('emu.acceptedFiles', { list: acceptedFiles(def) })}</div>
               {p && (
                 <div style={{ marginTop: 12 }}>
                   <ProgressBar value={p.phase === 'download' && p.total ? (p.done / p.total) * 100 : p.phase === 'cores' && p.total ? (p.done / p.total) * 100 : 100} />

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { ProviderStatus } from '@shared/catalog'
-import type { UpdateState } from '@shared/ipc'
+import type { UpdateChangelog } from '@shared/ipc'
 import { t } from '@/i18n'
 import { Button } from '@/ui'
 import { useSettings } from '@/store/settings'
+import { useUpdate } from '@/store/update'
+import { useChangelog } from '@/store/changelog'
 import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting } from '@shared/settings'
 
 const SECTIONS = ['general', 'import', 'emulation', 'controller', 'appearance', 'apiKeys', 'about'] as const
@@ -14,13 +16,13 @@ export function Settings() {
   const { settings, info, update } = useSettings()
   const [restart, setRestart] = useState(false)
 
-  const [upd, setUpd] = useState<UpdateState | null>(null)
+  const upd = useUpdate((s) => s.state)
+  const [lastChangelog, setLastChangelog] = useState<UpdateChangelog>(null)
   useEffect(() => {
     if (section !== 'about') return
-    void window.api.invoke('update:state').then(setUpd)
-    return window.api.on('update:state', setUpd)
+    void window.api.invoke('update:lastChangelog').then(setLastChangelog)
   }, [section])
-  const updateLabel = !upd || upd.status === 'idle' ? t('update.idle')
+  const updateLabel = upd.status === 'idle' ? t('update.idle')
     : upd.status === 'error' ? t('update.error', { error: upd.error ?? '' })
     : t(`update.${upd.status}`, { version: upd.version ?? '', percent: upd.percent })
 
@@ -139,9 +141,10 @@ export function Settings() {
             <h3>{t('update.title')}</h3>
             <p className="muted">{updateLabel}</p>
             <div className="row">
-              {(!upd || ['idle', 'none', 'error', 'unavailable'].includes(upd.status)) && <Button onClick={() => void window.api.invoke('update:check').then(setUpd)}>{t('update.check')}</Button>}
-              {upd?.status === 'available' && <Button variant="primary" onClick={() => void window.api.invoke('update:download')}>{t('update.download')}</Button>}
-              {upd?.status === 'ready' && <Button variant="primary" onClick={() => void window.api.invoke('update:install')}>{t('update.install')}</Button>}
+              {['idle', 'none', 'error', 'unavailable'].includes(upd.status) && <Button onClick={() => void useUpdate.getState().check()}>{t('update.check')}</Button>}
+              {upd.status === 'available' && <Button variant="primary" onClick={() => void useUpdate.getState().download()}>{t('update.download')}</Button>}
+              {upd.status === 'ready' && <Button variant="primary" onClick={() => useUpdate.getState().install()}>{t('update.install')}</Button>}
+              {lastChangelog && <Button onClick={() => void useChangelog.getState().showLast()}>{t('update.viewChangelog', { v: lastChangelog.version })}</Button>}
             </div>
           </>
         )}

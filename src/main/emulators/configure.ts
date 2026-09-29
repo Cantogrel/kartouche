@@ -301,6 +301,36 @@ const AZAHAR_CONTROLLER_PROFILE: Record<string, string | number> = {
   'profiles\\2\\udp_input_address': '127.0.0.1', 'profiles\\2\\udp_input_port': 26760, 'profiles\\2\\udp_pad_index': 0
 }
 
+// --- Eden : manette SDL (même GUID XInput générique qu'Azahar, mais format de Param différent — pas de `maptype`,
+// `invert` au lieu de `direction`, pas de deadzone par liaison — vérifié contre le code source réel d'Eden :
+// BuildButtonParamPackageForButton / BuildParamPackageForAnalog, src/input_common/drivers/sdl_driver.cpp). ------------
+const edenButton = (button: number): string => `engine:sdl,port:0,guid:${XINPUT_GUID},button:${button}`
+const edenTrigger = (axis: number): string => `engine:sdl,port:0,guid:${XINPUT_GUID},axis:${axis},threshold:0.5,invert:+`
+const edenStick = (axisX: number, axisY: number): string =>
+  `engine:sdl,port:0,guid:${XINPUT_GUID},axis_x:${axisX},axis_y:${axisY},offset_x:0,offset_y:0,invert_x:+,invert_y:+`
+
+/**
+ * Manette du joueur 1 (1re manette XInput détectée : `port` désambiguïse plusieurs manettes au même GUID générique,
+ * ce n'est pas un index XInput). ABXY et croix sur leurs positions physiques, ZL/ZR sur les gâchettes analogiques
+ * (comme le fait Eden lui-même pour une manette détectée : NativeButton::ZL/ZR n'ont pas d'équivalent bouton SDL),
+ * +/- sur Start/Back. Pas de liaison pour SL/SR (rails Joy-Con détachée, aucun équivalent sur une manette Xbox) ni
+ * Home/Capture (le bouton Guide n'est pas remonté par l'API XInput). Chaque clé nécessite sa liaison `\default=false`
+ * (`qt()`) : `ReadStringSetting` ignore silencieusement la valeur écrite si ce marqueur est absent ou à `true`
+ * (src/frontend_common/config.cpp). Joueur 1 connecté en Pro Controller par défaut, sans réglage à écrire (Config::ReadPlayerValues).
+ * Jamais testé avec une vraie manette (aucune sur cette machine de développement).
+ */
+const EDEN_CONTROLLER_PROFILE: Record<string, string> = {
+  player_0_button_a: edenButton(SDL_BUTTON.A), player_0_button_b: edenButton(SDL_BUTTON.B),
+  player_0_button_x: edenButton(SDL_BUTTON.X), player_0_button_y: edenButton(SDL_BUTTON.Y),
+  player_0_button_l: edenButton(SDL_BUTTON.L), player_0_button_r: edenButton(SDL_BUTTON.R),
+  player_0_button_zl: edenTrigger(SDL_AXIS.TriggerLeft), player_0_button_zr: edenTrigger(SDL_AXIS.TriggerRight),
+  player_0_button_plus: edenButton(SDL_BUTTON.Start), player_0_button_minus: edenButton(SDL_BUTTON.Back),
+  player_0_button_lstick: edenButton(SDL_BUTTON.LeftStick), player_0_button_rstick: edenButton(SDL_BUTTON.RightStick),
+  player_0_button_dup: edenButton(SDL_BUTTON.Up), player_0_button_ddown: edenButton(SDL_BUTTON.Down),
+  player_0_button_dleft: edenButton(SDL_BUTTON.Left), player_0_button_dright: edenButton(SDL_BUTTON.Right),
+  player_0_lstick: edenStick(SDL_AXIS.LeftX, SDL_AXIS.LeftY), player_0_rstick: edenStick(SDL_AXIS.RightX, SDL_AXIS.RightY)
+}
+
 async function configureDolphin(dir: string, ctx: ConfigContext, tier: 1 | 2 | 3): Promise<void> {
   const fr = ctx.lang === 'fr'
   const cfg = join(dir, 'User', 'Config')
@@ -483,10 +513,15 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
       await createOnce(join(dir, 'settings.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<content>\n  <fullscreen>true</fullscreen>\n  <console_language>${fr ? 2 : 1}</console_language>\n  <Audio>\n    <TVVolume>100</TVVolume>\n    <TVDevice>default</TVDevice>\n    <PadDevice>default</PadDevice>\n  </Audio>\n</content>\n`)
       return createOnce(join(dir, 'controllerProfiles', 'controller0.xml'), CEMU_GAMEPAD_PROFILE)
     case 'eden':
+      // confirmStop=2 (ConfirmStop::Ask_Never) : sans ça, un « Fermer le jeu » de RomVault (ou le raccourci manette
+      // Retour+Start) ouvre la boîte de confirmation d'Eden au lieu de fermer — comme confirmClose pour Azahar.
+      // Valeur et section (« UI », catégorie UiGeneral) vérifiées contre le code source réel d'Eden
+      // (src/qt_common/config/uisettings.h, src/common/settings_enums.h, src/common/settings.cpp TranslateCategory).
       return writeIni(join(dir, 'user', 'config', 'qt-config.ini'), {
         Renderer: qt({ resolution_setup: pick(tier, [2, 3, 5]) }),
         System: qt({ language_index: fr ? 2 : 1 }),
-        UI: qt({ fullscreen: true, language: fr ? 'fr' : 'en' })
+        UI: qt({ fullscreen: true, language: fr ? 'fr' : 'en', confirmStop: 2 }),
+        Controls: qt(EDEN_CONTROLLER_PROFILE)
       }, '=')
     case 'ppsspp':
       return writeIni(join(dir, 'memstick', 'PSP', 'SYSTEM', 'ppsspp.ini'), {
