@@ -3,6 +3,18 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.1.7
+
+- Thème clair ajouté, détecté automatiquement depuis Windows ou choisi manuellement (Paramètres → Apparence → Thème :
+  Automatique / Clair / Sombre). Le thème suit Windows en direct si vous le changez pendant que RomVault tourne.
+- Corrigé : dans la Bibliothèque bien remplie, la dernière rangée de jeux pouvait passer par-dessus la barre d'état
+  en bas de la fenêtre.
+- Fiches BIOS/firmware/clés allégées : le détail technique (nom de fichier, taille) n'est plus affiché en clair sur
+  chaque ligne, mais dans une icône ⓘ à côté — au survol, et copiable en un clic.
+- Sélection de texte dans ces fiches limitée au texte utile (plus d'icônes ou de texte d'intro sélectionnés par erreur).
+- Mises à jour et DLC Switch : détectés à l'import et refusés avec un message clair (à installer soi-même dans
+  l'émulateur via son menu « Install Files to NAND… »), plutôt que mal identifiés comme un jeu à part.
+
 ## 0.1.6
 
 - Mises à jour visibles partout, et changelog affiché après une installation.

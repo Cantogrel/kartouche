@@ -53,7 +53,30 @@ export const MIGRATIONS: readonly string[] = [
   CREATE TABLE ra_sync (console TEXT PRIMARY KEY, fetched_at INTEGER NOT NULL);
   CREATE TABLE ra_progress (library_id INTEGER PRIMARY KEY REFERENCES library(id) ON DELETE CASCADE, json TEXT NOT NULL, fetched_at INTEGER NOT NULL)`,
   // v10 : un .cia 3DS doit être installé une fois dans le NAND virtuel d'Azahar avant de pouvoir être lancé
-  `ALTER TABLE library ADD COLUMN cia_installed INTEGER NOT NULL DEFAULT 0`
+  `ALTER TABLE library ADD COLUMN cia_installed INTEGER NOT NULL DEFAULT 0`,
+  // v11 : mises à jour/DLC Switch (identifiés par Title ID, ou par mot-clé + nom à défaut) rattachés au jeu de base
+  // au lieu d'être une ligne à part ; title_id = Title ID du jeu (connu seulement quand son fichier le porte entre
+  // crochets/parenthèses) ; celui de library_content est NULL pour un dump sans Title ID lisible (rattaché par nom)
+  `ALTER TABLE library ADD COLUMN title_id TEXT;
+  CREATE INDEX library_title_id ON library (console, title_id);
+  CREATE TABLE library_content (
+    id INTEGER PRIMARY KEY, library_id INTEGER NOT NULL REFERENCES library(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL, title_id TEXT, version TEXT, label TEXT NOT NULL, path TEXT NOT NULL UNIQUE,
+    size INTEGER NOT NULL, added_at INTEGER NOT NULL
+  );
+  CREATE INDEX library_content_lib ON library_content (library_id)`,
+  // v12 : library_content.title_id doit être NULLABLE (mise à jour/DLC Switch sans Title ID lisible, rattaché par nom
+  // — voir switchContent.ts) ; une base déjà en v11 l'a créée NOT NULL, et SQLite ne sait pas relâcher une contrainte
+  // en place, d'où la reconstruction de la table (ses données existantes sont conservées).
+  `CREATE TABLE library_content_v12 (
+    id INTEGER PRIMARY KEY, library_id INTEGER NOT NULL REFERENCES library(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL, title_id TEXT, version TEXT, label TEXT NOT NULL, path TEXT NOT NULL UNIQUE,
+    size INTEGER NOT NULL, added_at INTEGER NOT NULL
+  );
+  INSERT INTO library_content_v12 SELECT * FROM library_content;
+  DROP TABLE library_content;
+  ALTER TABLE library_content_v12 RENAME TO library_content;
+  CREATE INDEX library_content_lib ON library_content (library_id)`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

@@ -38,14 +38,20 @@ export default function App() {
   // version qu'on vient de démarrer proposé une seule fois, où que l'utilisateur se trouve dans l'app.
   useEffect(() => { void useUpdate.getState().refresh(); void useChangelog.getState().showPending(); return useUpdate.getState().listen() }, [])
   const updateStatus = useUpdate((s) => s.state.status)
+  // Thème clair/sombre : réglage 'auto' suivi en direct si l'OS change de thème pendant que l'app tourne.
+  useEffect(() => useSettings.getState().listen(), [])
 
   const { uiScale, accent, reduceMotion } = useSettings((s) => s.settings)
+  const theme = useSettings((s) => s.theme)
   useEffect(() => {
     const el = document.documentElement
     el.style.zoom = String(uiScale)
     el.dataset.accent = accent
+    el.dataset.theme = theme
+    // Aligne le rendu natif (case à cocher, <select>, ascenseur) sur le thème choisi plutôt que sur celui de l'OS.
+    el.style.colorScheme = theme
     el.classList.toggle('reduce-motion', reduceMotion)
-  }, [uiScale, accent, reduceMotion])
+  }, [uiScale, accent, theme, reduceMotion])
 
   if (!ready) return null
   if (bigPicture) return <BigPicture onExit={() => setBigPicture(false)} />

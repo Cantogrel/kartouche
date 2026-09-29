@@ -44,6 +44,18 @@ export interface LibraryEntry {
 
 export interface Collection { id: number; name: string; count: number }
 
+/** Mise à jour ou DLC Switch (identifié par Title ID) rattaché à un jeu de la bibliothèque plutôt que listé à part. */
+export interface LibraryContentItem {
+  id: number
+  kind: 'update' | 'dlc'
+  /** Vide si le dump n'a pas de Title ID lisible (rattaché par nom). */
+  titleId: string | null
+  version: string | null
+  label: string
+  size: number
+  addedAt: number
+}
+
 export type ImportStatus = 'added' | 'duplicate' | 'ambiguous' | 'error'
 
 export interface ImportItem {

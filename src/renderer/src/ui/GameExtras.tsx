@@ -4,7 +4,7 @@ import { t, getLang } from '@/i18n'
 import { useLibrary } from '@/store/library'
 import { useEmulators } from '@/store/emulators'
 import { emulatorForConsole } from '@shared/emulators'
-import type { LibraryEntry } from '@shared/library'
+import type { LibraryContentItem, LibraryEntry } from '@shared/library'
 import type { AchievementsResult } from '@shared/achievements'
 import type { SaveInfo } from '@shared/saves'
 
@@ -63,6 +63,33 @@ export function SavesPanel({ entry }: { entry: LibraryEntry }) {
           <Button onClick={() => { if (window.confirm(t('saves.confirmDelete', { d: fmtDate(b.at) }))) void run(() => window.api.invoke('saves:deleteBackup', { entryId: entry.id, name: b.name })) }}>{t('saves.delete')}</Button>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * Mises à jour/DLC Switch détectés par Title ID et rattachés à ce jeu (voir `switchContent.ts`, migration v11).
+ * Eden (comme Yuzu) n'a pas de commande pour les installer : ça passe par son menu « File > Install Files to NAND… »,
+ * donc on se contente d'ouvrir l'émulateur et de rappeler la manip plutôt que de prétendre l'automatiser.
+ */
+export function ContentPanel({ entry }: { entry: LibraryEntry }) {
+  const [items, setItems] = useState<LibraryContentItem[] | null>(null)
+  useEffect(() => { void window.api.invoke('library:content', entry.id).then(setItems) }, [entry.id])
+  if (entry.console !== 'switch' || !items || items.length === 0) return null
+  const def = emulatorForConsole(entry.console)
+  return (
+    <div className="panel">
+      <h3>{t('content.title')}</h3>
+      <p className="muted">{t('content.installHint', { name: def?.name ?? 'Eden' })}</p>
+      {items.map((c) => (
+        <div key={c.id} className="row copy-row">
+          <span style={{ flex: 1 }}>{c.label} <span className="muted">· {t(`content.${c.kind}`)} · {fmtSize(c.size)}</span></span>
+        </div>
+      ))}
+      <div className="row">
+        <Button onClick={() => void window.api.invoke('emulators:open', { id: def?.id ?? 'eden', what: 'app' })}>{t('content.openEmulator', { name: def?.name ?? 'Eden' })}</Button>
+        <Button onClick={() => void window.api.invoke('library:revealContent', entry.id)}>{t('content.reveal')}</Button>
+      </div>
     </div>
   )
 }

@@ -42,6 +42,33 @@ describe('migrate', () => {
     db.exec('PRAGMA user_version = 99')
     expect(() => migrate(db)).toThrow(/newer/)
   })
+
+  // Bug réel (2026-09-29) : le v11 livré à l'utilisateur créait library_content.title_id en NOT NULL, corrigé plus
+  // tard dans le code source — mais éditer le texte d'une migration déjà appliquée ne change rien à une base existante
+  // (migrate() ne rejoue jamais un index déjà passé). Le vrai correctif est v12, qui reconstruit la table.
+  it('v12 relâche library_content.title_id (NOT NULL dans le v11 déjà livré) sans perdre les lignes existantes', () => {
+    const db = new DatabaseSync(':memory:')
+    const oldV11 = `ALTER TABLE library ADD COLUMN title_id TEXT;
+      CREATE INDEX library_title_id ON library (console, title_id);
+      CREATE TABLE library_content (
+        id INTEGER PRIMARY KEY, library_id INTEGER NOT NULL REFERENCES library(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL, title_id TEXT NOT NULL, version TEXT, label TEXT NOT NULL, path TEXT NOT NULL UNIQUE,
+        size INTEGER NOT NULL, added_at INTEGER NOT NULL
+      );
+      CREATE INDEX library_content_lib ON library_content (library_id)`
+    migrate(db, [...MIGRATIONS.slice(0, 10), oldV11]) // v1..v10 réels + l'ancien v11 (NOT NULL) : simule une base déjà migrée
+    db.prepare("INSERT INTO library (id, console, title, path, size, match, added_at) VALUES (1, 'switch', 'Base', 'p', 1, 'none', 0)").run()
+    db.prepare("INSERT INTO library_content (library_id, kind, title_id, label, path, size, added_at) VALUES (1, 'dlc', 'ABCD', 'DLC 1', 'q', 1, 0)").run()
+    expect(() => db.prepare("INSERT INTO library_content (library_id, kind, title_id, label, path, size, added_at) VALUES (1, 'update', NULL, 'Update', 'r', 1, 0)").run()).toThrow()
+
+    migrate(db, MIGRATIONS) // applique le vrai v12 (les index déjà passés, 0..10, sont ignorés par migrate())
+    expect(version(db)).toBe(MIGRATIONS.length)
+    db.prepare("INSERT INTO library_content (library_id, kind, title_id, label, path, size, added_at) VALUES (1, 'update', NULL, 'Update', 'r', 1, 0)").run()
+    expect(db.prepare('SELECT title_id, label FROM library_content ORDER BY label').all()).toEqual([
+      { title_id: 'ABCD', label: 'DLC 1' },
+      { title_id: null, label: 'Update' }
+    ])
+  })
 })
 
 describe('settingsStore', () => {

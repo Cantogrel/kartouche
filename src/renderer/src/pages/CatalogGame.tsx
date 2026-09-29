@@ -10,7 +10,7 @@ import type { LibraryEntry } from '@shared/library'
 import { useLibrary } from '@/store/library'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
 import { PlayButton, QuickExitNotice } from '@/ui/PlayButton'
-import { AchievementsPanel, FlagButtons, SavesPanel } from '@/ui/GameExtras'
+import { AchievementsPanel, ContentPanel, FlagButtons, SavesPanel } from '@/ui/GameExtras'
 
 /** Fiche d'un jeu du catalogue : données du DAT + description enrichie si un fournisseur (IGDB) est configuré. */
 export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEntry }) {
@@ -61,6 +61,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
           {details?.summary && (<><h3>{t('game.about')}</h3><p>{details.summary}</p><p className="muted">{details.summarySource === 'wikipedia' ? t('game.summaryWikipedia') : details.summarySource === 'machine' ? t('game.summaryMachine') : t('game.source', { p: details.provider.split('+')[0].toUpperCase() })}</p></>)}
         </div>
         {owned && !owned.missing && <SavesPanel entry={owned} />}
+        {owned && <ContentPanel entry={owned} />}
         {owned && !owned.missing && <AchievementsPanel entry={owned} />}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { app, dialog, globalShortcut, ipcMain, screen, shell, BrowserWindow } from 'electron'
+import { app, dialog, globalShortcut, ipcMain, nativeTheme, screen, shell, BrowserWindow } from 'electron'
 import type { DatabaseSync } from 'node:sqlite'
 import type { IpcChannel, IpcChannels, AppPaths } from '@shared/ipc'
 import { loadSettings, loadUserSettings, saveSettings } from './db/settingsStore'
@@ -12,7 +12,7 @@ import { tgdb } from './catalog/tgdb'
 import { syncPopularity } from './catalog/popularity'
 import { localizeDetails } from './catalog/l10n'
 import { importPaths } from './library/importer'
-import { addCatalogGame, entryPath, importSbi, listLibrary, refreshMissing, relinkUnmatched, removeEntry } from './library/libraryStore'
+import { addCatalogGame, entryPath, importSbi, listContent, listLibrary, refreshMissing, relinkUnmatched, removeEntry } from './library/libraryStore'
 import { createCollection, deleteCollection, listCollections, renameCollection, setFlags, setMembers, setMembership } from './library/collections'
 import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget } from './saves/saves'
 import { getAchievements } from './achievements/retroachievements'
@@ -61,7 +61,9 @@ export async function autoSyncCatalogOnUpdate(db: DatabaseSync): Promise<void> {
 
 export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVersion: string }): void {
   const { db, paths } = ctx
-  handle('app:info', () => ({ version: app.getVersion(), osLocale: app.getLocale(), sqlite: ctx.sqliteVersion, paths }))
+  handle('app:info', () => ({ version: app.getVersion(), osLocale: app.getLocale(), osDark: nativeTheme.shouldUseDarkColors, sqlite: ctx.sqliteVersion, paths }))
+  // Réglage « thème » auto : le suivre en direct si l'utilisateur change le thème clair/sombre de Windows pendant que l'app tourne.
+  nativeTheme.on('updated', () => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('theme:osDark', nativeTheme.shouldUseDarkColors)))
   handle('update:state', () => updateState())
   handle('update:check', () => checkForUpdate())
   handle('update:download', () => downloadUpdate())
@@ -123,8 +125,14 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('library:pick', async (kind) => {
     const win = BrowserWindow.getFocusedWindow()
     // Filtre « ROMs » (extensions connues + zip) en premier, « Tous les fichiers » en repli pour une extension inhabituelle.
+    // `multiSelections` combiné à `openDirectory` n'a pas de sens pour un choix de dossier unique : retiré par prudence,
+    // sans certitude que ce soit la cause d'un dossier existant que l'utilisateur n'a pas vu dans le sélecteur Windows
+    // (aucune anomalie trouvée côté fichiers : pas d'attribut caché/système, pas de redirection du dossier Téléchargements —
+    // voir la conversation du 2026-09-29). `defaultPath` : les ROMs de l'utilisateur atterrissent presque toujours dans
+    // Téléchargements, où le sélecteur s'ouvrait sinon sur un dossier quelconque laissé par un usage précédent.
     const opts = {
-      properties: [kind === 'folder' ? 'openDirectory' : 'openFile', 'multiSelections'] as ('openDirectory' | 'openFile' | 'multiSelections')[],
+      properties: (kind === 'folder' ? ['openDirectory'] : ['openFile', 'multiSelections']) as ('openDirectory' | 'openFile' | 'multiSelections')[],
+      defaultPath: app.getPath('downloads'),
       filters: kind === 'folder' ? [] : [{ name: 'ROMs', extensions: [...Object.keys(ROM_EXTENSIONS), 'zip'] }, { name: 'All files', extensions: ['*'] }]
     }
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
@@ -170,6 +178,11 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     return getAchievements(db, e, { username: s.raUsername, apiKey: s.raApiKey }, { refresh: req.refresh })
   })
   handle('library:reveal', (id) => { const p = entryPath(db, id); if (p) shell.showItemInFolder(p) })
+  handle('library:content', (id) => listContent(db, id))
+  handle('library:revealContent', (id) => {
+    const row = db.prepare('SELECT path FROM library_content WHERE library_id = ? LIMIT 1').get(id) as { path: string } | undefined
+    if (row) shell.showItemInFolder(row.path)
+  })
   const broadcast = (channel: string, payload: unknown): void => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send(channel, payload))
   const installing = new Set<string>()
   handle('emulators:list', () => listEmulators(db))

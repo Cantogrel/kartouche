@@ -5,6 +5,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path'
 import { ROM_EXTENSIONS, type ImportItem, type ImportResult, type LibraryProgress } from '@shared/library'
 import { extractZipEntries, hashAndCopyFile, hashFile, readZip, readZipEntryText } from './hash'
 import { identify } from './identify'
+import { switchContentFromFilename } from './switchContent'
 
 export interface ImportOptions {
   /** Copier dans <roms>/<console>/ (sinon le fichier reste où il est). */
@@ -79,9 +80,18 @@ async function prepare(file: string, extra: string[], onBytes?: (bytes: number) 
   return { crc: h.crc, sha1: h.sha1, size: ext === 'cue' ? h.size : (await stat(file)).size, name: stemOf(file), ext }
 }
 
+/** Messages précis affichés quand un import de mise à jour/DLC Switch est refusé (voir la note sur `importPaths`). */
+const SWITCH_CONTENT_MESSAGE: Record<'update' | 'dlc', string> = {
+  update: "mise à jour Switch non prise en charge : à installer manuellement dans l'émulateur (File > Install Files to NAND)",
+  dlc: "DLC Switch non pris en charge : à installer manuellement dans l'émulateur (File > Install Files to NAND)"
+}
+
 /**
  * Importe fichiers et dossiers : empreinte, identification contre le catalogue, copie dans le dossier de la console,
  * suppression éventuelle de l'original, enregistrement en bibliothèque. Un fichier en échec n'arrête pas les suivants.
+ * Une mise à jour/un DLC Switch (repéré par Title ID ou par mot-clé, voir switchContent.ts) n'est jamais importé :
+ * Eden (comme les autres émulateurs basés sur Yuzu) n'a pas de commande pour l'installer, seulement son propre menu
+ * File > Install Files to NAND ; le fichier reste donc tel quel et l'erreur le dit clairement.
  */
 export async function importPaths(db: DatabaseSync, paths: string[], opt: ImportOptions, onProgress: (p: LibraryProgress) => void = () => undefined): Promise<ImportResult> {
   const items: ImportItem[] = []
@@ -110,8 +120,9 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
 
   const sameRom = db.prepare('SELECT id, path FROM library WHERE path = ? OR (console = ? AND crc = ? AND size = ?)')
   const byGame = db.prepare('SELECT id, path FROM library WHERE game_id = ? AND console = ?')
-  const relink = db.prepare('UPDATE library SET path = ?, size = ?, crc = ?, sha1 = ?, match = ?, missing = 0 WHERE id = ?')
-  const insert = db.prepare('INSERT INTO library (game_id, console, title, path, size, crc, sha1, match, added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+  // title_id : gardé seulement pour un jeu de base (voir switchContent.ts) ; COALESCE au relink pour ne jamais effacer une valeur déjà connue.
+  const relink = db.prepare('UPDATE library SET path = ?, size = ?, crc = ?, sha1 = ?, match = ?, missing = 0, title_id = COALESCE(title_id, ?) WHERE id = ?')
+  const insert = db.prepare('INSERT INTO library (game_id, console, title, path, size, crc, sha1, match, title_id, added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
   // Fichiers temporaires du chemin rapide ci-dessous (empreinte + copie en une passe) : nettoyé même après un crash précédent.
   const tmpDir = join(opt.romsDir, '.import-tmp')
   let done = 0
@@ -144,6 +155,13 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
         prep = await prepare(file, refs, reportBytes)
       }
       if (typeof prep === 'string') { items.push({ file, status: 'error', error: prep }); continue }
+      // Mise à jour/DLC Switch (Title ID entre crochets/parenthèses, ou mot-clé à défaut) : jamais importé, voir la note ci-dessus.
+      const content = (ROM_EXTENSIONS[ext] ?? []).includes('switch') ? switchContentFromFilename(prep.name) : null
+      if (content && content.kind !== 'base') {
+        items.push({ file, status: 'error', error: SWITCH_CONTENT_MESSAGE[content.kind] })
+        continue
+      }
+      const titleId = content?.kind === 'base' ? content.titleId : null
       const id = identify(db, prep)
       const cons = id.console ?? (id.candidates.length === 1 ? id.candidates[0] : null)
       if (!cons) { items.push({ file, status: 'ambiguous', error: id.candidates.join(', ') }); continue }
@@ -182,8 +200,8 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
         if ((await stat(dest)).size !== (await stat(file)).size) { await rm(dest, { force: true }); throw new Error('copie incomplète') }
         if (opt.deleteSource) for (const f of [file, ...refs]) await rm(f, { force: true })
       }
-      if (target) relink.run(dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, target.id)
-      else insert.run(id.gameId, cons, title, dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, Date.now())
+      if (target) relink.run(dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, titleId, target.id)
+      else insert.run(id.gameId, cons, title, dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, titleId, Date.now())
       items.push({ file, status: 'added', console: cons, title, match: id.match })
     } catch (e) {
       items.push({ file, status: 'error', error: (e as Error).message })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, mergeSettings, resolveLanguage } from './settings'
+import { DEFAULT_SETTINGS, mergeSettings, resolveLanguage, resolveTheme } from './settings'
 import { missingKeys, setLanguage, t } from '../renderer/src/i18n'
 
 describe('resolveLanguage', () => {
@@ -24,6 +24,21 @@ describe('mergeSettings', () => {
   it('ignore un patch non objet ou un tableau mal typé', () => {
     expect(mergeSettings(DEFAULT_SETTINGS, null)).toEqual(DEFAULT_SETTINGS)
     expect(mergeSettings(DEFAULT_SETTINGS, { scanFolders: [1] })).toEqual(DEFAULT_SETTINGS)
+  })
+  it('accepte un thème valide et ignore une valeur invalide', () => {
+    expect(mergeSettings(DEFAULT_SETTINGS, { theme: 'light' }).theme).toBe('light')
+    expect(mergeSettings(DEFAULT_SETTINGS, { theme: 'nope' }).theme).toBe(DEFAULT_SETTINGS.theme)
+  })
+})
+
+describe('resolveTheme', () => {
+  it("suit le thème de l'OS en mode auto", () => {
+    expect(resolveTheme('auto', true)).toBe('dark')
+    expect(resolveTheme('auto', false)).toBe('light')
+  })
+  it('respecte le choix explicite', () => {
+    expect(resolveTheme('light', true)).toBe('light')
+    expect(resolveTheme('dark', false)).toBe('dark')
   })
 })
 

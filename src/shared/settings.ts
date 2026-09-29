@@ -1,4 +1,5 @@
 export type LanguageSetting = 'auto' | 'en' | 'fr'
+export type ThemeSetting = 'auto' | 'light' | 'dark'
 
 export interface Settings {
   language: LanguageSetting
@@ -23,7 +24,8 @@ export interface Settings {
   padSwapAB: boolean
   /** Manette : seuil d'inclinaison du stick pour compter comme une direction (0.3 = sensible, 0.9 = ferme). */
   padThreshold: number
-  /** Apparence : échelle de l'interface, couleur d'accent, animations réduites. */
+  /** Apparence : thème clair/sombre, échelle de l'interface, couleur d'accent, animations réduites. */
+  theme: ThemeSetting
   uiScale: number
   accent: Accent
   reduceMotion: boolean
@@ -48,6 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoBackupSaves: true,
   padSwapAB: false,
   padThreshold: 0.6,
+  theme: 'auto',
   uiScale: 1,
   accent: 'violet',
   reduceMotion: false
@@ -72,6 +75,7 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (typeof p.autoBackupSaves === 'boolean') out.autoBackupSaves = p.autoBackupSaves
   if (typeof p.padSwapAB === 'boolean') out.padSwapAB = p.padSwapAB
   if (typeof p.padThreshold === 'number' && p.padThreshold >= 0.3 && p.padThreshold <= 0.9) out.padThreshold = Math.round(p.padThreshold * 100) / 100
+  if (p.theme === 'auto' || p.theme === 'light' || p.theme === 'dark') out.theme = p.theme
   if (typeof p.uiScale === 'number' && (UI_SCALES as readonly number[]).includes(p.uiScale)) out.uiScale = p.uiScale
   if (typeof p.accent === 'string' && (ACCENTS as readonly string[]).includes(p.accent)) out.accent = p.accent as Accent
   if (typeof p.reduceMotion === 'boolean') out.reduceMotion = p.reduceMotion
@@ -82,4 +86,10 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
 export function resolveLanguage(setting: LanguageSetting, osLocale: string): 'en' | 'fr' {
   if (setting !== 'auto') return setting
   return osLocale.toLowerCase().startsWith('fr') ? 'fr' : 'en'
+}
+
+/** Thème effectif : réglage explicite, sinon thème clair/sombre de l'OS. */
+export function resolveTheme(setting: ThemeSetting, osDark: boolean): 'light' | 'dark' {
+  if (setting !== 'auto') return setting
+  return osDark ? 'dark' : 'light'
 }

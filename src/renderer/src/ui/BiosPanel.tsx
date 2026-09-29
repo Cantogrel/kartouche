@@ -21,6 +21,10 @@ export function BiosPanel({ emulator, onChange }: { emulator: string; onChange?:
   const [messages, setMessages] = useState<string[]>([])
   const [over, setOver] = useState(false)
   const [prog, setProg] = useState<EmulatorProgress | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const copyDetail = (id: string, detail: string): void => {
+    void navigator.clipboard.writeText(detail).then(() => { setCopiedId(id); setTimeout(() => setCopiedId(null), 1500) }).catch(() => {})
+  }
   const slots = biosSlotsFor(emulator)
   const auto = slots.find((s) => s.auto)
   const autoStatus = auto && status.find((x) => x.id === auto.id)
@@ -66,9 +70,20 @@ export function BiosPanel({ emulator, onChange }: { emulator: string; onChange?:
       <ul className="bios-list">
         {slots.map((s) => {
           const st = status.find((x) => x.id === s.id)
+          const detail = t(`bios.slot.${s.id}.detail`)
           return (
             <li key={s.id} className={st?.state === 'ok' ? (st.unverified ? 'warn' : 'ok') : s.required ? 'bad' : ''}>
-              <span className="bios-mark">{icon(st)}</span> {t(`bios.slot.${s.id}`)}{s.required ? '' : ` (${t('bios.optional')})`}
+              <span className="bios-mark">{icon(st)}</span> {t(`bios.slot.${s.id}`)}{s.required ? '' : ` (${t('bios.optional')})`}{' '}
+              <span
+                className={`bios-info${copiedId === s.id ? ' copied' : ''}`}
+                role="button"
+                tabIndex={0}
+                title={copiedId === s.id ? t('play.copied') : detail}
+                aria-label={detail}
+                onClick={() => copyDetail(s.id, detail)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copyDetail(s.id, detail) } }}
+              >{copiedId === s.id ? '✓' : 'i'}</span>
+              {copiedId === s.id && <span className="muted bios-copied">{t('play.copied')}</span>}
               {st?.state === 'ok' && st.detail ? <span className="muted"> · {st.detail}</span> : null}
               {st?.state === 'ok' && st.source === 'emulator' ? <span className="muted"> · {t('bios.external')}</span> : null}
               {st?.state === 'ok' && st.unverified ? <span className="muted"> · {t('bios.unverified')}</span> : null}

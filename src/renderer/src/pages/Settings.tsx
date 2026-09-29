@@ -6,7 +6,7 @@ import { Button } from '@/ui'
 import { useSettings } from '@/store/settings'
 import { useUpdate } from '@/store/update'
 import { useChangelog } from '@/store/changelog'
-import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting } from '@shared/settings'
+import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSetting } from '@shared/settings'
 
 const SECTIONS = ['general', 'import', 'emulation', 'controller', 'appearance', 'apiKeys', 'about'] as const
 type Section = (typeof SECTIONS)[number]
@@ -102,6 +102,14 @@ export function Settings() {
 
         {section === 'appearance' && (
           <>
+            <label className="field">
+              {t('settings.theme')}
+              <select value={settings.theme} onChange={(e) => void update({ theme: e.target.value as ThemeSetting })}>
+                <option value="auto">{t('theme.auto')}</option>
+                <option value="light">{t('theme.light')}</option>
+                <option value="dark">{t('theme.dark')}</option>
+              </select>
+            </label>
             <div className="field">
               {t('settings.accent')}
               <div className="row" role="radiogroup" aria-label={t('settings.accent')}>

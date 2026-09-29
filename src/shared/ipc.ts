@@ -1,5 +1,5 @@
 import type { Settings } from './settings'
-import type { Collection, ImportRequest, ImportResult, LibraryEntry, LibraryProgress, SbiImportResult } from './library'
+import type { Collection, ImportRequest, ImportResult, LibraryContentItem, LibraryEntry, LibraryProgress, SbiImportResult } from './library'
 import type { AchievementsResult } from './achievements'
 import type { BackupInfo, SaveInfo } from './saves'
 import type { BiosImportResult, BiosSlotStatus } from './bios'
@@ -20,6 +20,8 @@ export interface AppPaths {
 export interface AppInfo {
   version: string
   osLocale: string
+  /** Thème système au démarrage (Windows clair/sombre) ; les changements en cours d'exécution arrivent par l'événement 'theme:osDark'. */
+  osDark: boolean
   sqlite: string
   paths: AppPaths
 }
@@ -52,6 +54,10 @@ export interface IpcChannels {
   'library:add': { req: number; res: LibraryEntry | null }
   /** Affiche la ROM dans l'Explorateur. */
   'library:reveal': { req: number; res: void }
+  /** Mises à jour/DLC Switch rattachés à ce jeu (détectés par Title ID à l'import). */
+  'library:content': { req: number; res: LibraryContentItem[] }
+  /** Affiche le dossier des mises à jour/DLC rattachés dans l'Explorateur. */
+  'library:revealContent': { req: number; res: void }
   /** Favori et/ou épingle d'un jeu (champ absent = inchangé). */
   'library:flag': { req: { id: number; favorite?: boolean; pinned?: boolean }; res: void }
   /** Ouvre le sélecteur pour un fichier .sbi ; null si annulé. */
@@ -132,6 +138,8 @@ export interface IpcEvents {
   'emulators:progress': EmulatorProgress
   'game:session': GameSession
   'update:state': UpdateState
+  /** Le thème clair/sombre de Windows a changé pendant que l'app tourne (réglage 'auto' uniquement). */
+  'theme:osDark': boolean
 }
 export type IpcChannel = keyof IpcChannels
 

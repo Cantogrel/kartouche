@@ -5,7 +5,7 @@ import { basename, dirname, extname, join } from 'node:path'
 import { cueFiles } from './importer'
 import { identify } from './identify'
 import { deleteGameSaves } from '../saves/saves'
-import type { LibraryEntry, MatchKind, SbiImportResult } from '@shared/library'
+import type { LibraryContentItem, LibraryEntry, MatchKind, SbiImportResult } from '@shared/library'
 
 interface Row {
   id: number; game_id: number | null; console: string; title: string; path: string; size: number; match: string
@@ -96,7 +96,7 @@ async function deleteRomFiles(path: string): Promise<void> {
  * `save` (sauvegardes seulement) ou `all` (ROM, sauvegardes et entrée).
  */
 export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAction, savesRoot: string): Promise<void> {
-  const r = db.prepare('SELECT console, title, path FROM library WHERE id = ?').get(id) as { console: string; title: string; path: string } | undefined
+  const r = db.prepare('SELECT console, title, path, title_id FROM library WHERE id = ?').get(id) as { console: string; title: string; path: string; title_id: string | null } | undefined
   if (!r) return
   if (action === 'save' || action === 'all') {
     // Avant la ROM : melonDS range ses sauvegardes à côté d'elle. Copies de sécurité (backups/) conservées volontairement.
@@ -104,8 +104,19 @@ export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAc
     await rm(saveDir(savesRoot, r), { recursive: true, force: true })
   }
   if (action === 'file' || action === 'all') await deleteRomFiles(r.path)
-  if (action === 'entry' || action === 'all') db.prepare('DELETE FROM library WHERE id = ?').run(id)
+  if (action === 'all') {
+    // Ses mises à jour/DLC éventuels (voir migration v11) : rangés à côté, sous <console>/.content/<title_id>/.
+    if (r.title_id) await rm(join(dirname(r.path), '.content', r.title_id), { recursive: true, force: true }).catch(() => undefined)
+    db.prepare('DELETE FROM library WHERE id = ?').run(id)
+  } else if (action === 'entry') db.prepare('DELETE FROM library WHERE id = ?').run(id)
   else if (action === 'file') db.prepare('UPDATE library SET missing = 1 WHERE id = ?').run(id)
+}
+
+/** Mises à jour/DLC Switch rattachés à un jeu de la bibliothèque (voir migration v11 et `switchContent.ts`). */
+export function listContent(db: DatabaseSync, libraryId: number): LibraryContentItem[] {
+  return (db.prepare('SELECT id, kind, title_id, version, label, size, added_at FROM library_content WHERE library_id = ? ORDER BY kind, label COLLATE NOCASE').all(libraryId) as
+    { id: number; kind: string; title_id: string | null; version: string | null; label: string; size: number; added_at: number }[])
+    .map((r) => ({ id: r.id, kind: r.kind as 'update' | 'dlc', titleId: r.title_id, version: r.version, label: r.label, size: r.size, addedAt: r.added_at }))
 }
 
 /** Chemin du fichier pour l'afficher dans l'Explorateur ; null si le jeu n'a pas de fichier. */
