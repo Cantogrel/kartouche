@@ -38,3 +38,10 @@ export interface SourceListImportResult {
   entryCount: number
   matchedCount: number
 }
+
+export interface SourceListRefreshResult {
+  ok: boolean
+  entryCount?: number
+  matchedCount?: number
+  error?: string
+}

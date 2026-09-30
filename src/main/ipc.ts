@@ -17,6 +17,7 @@ import { createCollection, deleteCollection, listCollections, renameCollection, 
 import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget } from './saves/saves'
 import { getAchievements } from './achievements/retroachievements'
 import { addSourceList } from './sources/import'
+import { refreshSourceList, removeSourceList } from './sources/manage'
 import { ROM_EXTENSIONS } from '@shared/library'
 import { resolveLanguage } from '@shared/settings'
 import { EMULATORS, emulatorById, type EmulatorState } from '@shared/emulators'
@@ -190,6 +191,8 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     return getAchievements(db, e, { username: s.raUsername, apiKey: s.raApiKey }, { refresh: req.refresh })
   })
   handle('sourceLists:add', (url) => addSourceList(db, url))
+  handle('sourceLists:refresh', (id) => refreshSourceList(db, id))
+  handle('sourceLists:remove', (id) => removeSourceList(db, id))
   handle('library:reveal', (id) => { const p = entryPath(db, id); if (p) shell.showItemInFolder(p) })
   handle('library:content', (id) => listContent(db, id))
   handle('library:revealContent', (id) => {
