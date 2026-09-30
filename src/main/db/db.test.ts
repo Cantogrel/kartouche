@@ -69,6 +69,18 @@ describe('migrate', () => {
       { title_id: null, label: 'Update' }
     ])
   })
+
+  it('v14 crée source_lists/sources sur une base déjà en v13', () => {
+    const db = new DatabaseSync(':memory:')
+    migrate(db, MIGRATIONS.slice(0, 13)) // v1..v13, comme une base déjà livrée avant la v0.2.0
+    expect(version(db)).toBe(13)
+    migrate(db, MIGRATIONS)
+    expect(version(db)).toBe(MIGRATIONS.length)
+    db.prepare("INSERT INTO source_lists (name, url, added_at) VALUES ('Ma liste', 'https://example.org/list.json', 0)").run()
+    const listId = (db.prepare('SELECT id FROM source_lists').get() as { id: number }).id
+    db.prepare("INSERT INTO sources (list_id, console, title, uris) VALUES (?, 'snes', 'Super Mario World', '[\"https://example.org/smw.zip\"]')").run(listId)
+    expect((db.prepare('SELECT COUNT(*) AS n FROM sources').get() as { n: number }).n).toBe(1)
+  })
 })
 
 describe('settingsStore', () => {

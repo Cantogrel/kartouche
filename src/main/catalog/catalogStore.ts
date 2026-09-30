@@ -40,7 +40,9 @@ export function replaceConsole(db: DatabaseSync, consoleId: string, rows: Catalo
     }
     const gone = [...prev.keys()].filter((title) => !seen.has(title))
     if (gone.length) {
-      const del = db.prepare('DELETE FROM catalog_games WHERE console = ? AND title = ? AND NOT EXISTS (SELECT 1 FROM library WHERE game_id = catalog_games.id)')
+      const del = db.prepare(`DELETE FROM catalog_games WHERE console = ? AND title = ?
+        AND NOT EXISTS (SELECT 1 FROM library WHERE game_id = catalog_games.id)
+        AND NOT EXISTS (SELECT 1 FROM sources WHERE game_id = catalog_games.id)`)
       for (const title of gone) del.run(consoleId, title)
     }
     db.prepare(`INSERT INTO catalog_sync (console, version, synced_at, count) VALUES (?, ?, ?, ?)
