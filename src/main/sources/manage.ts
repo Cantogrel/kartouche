@@ -1,7 +1,30 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { SourceListRefreshResult } from '@shared/sourceList'
+import type { SourceListRefreshResult, SourceListSummary } from '@shared/sourceList'
 import { validateSourceList } from './validate'
 import { defaultFetch, insertEntries, type Fetcher } from './import'
+
+interface SourceListRow {
+  id: number
+  name: string
+  url: string
+  homepage: string | null
+  added_at: number
+  last_refreshed_at: number | null
+  entry_count: number
+  error: string | null
+  matched_count: number
+}
+
+/** Listes déjà ajoutées, avec le nombre d'entrées reconnues dans le catalogue. */
+export function listSourceLists(db: DatabaseSync): SourceListSummary[] {
+  const rows = db.prepare(`SELECT sl.id, sl.name, sl.url, sl.homepage, sl.added_at, sl.last_refreshed_at, sl.entry_count, sl.error,
+      (SELECT COUNT(*) FROM sources WHERE list_id = sl.id AND matched = 1) AS matched_count
+    FROM source_lists sl ORDER BY sl.added_at`).all() as unknown as SourceListRow[]
+  return rows.map((r) => ({
+    id: r.id, name: r.name, url: r.url, homepage: r.homepage, addedAt: r.added_at, lastRefreshedAt: r.last_refreshed_at,
+    entryCount: r.entry_count, matchedCount: r.matched_count, error: r.error
+  }))
+}
 
 /**
  * Re-télécharge et revalide une liste. Un échec (réseau ou validation) se contente de renseigner

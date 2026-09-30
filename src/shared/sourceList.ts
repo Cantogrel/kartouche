@@ -45,3 +45,15 @@ export interface SourceListRefreshResult {
   matchedCount?: number
   error?: string
 }
+
+export interface SourceListSummary {
+  id: number
+  name: string
+  url: string
+  homepage: string | null
+  addedAt: number
+  lastRefreshedAt: number | null
+  entryCount: number
+  matchedCount: number
+  error: string | null
+}
