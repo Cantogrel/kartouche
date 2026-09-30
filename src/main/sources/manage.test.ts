@@ -3,7 +3,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { migrate } from '../db/migrations'
 import { replaceConsole } from '../catalog/catalogStore'
 import { addSourceList, type Fetcher } from './import'
-import { listSourceLists, refreshSourceList, removeSourceList } from './manage'
+import { listSourceLists, refreshSourceList, removeSourceList, sourcesForGame } from './manage'
+import { queryCatalog } from '../catalog/catalogStore'
 
 let db: DatabaseSync
 beforeEach(() => {
@@ -53,6 +54,24 @@ describe('listSourceLists', () => {
     const { listId } = await addSourceList(db, 'https://x/list.json', fetchOk(withUnknown))
     const [summary] = listSourceLists(db)
     expect(summary).toMatchObject({ id: listId, name: 'Ma liste', url: 'https://x/list.json', entryCount: 2, matchedCount: 1, error: null })
+  })
+})
+
+describe('sourcesForGame', () => {
+  it("renvoie les sources rapprochées d'un jeu, avec le nom de leur liste", async () => {
+    const gameId = queryCatalog(db, {}).games[0].id
+    await addSourceList(db, 'https://x/a.json', fetchOk({ ...LIST, name: 'Liste A' }))
+    await addSourceList(db, 'https://x/b.json', fetchOk({ ...LIST, name: 'Liste B', entries: [{ ...LIST.entries[0], note: 'repack propre' }] }))
+
+    const result = sourcesForGame(db, gameId)
+    expect(result).toHaveLength(2)
+    expect(result.map((s) => s.listName).sort()).toEqual(['Liste A', 'Liste B'])
+    expect(result[0].uris).toEqual(['https://x/smw.zip'])
+  })
+
+  it("jeu sans source : tableau vide", () => {
+    const gameId = queryCatalog(db, {}).games[0].id
+    expect(sourcesForGame(db, gameId)).toEqual([])
   })
 })
 

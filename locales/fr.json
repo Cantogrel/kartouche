@@ -41,6 +41,8 @@
   "addToLibrary": "Ajouter à la bibliothèque",
   "inLibrary": "Dans la bibliothèque",
   "linkRom": "Associer une ROM",
+  "download.button": "Télécharger",
+  "download.cancel": "Annuler",
   "addGame": "Ajouter un jeu",
   "library.empty": "Votre bibliothèque est vide",
   "results": "résultats",

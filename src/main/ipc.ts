@@ -17,7 +17,7 @@ import { createCollection, deleteCollection, listCollections, renameCollection, 
 import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget } from './saves/saves'
 import { getAchievements } from './achievements/retroachievements'
 import { addSourceList } from './sources/import'
-import { listSourceLists, refreshSourceList, removeSourceList } from './sources/manage'
+import { listSourceLists, refreshSourceList, removeSourceList, sourcesForGame } from './sources/manage'
 import { cancelDownload, downloadSource } from './downloads/engine'
 import { ROM_EXTENSIONS } from '@shared/library'
 import { resolveLanguage } from '@shared/settings'
@@ -192,6 +192,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     return getAchievements(db, e, { username: s.raUsername, apiKey: s.raApiKey }, { refresh: req.refresh })
   })
   handle('sourceLists:list', () => listSourceLists(db))
+  handle('sources:forGame', (gameId) => sourcesForGame(db, gameId))
   handle('sourceLists:add', (url) => addSourceList(db, url))
   handle('sourceLists:refresh', (id) => refreshSourceList(db, id))
   handle('sourceLists:remove', (id) => removeSourceList(db, id))

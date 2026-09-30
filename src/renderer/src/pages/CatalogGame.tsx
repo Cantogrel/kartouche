@@ -7,6 +7,8 @@ import { canonicalGenre, genreLabel } from '@shared/genres'
 import { useSettings } from '@/store/settings'
 import type { CatalogGame, GameDetails } from '@shared/catalog'
 import type { LibraryEntry } from '@shared/library'
+import type { GameSource } from '@shared/sourceList'
+import type { DownloadProgress } from '@shared/downloads'
 import { useLibrary } from '@/store/library'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
 import { OpenEmulatorButton, PlayButton, QuickExitNotice } from '@/ui/PlayButton'
@@ -19,14 +21,16 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
   const [game, setGame] = useState<CatalogGame | null | undefined>(undefined)
   const [details, setDetails] = useState<GameDetails | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(true)
+  const [sources, setSources] = useState<GameSource[]>([])
   const setPageTitle = useApp((s) => s.setPageTitle)
   const { add: addToLibrary, link } = useLibrary.getState()
   useEffect(() => { void useLibrary.getState().refresh() }, [])
   const lang = useSettings((s) => s.lang)
   useEffect(() => {
-    setGame(undefined); setDetails(null); setLoadingDetails(true)
+    setGame(undefined); setDetails(null); setLoadingDetails(true); setSources([])
     void window.api.invoke('catalog:get', id).then((g) => { setGame(g); setPageTitle(g?.name ?? null) })
     void window.api.invoke('catalog:details', { id }).then(setDetails).finally(() => setLoadingDetails(false))
+    void window.api.invoke('sources:forGame', id).then(setSources)
   }, [id, setPageTitle])
   if (game === undefined) return null
   if (game === null) return <div className="content"><p className="muted">{t('game.notFound')}</p></div>
@@ -44,6 +48,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
           <div className="row">
             {!owned && <Button variant="primary" onClick={() => void addToLibrary(game.id)}>{t('addToLibrary')}</Button>}
             {owned?.missing && <Button variant="primary" onClick={() => void link()}>{t('linkRom')}</Button>}
+            {(!owned || owned.missing) && sources.length > 0 && <DownloadButton sources={sources} />}
             {owned && !owned.missing && <PlayButton entry={owned} />}
             {owned && !owned.missing && <OpenEmulatorButton entry={owned} />}
             {owned && <FlagButtons entry={owned} />}
@@ -65,6 +70,46 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
         {owned && <ContentPanel entry={owned} />}
         {owned && !owned.missing && <AchievementsPanel entry={owned} />}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Télécharge une source choisie par l'utilisateur (Paramètres → Sources, P03-S1). Un seul mirroir à la fois ;
+ * le fichier n'est ni extrait ni installé ici (P05) — juste téléchargé dans le cache.
+ */
+function DownloadButton({ sources }: { sources: GameSource[] }) {
+  const [selected, setSelected] = useState(sources[0]?.id)
+  const [progress, setProgress] = useState<DownloadProgress | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const busy = progress?.phase === 'downloading'
+
+  const start = async (): Promise<void> => {
+    if (selected === undefined || busy) return
+    setError(null)
+    setProgress(null)
+    const off = window.api.on('download:progress', (p) => { if (p.sourceId === selected) setProgress(p) })
+    try {
+      const r = await window.api.invoke('downloads:start', selected)
+      if (!r.ok) setError(r.error ?? null)
+    } finally {
+      off()
+    }
+  }
+  const cancel = (): void => { if (selected !== undefined) void window.api.invoke('downloads:cancel', selected) }
+  const percent = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : null
+
+  return (
+    <div className="row">
+      {sources.length > 1 && (
+        <select value={selected} disabled={busy} onChange={(e) => setSelected(Number(e.target.value))}>
+          {sources.map((s) => <option key={s.id} value={s.id}>{s.listName}{s.sizeBytes ? ` · ${(s.sizeBytes / 1048576).toFixed(0)} MB` : ''}</option>)}
+        </select>
+      )}
+      {busy
+        ? <Button onClick={cancel}>{t('download.cancel')}{percent !== null ? ` (${percent} %)` : ''}</Button>
+        : <Button variant="primary" onClick={() => void start()}>{t('download.button')}</Button>}
+      {error && <span className="muted">{error}</span>}
     </div>
   )
 }

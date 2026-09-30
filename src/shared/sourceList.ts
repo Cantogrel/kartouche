@@ -57,3 +57,12 @@ export interface SourceListSummary {
   matchedCount: number
   error: string | null
 }
+
+/** Une source de téléchargement rapprochée d'un jeu précis du catalogue (fiche jeu). */
+export interface GameSource {
+  id: number
+  listName: string
+  sizeBytes: number | null
+  note: string | null
+  uris: string[]
+}

@@ -41,6 +41,8 @@
   "addToLibrary": "Add to library",
   "inLibrary": "In library",
   "linkRom": "Link a ROM",
+  "download.button": "Download",
+  "download.cancel": "Cancel",
   "addGame": "Add a game",
   "library.empty": "Your library is empty",
   "results": "results",
