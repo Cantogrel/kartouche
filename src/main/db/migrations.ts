@@ -79,7 +79,22 @@ export const MIGRATIONS: readonly string[] = [
   CREATE INDEX library_content_lib ON library_content (library_id)`,
   // v13 : un .vpk Vita3K ne boote jamais tout seul après un install par chemin de contenu (constaté en vrai) ; on
   // installe une fois, on garde le Title ID annoncé par Vita3K, puis on relance toujours par ce Title ID (`-r`).
-  `ALTER TABLE library ADD COLUMN vita_title_id TEXT`
+  `ALTER TABLE library ADD COLUMN vita_title_id TEXT`,
+  // v14 : sources de téléchargement apportées par l'utilisateur (v0.2.0). RomVault ne fournit, ne scrape ni n'agrège
+  // aucune liste — chacune est une URL JSON ajoutée à la main dans Paramètres. list_id porte le cycle de vie (cascade
+  // à la suppression d'une liste) ; ces deux tables ne doivent jamais être touchées par une resynchro du catalogue
+  // (replaceConsole/pruneUnknownConsoles, catalogStore.ts) au même titre que `library`.
+  `CREATE TABLE source_lists (
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, url TEXT NOT NULL UNIQUE, homepage TEXT, generated_at INTEGER,
+    added_at INTEGER NOT NULL, last_refreshed_at INTEGER, entry_count INTEGER NOT NULL DEFAULT 0, error TEXT
+  );
+  CREATE TABLE sources (
+    id INTEGER PRIMARY KEY, list_id INTEGER NOT NULL REFERENCES source_lists(id) ON DELETE CASCADE,
+    game_id INTEGER REFERENCES catalog_games(id), console TEXT NOT NULL, title TEXT NOT NULL,
+    size_bytes INTEGER, crc TEXT, sha1 TEXT, uris TEXT NOT NULL, note TEXT, matched INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX sources_list ON sources (list_id);
+  CREATE INDEX sources_game ON sources (game_id)`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

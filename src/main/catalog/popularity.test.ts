@@ -90,6 +90,15 @@ describe('syncPopularity', () => {
     replaceConsole(db, 'switch', [row('New Game')], null) // « Old Game » a disparu de la source
     expect(getGame(db, id)).toMatchObject({ title: 'Old Game' }) // conservé : encore référencé par la bibliothèque
   })
+  it('ne supprime pas un jeu disparu de la source tant qu’une source de téléchargement le référence', () => {
+    const db = new DatabaseSync(':memory:'); migrate(db)
+    replaceConsole(db, 'switch', [row('Old Game')], null)
+    const id = queryCatalog(db, {}).games[0].id
+    db.prepare("INSERT INTO source_lists (name, url, added_at) VALUES ('L', 'https://x/l.json', 0)").run()
+    db.prepare("INSERT INTO sources (list_id, game_id, console, title, uris) VALUES (1, ?, 'switch', 'Old Game', '[]')").run(id)
+    replaceConsole(db, 'switch', [row('New Game')], null) // « Old Game » a disparu de la source
+    expect(getGame(db, id)).toMatchObject({ title: 'Old Game' }) // conservé : encore référencé par une source
+  })
   it('trie dans les deux sens, valeurs inconnues toujours en dernier', () => {
     const db = new DatabaseSync(':memory:'); migrate(db)
     replaceConsole(db, 'snes', [row('B', { year: 2000 }), row('A', { year: 1990 }), row('C')], null)
