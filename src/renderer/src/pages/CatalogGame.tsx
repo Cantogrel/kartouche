@@ -75,8 +75,8 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
 }
 
 /**
- * Télécharge une source choisie par l'utilisateur (Paramètres → Sources, P03-S1). Un seul mirroir à la fois ;
- * le fichier n'est ni extrait ni installé ici (P05) — juste téléchargé dans le cache.
+ * Télécharge une source choisie par l'utilisateur (Paramètres → Sources, P03-S1), puis vérifie son hash contre le
+ * jeu attendu et l'installe dans la bibliothèque (P05) — jamais d'installation silencieuse si le hash ne correspond pas.
  */
 function DownloadButton({ sources }: { sources: GameSource[] }) {
   const [selected, setSelected] = useState(sources[0]?.id)
@@ -92,6 +92,7 @@ function DownloadButton({ sources }: { sources: GameSource[] }) {
     try {
       const r = await window.api.invoke('downloads:start', selected)
       if (!r.ok) setError(r.error ?? null)
+      else await useLibrary.getState().refresh()
     } finally {
       off()
     }
