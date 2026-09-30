@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type DragEvent } from 'react'
 import type { ProviderStatus } from '@shared/catalog'
 import type { UpdateChangelog } from '@shared/ipc'
 import type { SourceListSummary } from '@shared/sourceList'
@@ -225,23 +225,25 @@ function DangerSection() {
 
 /**
  * Listes de sources apportées par l'utilisateur (v0.2.0). RomVault n'en fournit, n'en scrape ni
- * n'en agrège aucune : chaque liste vient d'une URL que l'utilisateur choisit lui-même.
+ * n'en agrège aucune : chaque liste vient d'une URL ou d'un fichier JSON local que l'utilisateur choisit lui-même.
  */
 function SourcesSection() {
   const [lists, setLists] = useState<SourceListSummary[]>([])
   const [url, setUrl] = useState('')
   const [addError, setAddError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<number | 'add' | null>(null)
+  const [over, setOver] = useState(false)
 
   const refresh = async (): Promise<void> => setLists(await window.api.invoke('sourceLists:list'))
   useEffect(() => { void refresh() }, [])
 
-  const add = async (): Promise<void> => {
-    if (!url.trim()) return
+  const add = async (value?: string): Promise<void> => {
+    const v = (value ?? url).trim()
+    if (!v) return
     setBusyId('add')
     setAddError(null)
     try {
-      await window.api.invoke('sourceLists:add', url.trim())
+      await window.api.invoke('sourceLists:add', v)
       setUrl('')
       await refresh()
     } catch (e) {
@@ -249,6 +251,17 @@ function SourcesSection() {
     } finally {
       setBusyId(null)
     }
+  }
+
+  const browse = async (): Promise<void> => {
+    const path = await window.api.invoke('sourceLists:pick')
+    if (path) await add(path)
+  }
+
+  const onDrop = async (e: DragEvent): Promise<void> => {
+    e.preventDefault()
+    setOver(false)
+    for (const p of [...e.dataTransfer.files].map((f) => window.api.pathOf(f)).filter(Boolean)) await add(p)
   }
 
   const refreshOne = async (id: number): Promise<void> => {
@@ -265,9 +278,13 @@ function SourcesSection() {
   return (
     <>
       <p className="muted">{t('sources.hint')}</p>
-      <div className="row">
-        <input style={{ flex: 1 }} placeholder={t('sources.urlPlaceholder')} value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void add()} />
-        <Button variant="primary" disabled={busyId === 'add' || !url.trim()} onClick={() => void add()}>{t('sources.add')}</Button>
+      <div className={`field dropzone${over ? ' over' : ''}`} onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={(e) => { if (e.currentTarget === e.target) setOver(false) }} onDrop={(e) => void onDrop(e)}>
+        <div className="row">
+          <input style={{ flex: 1 }} placeholder={t('sources.urlPlaceholder')} value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void add()} />
+          <Button onClick={() => void browse()}>{t('sources.browse')}</Button>
+          <Button variant="primary" disabled={busyId === 'add' || !url.trim()} onClick={() => void add()}>{t('sources.add')}</Button>
+        </div>
+        <p className="muted">{t('sources.dropHint')}</p>
       </div>
       {addError && <p className="notice">{addError}</p>}
 

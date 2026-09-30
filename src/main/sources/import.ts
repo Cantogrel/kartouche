@@ -1,11 +1,16 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { readFile } from 'node:fs/promises'
 import type { SourceListDocument, SourceListImportResult } from '@shared/sourceList'
 import { validateSourceList } from './validate'
 import { normalizeTitle } from '../achievements/retroachievements'
 
 export type Fetcher = (url: string) => Promise<unknown>
 
+/** Une valeur qui n'est pas une URL http(s) est un chemin de fichier local (glisser-déposer ou sélecteur, voir sourceLists:pick). */
+const isHttpUrl = (s: string): boolean => /^https?:\/\//i.test(s)
+
 export const defaultFetch: Fetcher = async (url) => {
+  if (!isHttpUrl(url)) return JSON.parse(await readFile(url, 'utf8'))
   const res = await fetch(url, { headers: { 'user-agent': 'RomVault' }, signal: AbortSignal.timeout(60_000) })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()

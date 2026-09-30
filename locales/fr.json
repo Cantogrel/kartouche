@@ -86,6 +86,8 @@
   "settings.sources": "Sources",
   "sources.hint": "Listes de téléchargement que vous ajoutez vous-même. RomVault n'en fournit, n'en scrape ni n'en agrège aucune.",
   "sources.urlPlaceholder": "URL de la liste (JSON)",
+  "sources.browse": "Parcourir…",
+  "sources.dropHint": "Ou glissez-déposez un fichier .json ici.",
   "sources.add": "Ajouter",
   "sources.refresh": "Actualiser",
   "sources.remove": "Supprimer",

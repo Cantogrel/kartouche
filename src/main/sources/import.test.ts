@@ -1,5 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { migrate } from '../db/migrations'
 import { replaceConsole } from '../catalog/catalogStore'
 import { addSourceList, type Fetcher } from './import'
@@ -46,5 +49,19 @@ describe('addSourceList', () => {
   it('refuse une liste invalide sans rien insérer', async () => {
     await expect(addSourceList(db, 'https://example.org/bad.json', fakeFetch({ schemaVersion: 1, name: '', entries: [] }))).rejects.toThrow(/liste invalide/)
     expect((db.prepare('SELECT COUNT(*) AS n FROM source_lists').get() as { n: number }).n).toBe(0)
+  })
+})
+
+describe('addSourceList (fichier local, defaultFetch réel)', () => {
+  let dir: string
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rv-sources-')) })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+  it('accepte un chemin de fichier local (glisser-déposer / sélecteur), pas seulement une URL http(s)', async () => {
+    const file = join(dir, 'liste.json')
+    writeFileSync(file, JSON.stringify(LIST))
+    const result = await addSourceList(db, file)
+    expect(result).toMatchObject({ name: 'Ma liste', entryCount: 2, matchedCount: 1 })
+    expect((db.prepare('SELECT url FROM source_lists').get() as { url: string }).url).toBe(file)
   })
 })
