@@ -159,6 +159,8 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 /* Bibliothèque : dépôt de fichiers, menu d'ajout, cartes avec jaquette */
 .dropzone { position: relative; }
 .dropzone.over { outline: 2px dashed var(--accent); outline-offset: -8px; }
+/* Zone de dépôt compacte (ex. Paramètres → Sources) : l'outline négatif de .dropzone chevauche le contenu sans un peu de marge interne. */
+.field.dropzone { padding: 10px; margin: -10px -10px 16px; border-radius: var(--radius-lg); }
 .drop-hint { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; font-size: 22px; font-weight: 700; background: rgba(0,0,0,.55); color: var(--text-strong); }
 .menu-wrap { position: relative; }
 .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; display: flex; flex-direction: column; min-width: 200px; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; }
