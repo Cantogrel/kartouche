@@ -5,14 +5,14 @@ import { normalizeTitle } from '../achievements/retroachievements'
 
 export type Fetcher = (url: string) => Promise<unknown>
 
-const defaultFetch: Fetcher = async (url) => {
+export const defaultFetch: Fetcher = async (url) => {
   const res = await fetch(url, { headers: { 'user-agent': 'RomVault' }, signal: AbortSignal.timeout(60_000) })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
 /** Rapprochement titre+console → id catalogue, mis en cache par console le temps d'un import (évite une requête par entrée). */
-class CatalogMatcher {
+export class CatalogMatcher {
   private readonly byConsole = new Map<string, Map<string, number>>()
   constructor(private readonly db: DatabaseSync) {}
 
@@ -29,7 +29,7 @@ class CatalogMatcher {
   }
 }
 
-function insertEntries(db: DatabaseSync, listId: number, doc: SourceListDocument): number {
+export function insertEntries(db: DatabaseSync, listId: number, doc: SourceListDocument): number {
   const matcher = new CatalogMatcher(db)
   const ins = db.prepare(`INSERT INTO sources (list_id, game_id, console, title, size_bytes, crc, sha1, uris, note, matched)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)

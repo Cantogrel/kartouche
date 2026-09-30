@@ -5,7 +5,7 @@ import type { BackupInfo, SaveInfo } from './saves'
 import type { BiosImportResult, BiosSlotStatus } from './bios'
 import type { EmulatorProgress, EmulatorState, GameSession, LatestVersion, LaunchResult } from './emulators'
 import type { CatalogGame, CatalogPage, CatalogQuery, GameDetails, ProviderStatus, SyncProgress, SyncResult } from './catalog'
-import type { SourceListImportResult } from './sourceList'
+import type { SourceListImportResult, SourceListRefreshResult } from './sourceList'
 
 export interface AppPaths {
   dataDir: string
@@ -93,6 +93,10 @@ export interface IpcChannels {
   'achievements:get': { req: { entryId: number; refresh?: boolean }; res: AchievementsResult }
   /** Ajoute une liste de sources (URL JSON apportée par l'utilisateur) ; rapproche ses entrées du catalogue. */
   'sourceLists:add': { req: string; res: SourceListImportResult }
+  /** Re-télécharge et revalide une liste ; un échec conserve les sources déjà importées. */
+  'sourceLists:refresh': { req: number; res: SourceListRefreshResult }
+  /** Retire une liste et ses sources (les autres listes ne sont pas touchées). */
+  'sourceLists:remove': { req: number; res: void }
   'emulators:list': { req: void; res: EmulatorState[] }
   /** Télécharge et installe (ou met à jour) un émulateur ; la progression arrive par 'emulators:progress'. */
   'emulators:install': { req: string; res: { ok: boolean; error?: string } }
