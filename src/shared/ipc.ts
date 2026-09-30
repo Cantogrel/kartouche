@@ -5,7 +5,7 @@ import type { BackupInfo, SaveInfo } from './saves'
 import type { BiosImportResult, BiosSlotStatus } from './bios'
 import type { EmulatorProgress, EmulatorState, GameSession, LatestVersion, LaunchResult } from './emulators'
 import type { CatalogGame, CatalogPage, CatalogQuery, GameDetails, ProviderStatus, SyncProgress, SyncResult } from './catalog'
-import type { SourceListImportResult, SourceListRefreshResult, SourceListSummary } from './sourceList'
+import type { GameSource, SourceListImportResult, SourceListRefreshResult, SourceListSummary } from './sourceList'
 import type { DownloadProgress } from './downloads'
 
 export interface AppPaths {
@@ -93,6 +93,8 @@ export interface IpcChannels {
   'saves:open': { req: number; res: void }
   'achievements:get': { req: { entryId: number; refresh?: boolean }; res: AchievementsResult }
   'sourceLists:list': { req: void; res: SourceListSummary[] }
+  /** Sources déjà rapprochées de ce jeu du catalogue (fiche jeu). */
+  'sources:forGame': { req: number; res: GameSource[] }
   /** Ajoute une liste de sources (URL JSON apportée par l'utilisateur) ; rapproche ses entrées du catalogue. */
   'sourceLists:add': { req: string; res: SourceListImportResult }
   /** Re-télécharge et revalide une liste ; un échec conserve les sources déjà importées. */

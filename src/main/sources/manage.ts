@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { SourceListRefreshResult, SourceListSummary } from '@shared/sourceList'
+import type { GameSource, SourceListRefreshResult, SourceListSummary } from '@shared/sourceList'
 import { validateSourceList } from './validate'
 import { defaultFetch, insertEntries, type Fetcher } from './import'
 
@@ -67,4 +67,20 @@ export async function refreshSourceList(db: DatabaseSync, listId: number, fetche
 /** Retire une liste ; ses sources partent en cascade (ON DELETE CASCADE), les autres listes ne sont pas touchées. */
 export function removeSourceList(db: DatabaseSync, listId: number): void {
   db.prepare('DELETE FROM source_lists WHERE id = ?').run(listId)
+}
+
+interface GameSourceRow {
+  id: number
+  list_name: string
+  size_bytes: number | null
+  note: string | null
+  uris: string
+}
+
+/** Sources rapprochées d'un jeu précis du catalogue (fiche jeu) ; vide si aucune liste n'en propose. */
+export function sourcesForGame(db: DatabaseSync, gameId: number): GameSource[] {
+  const rows = db.prepare(`SELECT s.id, sl.name AS list_name, s.size_bytes, s.note, s.uris
+    FROM sources s JOIN source_lists sl ON sl.id = s.list_id
+    WHERE s.game_id = ? AND s.matched = 1 ORDER BY sl.name`).all(gameId) as unknown as GameSourceRow[]
+  return rows.map((r) => ({ id: r.id, listName: r.list_name, sizeBytes: r.size_bytes, note: r.note, uris: JSON.parse(r.uris) as string[] }))
 }
