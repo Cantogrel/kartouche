@@ -95,7 +95,9 @@ export interface IpcChannels {
   'sourceLists:list': { req: void; res: SourceListSummary[] }
   /** Sources déjà rapprochées de ce jeu du catalogue (fiche jeu). */
   'sources:forGame': { req: number; res: GameSource[] }
-  /** Ajoute une liste de sources (URL JSON apportée par l'utilisateur) ; rapproche ses entrées du catalogue. */
+  /** Ouvre le sélecteur de fichier JSON ; renvoie le chemin choisi, null si annulé. */
+  'sourceLists:pick': { req: void; res: string | null }
+  /** Ajoute une liste de sources (URL http(s) ou chemin de fichier local JSON) ; rapproche ses entrées du catalogue. */
   'sourceLists:add': { req: string; res: SourceListImportResult }
   /** Re-télécharge et revalide une liste ; un échec conserve les sources déjà importées. */
   'sourceLists:refresh': { req: number; res: SourceListRefreshResult }

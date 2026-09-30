@@ -194,6 +194,12 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   })
   handle('sourceLists:list', () => listSourceLists(db))
   handle('sources:forGame', (gameId) => sourcesForGame(db, gameId))
+  handle('sourceLists:pick', async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = { properties: ['openFile'] as 'openFile'[], filters: [{ name: 'JSON', extensions: ['json'] }] }
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return res.canceled ? null : (res.filePaths[0] ?? null)
+  })
   handle('sourceLists:add', (url) => addSourceList(db, url))
   handle('sourceLists:refresh', (id) => refreshSourceList(db, id))
   handle('sourceLists:remove', (id) => removeSourceList(db, id))
