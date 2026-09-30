@@ -18,6 +18,7 @@ import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, sa
 import { getAchievements } from './achievements/retroachievements'
 import { addSourceList } from './sources/import'
 import { listSourceLists, refreshSourceList, removeSourceList } from './sources/manage'
+import { cancelDownload, downloadSource } from './downloads/engine'
 import { ROM_EXTENSIONS } from '@shared/library'
 import { resolveLanguage } from '@shared/settings'
 import { EMULATORS, emulatorById, type EmulatorState } from '@shared/emulators'
@@ -201,6 +202,17 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     if (row) shell.showItemInFolder(row.path)
   })
   const broadcast = (channel: string, payload: unknown): void => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send(channel, payload))
+  const downloading = new Set<number>()
+  handle('downloads:start', async (sourceId) => {
+    if (downloading.has(sourceId)) return { ok: false, error: 'busy' }
+    downloading.add(sourceId)
+    try {
+      const cacheDir = join(paths.cache, 'game-downloads')
+      const r = await downloadSource(db, sourceId, cacheDir, (p) => broadcast('download:progress', p))
+      return r.ok ? { ok: true } : { ok: false, error: r.error }
+    } finally { downloading.delete(sourceId) }
+  })
+  handle('downloads:cancel', (sourceId) => { cancelDownload(sourceId) })
   const installing = new Set<string>()
   handle('emulators:list', () => listEmulators(db))
   handle('emulators:install', async (id) => {
