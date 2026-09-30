@@ -40,7 +40,7 @@ function freeName(dir: string, name: string): string {
   for (let i = 2; ; i++) if (!existsSync(join(dir, `${stem} (${i})${ext}`))) return `${stem} (${i})${ext}`
 }
 
-interface Prepared {
+export interface Prepared {
   crc?: string
   sha1?: string
   size: number
@@ -50,7 +50,8 @@ interface Prepared {
   zipEntries?: string[]
 }
 
-async function prepare(file: string, extra: string[], onBytes?: (bytes: number) => void): Promise<Prepared | string> {
+/** Empreinte (+ détection zip/.cue) d'un fichier, sans effet de bord — réutilisé par downloads/install.ts pour vérifier un téléchargement avant de l'installer. */
+export async function prepare(file: string, extra: string[], onBytes?: (bytes: number) => void): Promise<Prepared | string> {
   const ext = extOf(file)
   if (ext === 'zip') {
     const all = await readZip(file)

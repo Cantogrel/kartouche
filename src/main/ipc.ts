@@ -19,6 +19,7 @@ import { getAchievements } from './achievements/retroachievements'
 import { addSourceList } from './sources/import'
 import { listSourceLists, refreshSourceList, removeSourceList, sourcesForGame } from './sources/manage'
 import { cancelDownload, downloadSource } from './downloads/engine'
+import { installDownload } from './downloads/install'
 import { ROM_EXTENSIONS } from '@shared/library'
 import { resolveLanguage } from '@shared/settings'
 import { EMULATORS, emulatorById, type EmulatorState } from '@shared/emulators'
@@ -210,7 +211,8 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     try {
       const cacheDir = join(paths.cache, 'game-downloads')
       const r = await downloadSource(db, sourceId, cacheDir, (p) => broadcast('download:progress', p))
-      return r.ok ? { ok: true } : { ok: false, error: r.error }
+      if (!r.ok || !r.file) return { ok: false, error: r.error }
+      return await installDownload(db, sourceId, r.file, paths)
     } finally { downloading.delete(sourceId) }
   })
   handle('downloads:cancel', (sourceId) => { cancelDownload(sourceId) })
