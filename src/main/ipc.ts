@@ -16,6 +16,7 @@ import { addCatalogGame, clearLibrary, deleteAllRomFiles, entryPath, importSbi, 
 import { createCollection, deleteCollection, listCollections, renameCollection, setFlags, setMembers, setMembership } from './library/collections'
 import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget } from './saves/saves'
 import { getAchievements } from './achievements/retroachievements'
+import { addSourceList } from './sources/import'
 import { ROM_EXTENSIONS } from '@shared/library'
 import { resolveLanguage } from '@shared/settings'
 import { EMULATORS, emulatorById, type EmulatorState } from '@shared/emulators'
@@ -188,6 +189,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     const s = loadSettings(db)
     return getAchievements(db, e, { username: s.raUsername, apiKey: s.raApiKey }, { refresh: req.refresh })
   })
+  handle('sourceLists:add', (url) => addSourceList(db, url))
   handle('library:reveal', (id) => { const p = entryPath(db, id); if (p) shell.showItemInFolder(p) })
   handle('library:content', (id) => listContent(db, id))
   handle('library:revealContent', (id) => {

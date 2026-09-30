@@ -31,3 +31,10 @@ export interface SourceListDocument {
   generatedAt?: string
   entries: SourceListEntry[]
 }
+
+export interface SourceListImportResult {
+  listId: number
+  name: string
+  entryCount: number
+  matchedCount: number
+}
