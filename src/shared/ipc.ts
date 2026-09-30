@@ -5,6 +5,7 @@ import type { BackupInfo, SaveInfo } from './saves'
 import type { BiosImportResult, BiosSlotStatus } from './bios'
 import type { EmulatorProgress, EmulatorState, GameSession, LatestVersion, LaunchResult } from './emulators'
 import type { CatalogGame, CatalogPage, CatalogQuery, GameDetails, ProviderStatus, SyncProgress, SyncResult } from './catalog'
+import type { SourceListImportResult } from './sourceList'
 
 export interface AppPaths {
   dataDir: string
@@ -90,6 +91,8 @@ export interface IpcChannels {
   /** Ouvre le dossier des sauvegardes dans l'Explorateur. */
   'saves:open': { req: number; res: void }
   'achievements:get': { req: { entryId: number; refresh?: boolean }; res: AchievementsResult }
+  /** Ajoute une liste de sources (URL JSON apportée par l'utilisateur) ; rapproche ses entrées du catalogue. */
+  'sourceLists:add': { req: string; res: SourceListImportResult }
   'emulators:list': { req: void; res: EmulatorState[] }
   /** Télécharge et installe (ou met à jour) un émulateur ; la progression arrive par 'emulators:progress'. */
   'emulators:install': { req: string; res: { ok: boolean; error?: string } }
