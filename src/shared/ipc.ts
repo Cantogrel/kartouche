@@ -6,6 +6,7 @@ import type { BiosImportResult, BiosSlotStatus } from './bios'
 import type { EmulatorProgress, EmulatorState, GameSession, LatestVersion, LaunchResult } from './emulators'
 import type { CatalogGame, CatalogPage, CatalogQuery, GameDetails, ProviderStatus, SyncProgress, SyncResult } from './catalog'
 import type { SourceListImportResult, SourceListRefreshResult, SourceListSummary } from './sourceList'
+import type { DownloadProgress } from './downloads'
 
 export interface AppPaths {
   dataDir: string
@@ -98,6 +99,10 @@ export interface IpcChannels {
   'sourceLists:refresh': { req: number; res: SourceListRefreshResult }
   /** Retire une liste et ses sources (les autres listes ne sont pas touchées). */
   'sourceLists:remove': { req: number; res: void }
+  /** Télécharge une source (sourceId) ; attend la fin, la progression arrive par 'download:progress'. Pas d'extraction/installation (P05). */
+  'downloads:start': { req: number; res: { ok: boolean; error?: string } }
+  /** Annule un téléchargement en cours ; sans effet si aucun n'est en cours pour cette source. */
+  'downloads:cancel': { req: number; res: void }
   'emulators:list': { req: void; res: EmulatorState[] }
   /** Télécharge et installe (ou met à jour) un émulateur ; la progression arrive par 'emulators:progress'. */
   'emulators:install': { req: string; res: { ok: boolean; error?: string } }
@@ -150,6 +155,7 @@ export interface IpcEvents {
   'catalog:progress': SyncProgress
   'library:progress': LibraryProgress
   'emulators:progress': EmulatorProgress
+  'download:progress': DownloadProgress
   'game:session': GameSession
   'update:state': UpdateState
   /** Le thème clair/sombre de Windows a changé pendant que l'app tourne (réglage 'auto' uniquement). */
