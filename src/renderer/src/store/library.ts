@@ -20,6 +20,10 @@ interface LibraryState {
   scan: () => Promise<void>
   add: (gameId: number) => Promise<void>
   removeEntry: (id: number, action: RemoveAction) => Promise<void>
+  /** Retire toutes les entrées de la bibliothèque (Réglages → Zone dangereuse) ; les fichiers ROM ne sont pas touchés. */
+  clearAll: () => Promise<void>
+  /** Supprime le fichier ROM de tous les jeux (Réglages → Zone dangereuse) ; les entrées restent, marquées sans fichier. */
+  deleteAllFiles: () => Promise<void>
   setFlag: (id: number, flags: { favorite?: boolean; pinned?: boolean }) => Promise<void>
   /** Crée une collection et renvoie son id (null si le nom est vide). */
   createCollection: (name: string) => Promise<number | null>
@@ -57,6 +61,8 @@ export const useLibrary = create<LibraryState>((set, get) => {
     scan: () => run(() => window.api.invoke('library:scan')),
     add: async (gameId) => { await window.api.invoke('library:add', gameId); await get().refresh() },
     removeEntry: async (id, action) => { await window.api.invoke('library:remove', { id, action }); set({ savesRev: get().savesRev + 1 }); await get().refresh() },
+    clearAll: async () => { await window.api.invoke('library:clearAll'); await get().refresh() },
+    deleteAllFiles: async () => { await window.api.invoke('library:deleteAllFiles'); await get().refresh() },
     setFlag: async (id, flags) => {
       // Mise à jour immédiate de la liste (le cœur réagit au clic), puis l'enregistrement.
       set({ entries: get().entries.map((e) => (e.id === id ? { ...e, ...flags } : e)) })

@@ -78,14 +78,23 @@ async function sgdbApi<T>(db: DatabaseSync, path: string, key: string): Promise<
   return ((await res.json()) as { data: T }).data
 }
 
-/** Identifiant SteamGridDB du jeu (recherche par nom), mémorisé y compris quand il n'y en a pas. */
-async function sgdbId(db: DatabaseSync, game: CatalogGame, key: string): Promise<number | null> {
+/** Normalise pour comparer un nom malgré accents/ponctuation/casse (« Pokémon: Yellow » ~ « pokemon yellow »). */
+const normalizeName = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+/**
+ * Identifiant SteamGridDB du jeu (recherche par nom), mémorisé y compris quand il n'y en a pas. Aucun résultat
+ * approché n'est retenu : sur une franchise (Pokémon Rouge/Jaune, Final Fantasy…), le premier résultat de
+ * l'autocomplete est souvent un AUTRE jeu de la même série (un titre régional ne correspond à aucune entrée SGDB
+ * telle quelle) plutôt que celui recherché — mieux vaut aucune image que celle d'un autre jeu.
+ */
+export async function sgdbId(db: DatabaseSync, game: CatalogGame, key: string): Promise<number | null> {
   const row = db.prepare("SELECT json FROM game_meta WHERE game_id = ? AND provider = 'sgdb-id'").get(game.id) as { json: string } | undefined
   if (row) return (JSON.parse(row.json) as { id: number | null }).id
   const term = searchTerm(game.name)
   const found = term ? await sgdbApi<{ id: number; name: string }[]>(db, `/search/autocomplete/${encodeURIComponent(term)}`, key) : null
   if (found === null) throw new Error('SteamGridDB indisponible')
-  const hit = found.find((f) => f.name.toLowerCase() === term.toLowerCase()) ?? found[0]
+  const want = normalizeName(term)
+  const hit = found.find((f) => normalizeName(f.name) === want)
   db.prepare("INSERT OR REPLACE INTO game_meta (game_id, provider, json, fetched_at) VALUES (?, 'sgdb-id', ?, ?)").run(game.id, JSON.stringify({ id: hit?.id ?? null }), Date.now())
   return hit?.id ?? null
 }

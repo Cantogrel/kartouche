@@ -3,6 +3,26 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.1.8
+
+- Nouvelle section « Zone dangereuse » dans Paramètres : vider la bibliothèque (les fichiers ROM restent sur le
+  disque), supprimer tous les fichiers ROM (les jeux restent dans la liste, marqués sans fichier), désinstaller tous
+  les émulateurs installés, ou tout réinitialiser (réglages, bibliothèque, catalogue et collections — fichiers ROM et
+  émulateurs installés conservés).
+- Vita3K : messages d'erreur au lancement plus clairs, notamment la détection d'un dump au format Vitamin (bloqué
+  systématiquement par l'émulateur, connu pour corrompre les sauvegardes) avec l'explication à l'écran. Un jeu Vita
+  relance désormais toujours par son Title ID une fois installé (le .vpk lui-même ne boote jamais seul).
+- Jaquettes/images du catalogue : l'autocomplete SteamGridDB ne retient plus le premier résultat par défaut s'il ne
+  correspond pas vraiment au jeu recherché (accents/ponctuation/casse ignorés pour la comparaison) — évite d'hériter
+  de la jaquette d'un autre jeu de la même franchise.
+- Import : n'accepte que les extensions de ROM réellement ouvrables par l'émulateur de la console ; un paquet PS Vita
+  en .zip (eboot.bin + sce_sys/) est importé tel quel, sans être extrait comme une archive de ROM classique.
+- Corrigé : melonDS pouvait planter à l'installation, au tout premier lancement d'un jeu DS (`toml::serializer: an
+  implicit table cannot have non-table value`), en repassant ensuite normalement au lancement suivant.
+- Dolphin (GameCube/Wii) : lancement et chargements accélérés (vitesse de lecture disque simulée plus rapide,
+  particulièrement sensible sur Wii) ; les rares jeux qui en auraient besoin sont détectés automatiquement (un jeu
+  qui plante au lancement est retenté une fois sans ce réglage) et exemptés durablement, sans intervention.
+
 ## 0.1.7
 
 - Thème clair ajouté, détecté automatiquement depuis Windows ou choisi manuellement (Paramètres → Apparence → Thème :

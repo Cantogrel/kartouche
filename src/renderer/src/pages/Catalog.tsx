@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { FilterGroup, Tag, Badge, Cover, Button } from '@/ui'
 import { t } from '@/i18n'
 import { useApp } from '@/store/app'
@@ -11,6 +11,8 @@ const PAGE = 60
 const toggle = (arr: string[], v: string): string[] => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
 const labelOf = (id: string): string => consoleById(id)?.label ?? id
 const DEFAULT_DIR = { popularity: 'desc', year: 'desc', title: 'asc' } as const
+// Position de scroll de la liste, conservée hors de l'état React pour survivre au démontage de la page (fiche jeu puis retour).
+let lastScrollTop = 0
 
 export function Catalog({ query }: { query: string }) {
   const { go, catalog: view, setCatalog } = useApp()
@@ -21,6 +23,14 @@ export function Catalog({ query }: { query: string }) {
   const [status, setStatus] = useState<{ total: number; syncing: boolean; enriched: boolean } | null>(null)
   const [progress, setProgress] = useState<SyncProgress | null>(null)
   const reqId = useRef(0)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const scrollRestored = useRef(false)
+  // Remonte à la position de scroll précédente une fois la liste chargée (retour depuis la fiche d'un jeu).
+  useLayoutEffect(() => {
+    if (scrollRestored.current || !page || !contentRef.current) return
+    scrollRestored.current = true
+    contentRef.current.scrollTop = lastScrollTop
+  }, [page])
   // Survol d'une carte : la fiche est préparée (mise en cache côté principal) pour que le clic soit instantané.
   const prefetched = useRef(new Set<number>())
   const prefetch = (id: number): void => {
@@ -75,7 +85,7 @@ export function Catalog({ query }: { query: string }) {
 
   const games = page?.games ?? []
   return (
-    <div className="content catalog">
+    <div className="content catalog" ref={contentRef} onScroll={(e) => { lastScrollTop = e.currentTarget.scrollTop }}>
       <div className="catalog-list">
         {(status?.syncing || progress) && (
           <div className="panel catalog-sync"><span>{progress?.console === 'popularity' ? t('catalog.rating', { n: progress.done, total: progress.total }) : t('catalog.syncing', { n: progress?.done ?? 0, total: progress?.total ?? CONSOLES.length })}</span></div>
@@ -99,6 +109,16 @@ export function Catalog({ query }: { query: string }) {
           </div>
         </div>
         {status && status.total === 0 && !status.syncing && <p className="muted">{t('catalog.empty')}</p>}
+        {page === null && Array.from({ length: 10 }).map((_, i) => (
+          <div key={i} className="row-card skeleton-item">
+            <div className="thumb skeleton-block" />
+            <div>
+              <span className="skeleton" style={{ width: '55%' }} />
+              <span className="skeleton" style={{ width: '35%' }} />
+              <span className="skeleton" style={{ width: '20%' }} />
+            </div>
+          </div>
+        ))}
         {games.map((g) => (
           <div key={g.id} className="row-card" role="button" tabIndex={0} onMouseEnter={() => prefetch(g.id)} onFocus={() => prefetch(g.id)} onClick={() => go('game', String(g.id))} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go('game', String(g.id)) } }}>
             <Cover className="thumb" gameId={g.id} title={g.name}><Badge>{labelOf(g.console)}</Badge></Cover>

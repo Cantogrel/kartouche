@@ -35,6 +35,8 @@ export interface IpcChannels {
   'paths:chooseDataDir': { req: void; res: { dataDir: string; restartRequired: boolean } | null }
   'paths:openDataDir': { req: void; res: void }
   'app:relaunch': { req: void; res: void }
+  /** Remet à zéro réglages, bibliothèque, catalogue et collections (garde les fichiers ROM et les émulateurs installés) ; redémarre l'app aussitôt. */
+  'app:factoryReset': { req: void; res: void }
   'catalog:search': { req: CatalogQuery; res: CatalogPage }
   'catalog:get': { req: number; res: CatalogGame | null }
   'catalog:details': { req: { id: number; refresh?: boolean }; res: GameDetails | null }
@@ -50,6 +52,10 @@ export interface IpcChannels {
   /** Réimporte (en référence, sans copie) les dossiers surveillés des réglages et met à jour les fichiers manquants. */
   'library:scan': { req: void; res: ImportResult }
   'library:remove': { req: { id: number; action: 'file' | 'entry' | 'save' | 'all' }; res: void }
+  /** Vide entièrement la bibliothèque (toutes les entrées) ; les fichiers ROM ne sont pas touchés. */
+  'library:clearAll': { req: void; res: void }
+  /** Supprime le fichier ROM de tous les jeux de la bibliothèque ; les entrées restent, marquées sans fichier. */
+  'library:deleteAllFiles': { req: void; res: void }
   /** Ajoute un jeu du catalogue à la bibliothèque, sans fichier. */
   'library:add': { req: number; res: LibraryEntry | null }
   /** Affiche la ROM dans l'Explorateur. */

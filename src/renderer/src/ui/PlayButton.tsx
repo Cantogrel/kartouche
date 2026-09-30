@@ -9,6 +9,7 @@ import type { LibraryEntry } from '@shared/library'
 /** Bouton « Jouer » : lance le jeu ; si l'émulateur manque, propose d'aller l'installer. */
 export function PlayButton({ entry }: { entry: LibraryEntry }) {
   const running = useEmulators((s) => s.running.includes(entry.id))
+  const launching = useEmulators((s) => s.launching.includes(entry.id))
   const play = useEmulators((s) => s.play)
   const installed = useEmulators((s) => s.list.find((e) => e.id === emulatorForConsole(entry.console)?.id)?.installed)
   const navigate = useApp((s) => s.go)
@@ -22,10 +23,22 @@ export function PlayButton({ entry }: { entry: LibraryEntry }) {
     <>
       {running
         ? <Button onClick={() => void window.api.invoke('game:stop', entry.id)}>■ {t('play.stop')}</Button>
-        : <Button variant="primary" onClick={() => void click()}>{installed === false && def ? t('play.installFirst', { name: def.name }) : `▶ ${t('play')}`}</Button>}
+        // launching : le clic est pris en compte mais rien n'est encore lancé (peut prendre plusieurs minutes la
+        // première fois pour un jeu Vita — install avant de pouvoir jouer) ; désactivé pour éviter un double clic.
+        : <Button variant="primary" disabled={launching} onClick={() => void click()}>
+            {launching ? t('play.launching') : installed === false && def ? t('play.installFirst', { name: def.name }) : `▶ ${t('play')}`}
+          </Button>}
       {running && <span className="muted">{t('play.quitHint')}</span>}
     </>
   )
+}
+
+/** Ouvre directement l'émulateur associé (son propre écran d'accueil/config), sans lancer ce jeu précis. */
+export function OpenEmulatorButton({ entry }: { entry: LibraryEntry }) {
+  const def = emulatorForConsole(entry.console)
+  const emu = useEmulators((s) => s.list.find((e) => e.id === def?.id))
+  if (!def || !emu?.installed || emu.missing) return null
+  return <Button onClick={() => void window.api.invoke('emulators:open', { id: def.id, what: 'app' })}>{t('content.openEmulator', { name: def.name })}</Button>
 }
 
 /**

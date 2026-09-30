@@ -12,7 +12,7 @@ import { tgdb } from './catalog/tgdb'
 import { syncPopularity } from './catalog/popularity'
 import { localizeDetails } from './catalog/l10n'
 import { importPaths } from './library/importer'
-import { addCatalogGame, entryPath, importSbi, listContent, listLibrary, refreshMissing, relinkUnmatched, removeEntry } from './library/libraryStore'
+import { addCatalogGame, clearLibrary, deleteAllRomFiles, entryPath, importSbi, listContent, listLibrary, refreshMissing, relinkUnmatched, removeEntry } from './library/libraryStore'
 import { createCollection, deleteCollection, listCollections, renameCollection, setFlags, setMembers, setMembership } from './library/collections'
 import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget } from './saves/saves'
 import { getAchievements } from './achievements/retroachievements'
@@ -27,6 +27,7 @@ import { autoInstallFirmware } from './bios/official'
 import { isRunning, launchGame, openEmulator, runningCount, stopAllGames, stopGame } from './emulators/launcher'
 import { dirname, join } from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 
 /** Ordre de la cascade de fiches enrichies. */
 const PROVIDERS: MetadataProvider[] = [igdb, tgdb]
@@ -82,6 +83,14 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   })
   handle('paths:openDataDir', async () => { await shell.openPath(paths.dataDir) })
   handle('app:relaunch', () => { app.relaunch(); app.exit(0) })
+  // Ferme la base avant de supprimer son fichier (verrou Windows) : rien d'autre ne doit s'en servir après, d'où le
+  // redémarrage immédiat plutôt qu'un état « à redémarrer » comme pour le changement de dossier de données.
+  handle('app:factoryReset', async () => {
+    db.close()
+    const dbFile = join(paths.dataDir, 'romvault.db')
+    for (const suffix of ['', '-wal', '-shm']) await rm(dbFile + suffix, { force: true })
+    app.relaunch(); app.exit(0)
+  })
 
   handle('catalog:search', (q) => queryCatalog(db, q ?? {}))
   handle('catalog:get', (id) => getGame(db, id))
@@ -144,6 +153,8 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     return r
   })
   handle('library:remove', (req) => removeEntry(db, req.id, req.action, paths.saves))
+  handle('library:clearAll', () => clearLibrary(db))
+  handle('library:deleteAllFiles', () => deleteAllRomFiles(db))
   handle('library:add', (gameId) => addCatalogGame(db, gameId))
   handle('library:pickSbi', async () => {
     const win = BrowserWindow.getFocusedWindow()

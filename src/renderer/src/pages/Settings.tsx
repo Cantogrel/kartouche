@@ -4,12 +4,14 @@ import type { UpdateChangelog } from '@shared/ipc'
 import { t } from '@/i18n'
 import { Button } from '@/ui'
 import { useApp } from '@/store/app'
+import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
 import { useUpdate } from '@/store/update'
 import { useChangelog } from '@/store/changelog'
+import { useEmulators } from '@/store/emulators'
 import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSetting } from '@shared/settings'
 
-const SECTIONS = ['general', 'import', 'emulation', 'controller', 'appearance', 'apiKeys', 'about'] as const
+const SECTIONS = ['general', 'import', 'emulation', 'controller', 'appearance', 'apiKeys', 'about', 'danger'] as const
 type Section = (typeof SECTIONS)[number]
 
 const isSection = (s: string | undefined): s is Section => (SECTIONS as readonly string[]).includes(s ?? '')
@@ -161,8 +163,60 @@ export function Settings() {
             </div>
           </>
         )}
+
+        {section === 'danger' && <DangerSection />}
       </div>
     </div>
+  )
+}
+
+/**
+ * Actions globales destructrices, regroupées à part pour ne pas se retrouver à côté des réglages courants.
+ * Une seule à la fois (`busy`) pour éviter un double clic pendant qu'une opération tourne.
+ */
+function DangerSection() {
+  const entries = useLibrary((s) => s.entries)
+  const { clearAll, deleteAllFiles } = useLibrary()
+  const emuList = useEmulators((s) => s.list)
+  const { uninstallAll } = useEmulators()
+  const installed = emuList.filter((e) => e.installed)
+  const [busy, setBusy] = useState(false)
+  const withFile = entries.filter((e) => !e.missing).length
+
+  const run = async (confirmText: string, job: () => Promise<void>): Promise<void> => {
+    if (!window.confirm(confirmText)) return
+    setBusy(true)
+    try { await job() } finally { setBusy(false) }
+  }
+
+  return (
+    <>
+      <p className="muted">{t('settings.dangerHint')}</p>
+      <div className="danger-zone">
+        <div className="danger-row">
+          <div><strong>{t('danger.clearLibrary')}</strong><p className="muted">{t('danger.clearLibraryHint')}</p></div>
+          {entries.length === 0
+            ? <span className="muted">{t('danger.clearLibraryNone')}</span>
+            : <Button variant="danger" disabled={busy} onClick={() => void run(t('danger.clearLibraryConfirm', { n: entries.length }), clearAll)}>{t('danger.clearLibrary')}</Button>}
+        </div>
+        <div className="danger-row">
+          <div><strong>{t('danger.deleteAllFiles')}</strong><p className="muted">{t('danger.deleteAllFilesHint')}</p></div>
+          {withFile === 0
+            ? <span className="muted">{t('danger.deleteAllFilesNone')}</span>
+            : <Button variant="danger" disabled={busy} onClick={() => void run(t('danger.deleteAllFilesConfirm', { n: withFile }), deleteAllFiles)}>{t('danger.deleteAllFiles')}</Button>}
+        </div>
+        <div className="danger-row">
+          <div><strong>{t('danger.uninstallAllEmulators')}</strong><p className="muted">{t('danger.uninstallAllEmulatorsHint')}</p></div>
+          {installed.length === 0
+            ? <span className="muted">{t('danger.uninstallAllEmulatorsNone')}</span>
+            : <Button variant="danger" disabled={busy} onClick={() => void run(t('danger.uninstallAllEmulatorsConfirm', { n: installed.length }), uninstallAll)}>{t('danger.uninstallAllEmulators')}</Button>}
+        </div>
+        <div className="danger-row">
+          <div><strong>{t('danger.factoryReset')}</strong><p className="muted">{t('danger.factoryResetHint')}</p></div>
+          <Button variant="danger" disabled={busy} onClick={() => void run(t('danger.factoryResetConfirm'), () => window.api.invoke('app:factoryReset'))}>{t('danger.factoryReset')}</Button>
+        </div>
+      </div>
+    </>
   )
 }
 

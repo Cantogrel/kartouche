@@ -8,7 +8,8 @@ import { migrate } from '../db/migrations'
 import { extractZipEntries, hashFile, readZip, readZipEntryText } from './hash'
 import { identify } from './identify'
 import { importPaths } from './importer'
-import { addCatalogGame, importSbi, listLibrary, relinkUnmatched, removeEntry, saveDir, sbiPathFor } from './libraryStore'
+import { addCatalogGame, clearLibrary, deleteAllRomFiles, importSbi, listLibrary, relinkUnmatched, removeEntry, saveDir, sbiPathFor } from './libraryStore'
+import { extensionsForConsoles, ROM_EXTENSIONS } from '@shared/library'
 
 const hex = (n: number): string => (n >>> 0).toString(16).padStart(8, '0')
 let dir: string
@@ -46,6 +47,21 @@ function makeZipMulti(files: { name: string; data: Buffer }[]): Buffer {
   end.writeUInt32LE(cdBuf.length, 12); end.writeUInt32LE(cdStart, 16)
   return Buffer.concat([...locals, cdBuf, end])
 }
+
+describe('extensions de ROM', () => {
+  it('n’accepte que des extensions vérifiées comme réellement ouvrables par l’émulateur de la console (voir le commentaire de ROM_EXTENSIONS)', () => {
+    // .gc n'existe pas (Dolphin ne le connaît pas) ; .nsz/.xcz ont besoin d'être décompressés avant qu'Eden ne les
+    // ouvre ; .pkg PS3 a besoin d'un install préalable (RPCS3 --installpkg) jamais implémenté ici.
+    expect(ROM_EXTENSIONS.gc).toBeUndefined()
+    expect(ROM_EXTENSIONS.nsz).toBeUndefined()
+    expect(ROM_EXTENSIONS.xcz).toBeUndefined()
+    expect(ROM_EXTENSIONS.pkg).toBeUndefined()
+    // .img : légitime seulement pour PS1 (DuckStation) — absent des formats supportés par PCSX2 (PS2).
+    expect(ROM_EXTENSIONS.img).toEqual(['ps1'])
+    expect(extensionsForConsoles(['ps2'])).not.toContain('img')
+    expect(extensionsForConsoles(['ps1'])).toContain('img')
+  })
+})
 
 describe('hash', () => {
   it('calcule CRC32 et SHA1 (« 123456789 » → cbf43926)', async () => {
@@ -172,6 +188,16 @@ describe('bibliothèque', () => {
     expect(list).toHaveLength(1)
     expect(list[0]).toMatchObject({ id: e.id, missing: false, match: 'hash' })
   })
+  it('un paquet PS Vita en .zip (eboot.bin + sce_sys/, un .vpk n’est qu’un zip renommé) est importé tel quel, jamais extrait', async () => {
+    const f = join(dir, 'src', 'Game.zip')
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(f, makeZipMulti([{ name: 'eboot.bin', data: Buffer.from('boot') }, { name: 'sce_sys/keystone', data: Buffer.from('key') }]))
+    const r = await importPaths(db, [f], opt())
+    expect(r.items[0].status).toBe('added')
+    const [e] = listLibrary(db)
+    expect(e.console).toBe('vita')
+    expect(e.path.endsWith('.zip')).toBe(true)
+  })
   it('supprimer le fichier garde le jeu (sans fichier) ; le réimporter le rattache de nouveau', async () => {
     addGame('nes', 'Test', 'test', 'cbf43926', 9)
     const f = rom('Test.nes', '123456789')
@@ -182,6 +208,14 @@ describe('bibliothèque', () => {
     expect(listLibrary(db)).toHaveLength(1); expect(listLibrary(db)[0].missing).toBe(true)
     expect((await importPaths(db, [f], opt())).items[0].status).toBe('added')
     expect(listLibrary(db)).toHaveLength(1); expect(listLibrary(db)[0].missing).toBe(false)
+  })
+  it('supprimer le fichier d’un jeu Vita3K réinitialise son Title ID (la copie que Vita3K a installée à part ne vaudrait plus rien)', async () => {
+    addGame('vita', 'Test Vita', 'test', 'cbf43926', 9)
+    await importPaths(db, [rom('Test.vpk', '123456789')], opt())
+    const [e] = listLibrary(db)
+    db.prepare('UPDATE library SET vita_title_id = ? WHERE id = ?').run('TESTVITA01', e.id)
+    await removeEntry(db, e.id, 'file', join(dir, 'saves'))
+    expect((db.prepare('SELECT vita_title_id FROM library WHERE id = ?').get(e.id) as { vita_title_id: string | null }).vita_title_id).toBeNull()
   })
   it('retirer de la bibliothèque garde la ROM ; « tout supprimer » enlève ROM, sauvegardes et entrée', async () => {
     addGame('nes', 'Test', 'test', 'cbf43926', 9)
@@ -198,6 +232,28 @@ describe('bibliothèque', () => {
     mkdirSync(saveDir(saves, e2), { recursive: true })
     await removeEntry(db, e2.id, 'all', saves)
     expect(listLibrary(db)).toHaveLength(0); expect(existsSync(e2.path)).toBe(false); expect(existsSync(saveDir(saves, e2))).toBe(false)
+  })
+  it('« vider la bibliothèque » retire toutes les entrées mais garde les fichiers ROM (Zone dangereuse)', async () => {
+    addGame('nes', 'Test 1', 'test1', 'cbf43926', 9)
+    addGame('snes', 'Test 2', 'test2', 'cbf43926', 9)
+    await importPaths(db, [rom('Test 1.nes', '123456789'), rom('Test 2.sfc', '123456789')], opt())
+    const [e1, e2] = listLibrary(db)
+    clearLibrary(db)
+    expect(listLibrary(db)).toHaveLength(0)
+    expect(existsSync(e1.path)).toBe(true); expect(existsSync(e2.path)).toBe(true)
+  })
+  it('« supprimer tous les fichiers ROM » efface les fichiers mais garde les entrées, marquées sans fichier (Zone dangereuse)', async () => {
+    addGame('nes', 'Test 1', 'test1', 'cbf43926', 9)
+    addGame('snes', 'Test 2', 'test2', 'cbf43926', 9)
+    await importPaths(db, [rom('Test 1.nes', '123456789'), rom('Test 2.sfc', '123456789')], opt())
+    const noFile = addCatalogGame(db, addGame('gb', 'Test 3', 'test3', null, null))! // jeu ajouté sans ROM : pas touché
+    const [e1, e2] = listLibrary(db)
+    await deleteAllRomFiles(db)
+    expect(existsSync(e1.path)).toBe(false); expect(existsSync(e2.path)).toBe(false)
+    const list = listLibrary(db)
+    expect(list).toHaveLength(3)
+    expect(list.every((e) => e.missing)).toBe(true)
+    expect(list.find((e) => e.id === noFile.id)).toMatchObject({ missing: true })
   })
   it('relie après coup un jeu importé sans fiche, une fois que le catalogue le connaît (rattrape un catalogue Switch incomplet lors de l’import)', async () => {
     // Le jeu manque encore au catalogue (ex. filtre IGDB alors trop strict) : importé quand même, sans fiche.

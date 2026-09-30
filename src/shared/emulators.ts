@@ -48,11 +48,14 @@ export const EMULATORS: readonly EmulatorDef[] = [
   { id: 'pcsx2', name: 'PCSX2', consoles: ['ps2'], source: { kind: 'github', repo: 'PCSX2/pcsx2', asset: '^pcsx2-v[\\d.]+-windows-x64-Qt\\.7z$', prerelease: true }, exe: ['pcsx2-qt.exe'], args: ['-batch', '-fullscreen', '--', '{rom}'], portable: { file: 'portable.txt' }, needsFirmware: true },
   { id: 'rpcs3', name: 'RPCS3', consoles: ['ps3'], source: { kind: 'rpcs3' }, exe: ['rpcs3.exe'], args: ['--no-gui', '{rom}'], needsFirmware: true },
   { id: 'ppsspp', name: 'PPSSPP', consoles: ['psp'], source: { kind: 'github', repo: 'hrydgard/ppsspp', asset: '^PPSSPP-v[\\d.]+-Windows-x64\\.zip$' }, exe: ['PPSSPPWindows64.exe'], args: ['--fullscreen', '{rom}'], portable: { dir: 'memstick' }, needsFirmware: false },
-  { id: 'vita3k', name: 'Vita3K', consoles: ['vita'], source: { kind: 'github', repo: 'Vita3K/Vita3K', asset: '^windows-latest\\.zip$', prerelease: true }, exe: ['Vita3K.exe'], args: [], needsFirmware: true }
+  // -r <Title ID> (pas le .vpk en positionnel) : constaté en vrai, Vita3K n'auto-boote jamais après un install par
+  // chemin de contenu (même boîtes de confirmation désactivées) — seul -r boote vraiment. launcher.ts installe le
+  // .vpk une fois (titre absent), récupère le Title ID dans le journal de Vita3K, puis lance toujours par -r.
+  { id: 'vita3k', name: 'Vita3K', consoles: ['vita'], source: { kind: 'github', repo: 'Vita3K/Vita3K', asset: '^windows-latest\\.zip$', prerelease: true }, exe: ['Vita3K.exe'], args: ['-r', '{titleId}'], needsFirmware: true }
 ]
 
-/** Émulateurs encore en rodage : configuration parfois instable, bugs possibles (affiché comme avertissement dans l'UI). */
-export const UNSTABLE_EMULATORS: readonly string[] = ['melonds', 'azahar']
+/** Émulateurs sans mapping manette automatique (profils par GUID/indices, pas génériques) : à configurer soi-même dans l'émulateur (affiché comme avertissement dans l'UI). */
+export const MANUAL_PAD_EMULATORS: readonly string[] = ['melonds', 'azahar', 'rpcs3']
 
 /** Constructeur de l'émulateur (celui de sa première console). */
 export const emulatorMaker = (def: EmulatorDef): string | undefined => consoleById(def.consoles[0])?.maker
@@ -62,12 +65,15 @@ export const emulatorRank = (def: EmulatorDef): number => CONSOLES.findIndex((c)
 export const emulatorById = (id: string): EmulatorDef | undefined => EMULATORS.find((e) => e.id === id)
 export const emulatorForConsole = (console: string): EmulatorDef | undefined => EMULATORS.find((e) => e.consoles.includes(console))
 
-/** Arguments de lancement pour un jeu ; null si la console n'est pas gérée par cet émulateur. */
-export function buildArgs(def: EmulatorDef, rom: string, consoleId: string): string[] | null {
+/**
+ * Arguments de lancement pour un jeu ; null si la console n'est pas gérée par cet émulateur. `titleId` : Title ID déjà
+ * installé (Vita3K uniquement, voir launcher.ts) — vide tant qu'il n'est pas encore connu.
+ */
+export function buildArgs(def: EmulatorDef, rom: string, consoleId: string, titleId?: string): string[] | null {
   if (!def.consoles.includes(consoleId)) return null
   const core = RETROARCH_CORES[consoleId]
   if (def.id === 'retroarch' && !core) return null
-  return def.args.map((a) => a.replace('{rom}', rom).replace('{core}', core ?? ''))
+  return def.args.map((a) => a.replace('{rom}', rom).replace('{core}', core ?? '').replace('{titleId}', titleId ?? ''))
 }
 
 /** Compare deux versions numériques (« 1.10.2 » > « 1.9 ») ; les textes non numériques comptent pour 0. */
@@ -105,7 +111,7 @@ export interface EmulatorProgress {
 
 export interface LatestVersion { id: string; version: string | null; error?: string }
 
-export interface LaunchResult { ok: boolean; error?: 'noEmulator' | 'notInstalled' | 'noFile' | 'spawn' | 'unsupported' | 'running' | 'zipUnreadable' | 'ciaInstallFailed'; detail?: string }
+export interface LaunchResult { ok: boolean; error?: 'noEmulator' | 'notInstalled' | 'noFile' | 'spawn' | 'unsupported' | 'running' | 'zipUnreadable' | 'ciaInstallFailed' | 'vitaInstallFailed'; detail?: string }
 
 /** Présent quand le jeu s'est fermé (ou a planté) très vite après son lancement, sans que l'utilisateur ne l'ait fermé lui-même. */
 export interface QuickExit {
@@ -126,7 +132,9 @@ const KNOWN_FAILURES: readonly { pattern: RegExp; key: string }[] = [
   { pattern: /bios.*(missing|invalid|not found|refused)|no bios|aucun bios/i, key: 'play.quickExitBios' },
   { pattern: /firmware.*(missing|invalid|not found)/i, key: 'play.quickExitFirmware' },
   // Azahar (3DS) : échec de déchiffrement du contenu (clés AES incomplètes, ou graine manquante pour ce jeu précis).
-  { pattern: /failed to determine system mode/i, key: 'play.quickExit3dsCrypto' }
+  { pattern: /failed to determine system mode/i, key: 'play.quickExit3dsCrypto' },
+  // Vita3K refuse par principe les dumps au format Vitamin (corruption de sauvegardes, jeux cassés connus).
+  { pattern: /vitamin dump/i, key: 'play.quickExitVitaminDump' }
 ]
 
 /** Clé i18n d'une cause connue reconnue dans le journal, ou undefined si rien de reconnu (le journal brut reste la seule piste). */

@@ -8,7 +8,7 @@ import { CONSOLES, consoleById } from '@shared/consoles'
 import { EMULATORS } from '@shared/emulators'
 import type { CatalogPage } from '@shared/catalog'
 import type { LanguageSetting } from '@shared/settings'
-import type { LibraryEntry } from '@shared/library'
+import { orderConsolesByRecency, type LibraryEntry } from '@shared/library'
 import { focusEl, navItems, useNav } from './useNav'
 import { VirtualKeyboard } from './VirtualKeyboard'
 import { Detail } from './Detail'
@@ -22,7 +22,7 @@ interface Opened { gameId: number | null; entryId?: number }
 /** Dernière tuile ouverte : le focus y revient à la fermeture de la fiche. */
 let lastOpened: string | null = null
 
-function Tile({ id, gameId, title, cons, dim, fav, onOpen }: { id: string; gameId: number | null; title: string; cons: string; dim?: boolean; fav?: boolean; onOpen: () => void }) {
+function Tile({ id, gameId, title, cons, dim, fav, pinned, onOpen }: { id: string; gameId: number | null; title: string; cons: string; dim?: boolean; fav?: boolean; pinned?: boolean; onOpen: () => void }) {
   const tag = <Badge>{label(cons)}</Badge>
   const name = <span className="card-title">{title}</span>
   return (
@@ -31,6 +31,7 @@ function Tile({ id, gameId, title, cons, dim, fav, onOpen }: { id: string; gameI
         ? <Cover className="cover-fill" gameId={gameId} title={title} kind="tile">{name}{tag}</Cover>
         : <div className="cover-fill" style={artStyle(title)}>{name}{tag}</div>}
       {fav && <span className="fav-mark">♥</span>}
+      {pinned && <span className="pin-mark">★</span>}
     </button>
   )
 }
@@ -53,7 +54,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
 
   const playable = useMemo(() => entries.filter((e) => !e.missing).sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0) || a.title.localeCompare(b.title)), [entries])
   const q = query.trim().toLowerCase()
-  const libraryConsoles = useMemo(() => [...new Set(playable.map((e) => e.console))].sort((a, b) => label(a).localeCompare(label(b))), [playable])
+  const libraryConsoles = useMemo(() => orderConsolesByRecency(playable), [playable])
   const libShown = playable.filter((e) => (consoleTab === 'all' || e.console === consoleTab) && (!q || e.title.toLowerCase().includes(q)))
 
   // Catalogue : recherche côté principal (la même que la page classique), triée par popularité.
@@ -66,11 +67,16 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
     return () => { stale = true; clearTimeout(h) }
   }, [section, query, consoleTab, limit])
 
-  // Collections : seules celles qui ont au moins un jeu jouable ; sans choix explicite, la première.
+  // Collections : seules celles qui ont au moins un jeu jouable, plus « Favoris » en tête (mis en avant comme une
+  // collection bien que ça n'en soit pas techniquement une) dès qu'il y a au moins un favori. Sans choix explicite,
+  // la première (Favoris si présente, sinon la première vraie collection).
   const colList = useMemo(() => collections.filter((c) => playable.some((e) => e.collections.includes(c.id))), [collections, playable])
-  const activeCol = colList.find((c) => String(c.id) === consoleTab) ?? colList[0]
-  const colShown = activeCol ? playable.filter((e) => e.collections.includes(activeCol.id)) : []
-  const chips = section === 'collections' ? colList.map((c) => String(c.id)) : section === 'library' ? libraryConsoles : section === 'catalog' ? CONSOLES.filter((c) => (page?.consoles.find((x) => x.id === c.id)?.count ?? 0) > 0 || c.id === consoleTab).map((c) => c.id) : []
+  const hasFav = playable.some((e) => e.favorite)
+  const colKeys = useMemo(() => [...(hasFav ? ['fav'] : []), ...colList.map((c) => String(c.id))], [hasFav, colList])
+  const activeColKey = colKeys.includes(consoleTab) ? consoleTab : colKeys[0]
+  const activeCol = activeColKey && activeColKey !== 'fav' ? colList.find((c) => String(c.id) === activeColKey) : undefined
+  const colShown = activeColKey === 'fav' ? playable.filter((e) => e.favorite) : activeCol ? playable.filter((e) => e.collections.includes(activeCol.id)) : []
+  const chips = section === 'collections' ? colKeys : section === 'library' ? libraryConsoles : section === 'catalog' ? CONSOLES.filter((c) => (page?.consoles.find((x) => x.id === c.id)?.count ?? 0) > 0 || c.id === consoleTab).map((c) => c.id) : []
   const inGame = running.length > 0
   const overlay = keyboard || menu || opened !== null
 
@@ -89,7 +95,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   const cycleFilter = (d: 1 | -1): void => {
     if (!chips.length) return
     const all = section === 'collections' ? chips : ['all', ...chips]
-    const cur = section === 'collections' ? (activeCol ? String(activeCol.id) : '') : consoleTab
+    const cur = section === 'collections' ? (activeColKey ?? '') : consoleTab
     setConsoleTab(all[(Math.max(0, all.indexOf(cur)) + d + all.length) % all.length]); setLimit(PAGE)
   }
 
@@ -110,7 +116,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   const openEntry = (e: LibraryEntry): void => setOpened({ gameId: e.gameId, entryId: e.id })
   const openedEntry = opened?.entryId !== undefined ? entries.find((e) => e.id === opened.entryId) : undefined
   const playing = entries.find((e) => running.includes(e.id))
-  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} title={e.title} cons={e.console} fav={e.favorite} onOpen={() => openEntry(e)} />)
+  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} title={e.title} cons={e.console} fav={e.favorite} pinned={e.pinned} onOpen={() => openEntry(e)} />)
   const searchable = section === 'library' || section === 'catalog'
 
   return (
@@ -129,8 +135,8 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
         <div className="bp-chips">
           <span className="bp-key">LT</span>
           {(section === 'collections' ? chips : ['all', ...chips]).map((k) => {
-            const active = section === 'collections' ? String(activeCol?.id) === k : consoleTab === k
-            return <button key={k} data-nav className={`bp-chip${active ? ' active' : ''}`} onClick={() => { setConsoleTab(k); setLimit(PAGE) }}>{k === 'all' ? t('bp.all') : section === 'collections' ? colList.find((c) => String(c.id) === k)?.name : label(k)}</button>
+            const active = section === 'collections' ? activeColKey === k : consoleTab === k
+            return <button key={k} data-nav className={`bp-chip${active ? ' active' : ''}`} onClick={() => { setConsoleTab(k); setLimit(PAGE) }}>{k === 'all' ? t('bp.all') : section === 'collections' ? (k === 'fav' ? t('home.favorites') : colList.find((c) => String(c.id) === k)?.name) : label(k)}</button>
           })}
           <span className="bp-key">RT</span>
         </div>
@@ -149,7 +155,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
 
         {section === 'library' && (playable.length === 0 ? <p className="empty">{t('bp.empty')}</p> : libShown.length === 0 ? <p className="empty">{t('library.noMatch')}</p> : <div className="bp-grid">{libTiles(libShown, 'l')}</div>)}
 
-        {section === 'collections' && (colList.length === 0 ? <p className="empty">{collections.length === 0 ? t('bp.noCollections') : t('bp.emptyCollection')}</p> : <div className="bp-grid">{libTiles(colShown, 'k')}</div>)}
+        {section === 'collections' && (colKeys.length === 0 ? <p className="empty">{collections.length === 0 ? t('bp.noCollections') : t('bp.emptyCollection')}</p> : <div className="bp-grid">{libTiles(colShown, 'k')}</div>)}
 
         {section === 'catalog' && (
           <div className="bp-grid">

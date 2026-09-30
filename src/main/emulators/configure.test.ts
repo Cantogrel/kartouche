@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EMULATORS, emulatorMaker, emulatorRank } from '@shared/emulators'
-import { applyDolphinPad, configureEmulator, isUntouchedPadFile, patchCfg, patchIni, patchYaml, resolutionTier, setCfgLanguage, setSysconfLanguage, type ConfigContext } from './configure'
+import { applyDolphinFastDiscExclusion, applyDolphinPad, configureEmulator, isUntouchedPadFile, patchCfg, patchIni, patchYaml, resolutionTier, setCfgLanguage, setSysconfLanguage, type ConfigContext } from './configure'
 
 describe('patchIni / patchCfg', () => {
   it('met à jour, ajoute et conserve le reste', () => {
@@ -80,6 +80,8 @@ describe('configuration automatique des émulateurs', () => {
     expect(ini).toMatch(/Fullscreen = true/)
     expect(ini).toContain('PermissionAsked = true')
     expect(ini).toContain('ConfirmStop = false')
+    // Réduit les temps de lancement/chargement (plus sensible sur Wii) ; désactivé au cas par cas pour les rares jeux qui en dépendent (voir applyDolphinFastDiscExclusion).
+    expect(ini).toContain('FastDiscSpeed = true')
     expect(read('User', 'Config', 'GFX.ini')).toContain('InternalResolution = 3')
     // Sans Dolphin.exe dans le dossier de test : clavier seul, avec le périphérique par défaut (sinon les touches ne répondent pas).
     const pad = read('User', 'Config', 'GCPadNew.ini')
@@ -97,6 +99,14 @@ describe('configuration automatique des émulateurs', () => {
     expect(pad).not.toContain('SDL/')
     await applyDolphinPad(dir, null)
     expect(read('User', 'Config', 'GCPadNew.ini')).not.toContain('XInput')
+  })
+  it('Dolphin : FastDiscSpeed désactivé seulement pour un jeu de la liste d’exclusion connue (aucun pour l’instant), sans toucher aux autres jeux', async () => {
+    // Liste vide par défaut (voir DOLPHIN_FAST_DISC_EXCLUSIONS) : rien n'est écrit sans `force`.
+    await applyDolphinFastDiscExclusion(dir, 'GALE01')
+    expect(existsSync(join(dir, 'User', 'GameSettings', 'GALE01.ini'))).toBe(false)
+    // `force` (détection automatique d'un plantage, voir launcher.ts) contourne la liste.
+    await applyDolphinFastDiscExclusion(dir, 'GFTE01', true)
+    expect(read('User', 'GameSettings', 'GFTE01.ini')).toBe('[Core]\nFastDiscSpeed = false\n')
   })
   it('Dolphin : les liaisons modifiées à la main ne sont jamais réécrites, un fichier inutilisable l’est', () => {
     expect(isUntouchedPadFile('')).toBe(true)
@@ -116,6 +126,30 @@ describe('configuration automatique des émulateurs', () => {
     writeFileSync(join(dir, 'config.yml'), 'mine: 1\n')
     await configureEmulator('rpcs3', dir, ctx())
     expect(read('config.yml')).toBe('mine: 1\n')
+  })
+  it('RPCS3 : plein écran et boîtes de confirmation de démarrage/fermeture désactivées', async () => {
+    await configureEmulator('rpcs3', dir, ctx())
+    const ini = read('config', 'GuiConfigs', 'CurrentSettings.ini')
+    expect(ini).toContain('startGameFullscreen=true')
+    expect(ini).toContain('confirmationBoxBootGame=false')
+    expect(ini).toContain('confirmationBoxExitGame=false')
+  })
+  it('PPSSPP : confirmation de fermeture désactivée', async () => {
+    await configureEmulator('ppsspp', dir, ctx())
+    expect(read('memstick', 'PSP', 'SYSTEM', 'ppsspp.ini')).toContain('AskForExitConfirmationAfterSeconds = 0')
+  })
+  it('Vita3K : bienvenue et avertissement firmware manquant désactivés (config.yml déjà présent, pas besoin de lancer l’exe)', async () => {
+    writeFileSync(join(dir, 'config.yml'), 'sys-lang: 1\nshow-welcome: true\nwarn-missing-firmware: true\nconfirm_exit_app: true\n')
+    await configureEmulator('vita3k', dir, ctx())
+    const yml = read('config.yml')
+    expect(yml).toContain('show-welcome: false')
+    // Sans ça, Vita3K bloque l'auto-boot d'un jeu derrière une boîte de dialogue jamais fermée (assistant BIOS = firmware de base seul, jamais les polices).
+    expect(yml).toContain('warn-missing-firmware: false')
+  })
+  it('Vita3K : confirmation de fermeture Qt désactivée (fichier ini séparé de config.yml)', async () => {
+    await configureEmulator('vita3k', dir, ctx())
+    // La vraie boîte « Exit App? » constatée en vrai est un réglage Qt (gui-qt/src/game_window.cpp), pas config.yml.
+    expect(read('gui-configs', 'CurrentSettings.ini')).toContain('mw_confirmExitApp=false')
   })
   it('melonDS : un melonDS.toml déjà présent (lancement manuel avant l’installation par RomVault) est complété, pas ignoré', async () => {
     writeFileSync(join(dir, 'melonDS.toml'), 'mine = 1\n')
@@ -138,6 +172,13 @@ describe('configuration automatique des émulateurs', () => {
     // Une 2e configuration ne perd pas ce qu'une 1re a écrit.
     await configureEmulator('melonds', dir, ctx({ lang: 'en', displayHeight: 2160 }))
     expect(read('melonDS.toml')).toContain('[3D]\nRenderer = 1')
+  })
+  it('melonDS : [Instance0] est écrit en table explicite avant ses sous-tables, sinon melonDS plante au 1er lancement (toml::serializer implicit table)', async () => {
+    await configureEmulator('melonds', dir, ctx())
+    const t = read('melonDS.toml')
+    expect(t).toContain('[Instance0]')
+    expect(t.indexOf('[Instance0]\n')).toBeLessThan(t.indexOf('[Instance0.Firmware]'))
+    expect(t.indexOf('[Instance0]\n')).toBeLessThan(t.indexOf('[Instance0.Keyboard]'))
   })
   it('Azahar : plein écran, pas de confirmation de fermeture, profil manette activé sans toucher au clavier', async () => {
     await configureEmulator('azahar', dir, ctx())

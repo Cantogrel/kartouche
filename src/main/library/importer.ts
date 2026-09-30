@@ -55,6 +55,13 @@ async function prepare(file: string, extra: string[], onBytes?: (bytes: number) 
   if (ext === 'zip') {
     const all = await readZip(file)
     if (!all) return 'archive illisible'
+    // Paquet PS Vita (contenu à la racine du zip : eboot.bin + sce_sys/, comme un vrai .vpk qui n'est qu'un zip renommé) :
+    // vérifié AVANT le cas single-ROM ci-dessous, sinon son eboot.bin (extension .bin) serait confondu avec un disque
+    // PS1/PS2 générique. Le fichier entier EST la ROM, jamais extrait — Vita3K sait l'installer directement, .zip ou .vpk indifféremment.
+    if (all.some((z) => /(^|\/)eboot\.bin$/i.test(z.name)) && all.some((z) => /^sce_sys\//i.test(z.name))) {
+      const h = await hashFile(file, onBytes)
+      return { crc: h.crc, sha1: h.sha1, size: (await stat(file)).size, name: stemOf(file), ext: 'vpk' }
+    }
     const roms = all.filter((z) => extOf(z.name) in ROM_EXTENSIONS)
     if (roms.length === 1) {
       const z = roms[0]

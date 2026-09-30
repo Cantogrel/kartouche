@@ -1,4 +1,4 @@
-import { useEffect, type MouseEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { create } from 'zustand'
 import { t } from '@/i18n'
 import { useApp } from '@/store/app'
@@ -71,6 +71,8 @@ export function EntryMenu() {
   const { at, hide } = useEntryMenu()
   const entry = useLibrary((s) => s.entries.find((e) => e.id === at?.entryId))
   const back = useApp((s) => s.back)
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
   useEffect(() => {
     if (!at) return
     const close = (): void => hide()
@@ -82,12 +84,19 @@ export function EntryMenu() {
       window.removeEventListener('contextmenu', close, true); window.removeEventListener('keydown', key)
     }
   }, [at, hide])
+  // Reste dans la fenêtre quelle que soit sa taille réelle (nombre d'actions, échelle d'interface, longueur des
+  // libellés traduits) : mesurée après rendu plutôt qu'estimée, sinon un menu déborde dès qu'il est un peu plus
+  // grand que prévu (ex. clic droit tout en bas de la liste).
+  useLayoutEffect(() => {
+    if (!at || !ref.current) { setPos(null); return }
+    const { offsetWidth: w, offsetHeight: h } = ref.current
+    setPos({ x: Math.max(8, Math.min(at.x, window.innerWidth - w - 8)), y: Math.max(8, Math.min(at.y, window.innerHeight - h - 8)) })
+  }, [at, entry])
   if (!at || !entry) return null
   const actions = actionsFor(entry, back)
-  // Reste dans la fenêtre : on remonte le menu s'il déborde en bas ou à droite.
-  const x = Math.min(at.x, window.innerWidth - 250), y = Math.max(8, Math.min(at.y, window.innerHeight - actions.length * 38 - 16))
+  const { x, y } = pos ?? at
   return (
-    <div className="ctx" style={{ left: x, top: y }} onClick={(e) => e.stopPropagation()}>
+    <div ref={ref} className="ctx" style={{ left: x, top: y }} onClick={(e) => e.stopPropagation()}>
       <div className="ctx-title">{entry.title}</div>
       {actions.map((a) => (
         <button key={a.key} className={a.danger ? 'danger' : ''} onClick={() => { hide(); void a.run() }}>{a.label}</button>

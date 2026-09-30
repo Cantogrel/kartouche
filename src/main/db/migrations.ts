@@ -76,7 +76,10 @@ export const MIGRATIONS: readonly string[] = [
   INSERT INTO library_content_v12 SELECT * FROM library_content;
   DROP TABLE library_content;
   ALTER TABLE library_content_v12 RENAME TO library_content;
-  CREATE INDEX library_content_lib ON library_content (library_id)`
+  CREATE INDEX library_content_lib ON library_content (library_id)`,
+  // v13 : un .vpk Vita3K ne boote jamais tout seul après un install par chemin de contenu (constaté en vrai) ; on
+  // installe une fois, on garde le Title ID annoncé par Vita3K, puis on relance toujours par ce Title ID (`-r`).
+  `ALTER TABLE library ADD COLUMN vita_title_id TEXT`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

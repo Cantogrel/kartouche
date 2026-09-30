@@ -337,8 +337,15 @@ async function configureDolphin(dir: string, ctx: ConfigContext, tier: 1 | 2 | 3
   await writeIni(join(cfg, 'Dolphin.ini'), {
     Analytics: { PermissionAsked: true, Enabled: false },
     Interface: { LanguageCode: fr ? 'fr' : 'en', ConfirmStop: false },
-    // Langue de la GameCube : 0 anglais, 1 allemand, 2 français, 3 espagnol, 4 italien, 5 néerlandais.
-    Core: { SelectedLanguage: fr ? 2 : 0 },
+    Core: {
+      // Langue de la GameCube : 0 anglais, 1 allemand, 2 français, 3 espagnol, 4 italien, 5 néerlandais.
+      SelectedLanguage: fr ? 2 : 0,
+      // Simule une vitesse de lecture de disque irréaliste : réduit nettement le temps de lancement et les temps de
+      // chargement (plus sensible sur Wii, dont les disques transportent plus de données que la GameCube). Quelques
+      // jeux dépendent du vrai timing du lecteur pour démarrer (voir DOLPHIN_FAST_DISC_EXCLUSIONS, désactivé au cas
+      // par cas via un fichier GameSettings) — connu de la communauté Dolphin, pas une hypothèse RomVault.
+      FastDiscSpeed: true
+    },
     Display: { Fullscreen: true }
   })
   await writeIni(join(cfg, 'GFX.ini'), { Settings: { InternalResolution: pick(tier, [3, 4, 6]) } })
@@ -351,6 +358,30 @@ async function configureDolphin(dir: string, ctx: ConfigContext, tier: 1 | 2 | 3
   }
   // Clavier seul à l'installation ; la manette est ajoutée à chaque lancement selon ce qui est branché (applyDolphinPad).
   await applyDolphinPad(dir, null)
+}
+
+/**
+ * Identifiants disque (6 caractères, voir `readDiscId` dans `saves.ts`) des jeux confirmés incompatibles avec
+ * `FastDiscSpeed` (voir `configureDolphin`) — vide pour l'instant : la base officielle des réglages par jeu de Dolphin
+ * lui-même (Data/Sys/GameSettings, vérifiée sur GitHub) ne liste aujourd'hui aucun jeu qui en a besoin désactivé (elle
+ * force au contraire FastDiscSpeed=True pour Bully: Scholarship Edition, RB7E54/RB7P54 — déjà géré par Dolphin, aucune
+ * action nécessaire ici). Un cas cité par une recherche web pour Mario Golf: Toadstool Tour (GFTE01) n'a pas résisté
+ * à la vérification (absent de la base Dolphin, absent du wiki, absent des recherches ciblées) : ne pas le réutiliser.
+ * Cette liste n'a donc vocation à être alimentée que par du confirmé (source primaire) ou par la détection automatique
+ * (voir `retryDolphinWithoutFastDiscSpeed` dans `launcher.ts`, qui écrit directement le fichier GameSettings sans
+ * passer par cette liste).
+ */
+const DOLPHIN_FAST_DISC_EXCLUSIONS = new Set<string>([])
+
+/**
+ * Désactive `FastDiscSpeed` pour un jeu, dans son propre fichier GameSettings (sans toucher au réglage global ni aux
+ * autres jeux). `force` contourne la liste d'exclusion connue (utilisé par la détection automatique d'un plantage au
+ * lancement, voir `launcher.ts`) ; sans lui, rien n'est écrit pour un jeu absent de la liste. Appelé à chaque
+ * lancement (comme `applyDolphinPad`) : `readDiscId` a besoin du fichier ROM réel, pas seulement de sa console.
+ */
+export async function applyDolphinFastDiscExclusion(dir: string, gameId: string, force = false): Promise<void> {
+  if (!force && !DOLPHIN_FAST_DISC_EXCLUSIONS.has(gameId)) return
+  await writeIni(join(dir, 'User', 'GameSettings', `${gameId}.ini`), { Core: { FastDiscSpeed: false } })
 }
 
 // --- DuckStation / PCSX2 : clavier + première manette SDL (tout type de manette) ---------------------------------------------
@@ -487,6 +518,11 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
       let text = await readText(file)
       text = setTomlKeys(text, '3D', { Renderer: 1 })
       text = setTomlKeys(text, '3D.GL', { ScaleFactor: pick(tier, [6, 8, 12]) })
+      // [Instance0] doit exister EN TANT QUE SECTION EXPLICITE avant ses sous-tables (Firmware, Keyboard) : sinon TOML ne
+      // crée qu'une table « implicite » pour Instance0, que melonDS refuse de réécrire au premier lancement
+      // (`toml::serializer: an implicit table cannot have non-table value`, plantage immédiat ; fonctionne ensuite, une
+      // fois que melonDS a lui-même réécrit un fichier complet avec un [Instance0] explicite).
+      text = setTomlKeys(text, 'Instance0', {})
       text = setTomlKeys(text, 'Instance0.Firmware', { OverrideSettings: true, Language: fr ? 2 : 1 })
       // Valeurs Qt::Key (pas les codes VK de Windows) : lettres = même valeur que l'ASCII majuscule, touches spéciales
       // = 0x0100_0000 + offset (Qt::Key_Backspace=16777219, Key_Return=16777220, Key_Left=16777234, Key_Up=16777235, Key_Right=16777236, Key_Down=16777237).
@@ -525,21 +561,42 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
       }, '=')
     case 'ppsspp':
       return writeIni(join(dir, 'memstick', 'PSP', 'SYSTEM', 'ppsspp.ini'), {
-        General: { Language: fr ? 'fr_FR' : 'en_US' },
+        // AskForExitConfirmationAfterSeconds = 0 : sans ça, PPSSPP demande confirmation à la fermeture (bouton,
+        // Retour+Start) dès que la partie dure depuis plus de 5 min (défaut 300) — comme confirmClose pour Azahar.
+        General: { Language: fr ? 'fr_FR' : 'en_US', AskForExitConfirmationAfterSeconds: 0 },
         SystemParam: { Language: fr ? 2 : 1 },
         // 0 = résolution automatique : celle de la fenêtre, donc de l'écran en plein écran.
         Graphics: { FullScreen: true, InternalResolution: 0 }
       })
     case 'rpcs3':
       await createOnce(join(dir, 'config', 'config.yml'), `Video:\n  Resolution Scale: ${pick(tier, [150, 200, 300])}\nSystem:\n  Language: ${fr ? 'French' : 'English (US)'}\n`)
-      return writeIni(join(dir, 'config', 'GuiConfigs', 'CurrentSettings.ini'), { main_window: { startGameFullscreen: true } }, '=')
+      // confirmationBoxBootGame/confirmationBoxExitGame à false : sans ça, RPCS3 affiche une boîte « Boot this game? »
+      // à chaque lancement et « Exit RPCS3? » à la fermeture (bouton, Retour+Start) au lieu de fermer — comme
+      // confirmClose pour Azahar / confirmStop pour Eden.
+      return writeIni(join(dir, 'config', 'GuiConfigs', 'CurrentSettings.ini'), {
+        main_window: { startGameFullscreen: true, confirmationBoxBootGame: false, confirmationBoxExitGame: false }
+      }, '=')
     case 'vita3k': {
+      // mw_confirmExitApp à false (réglage Qt, fichier ini indépendant de config.yml, fusion sans besoin que Vita3K
+      // ait déjà tourné) : sans ça, une fermeture demandée par RomVault (bouton, Retour+Start) ouvre « Exit App? / Do
+      // you really want to exit the app? » au lieu de fermer — vérifié dans le code source de Vita3K (clé exacte
+      // confirmée dans gui-qt/src/game_window.cpp).
+      await writeIni(join(dir, 'gui-configs', 'CurrentSettings.ini'), { MainWindow: { mw_confirmExitApp: false } }, '=')
       // Vita3K ignore un config.yml partiel : on le laisse créer le sien (premier démarrage), puis on en change les valeurs.
       const file = join(dir, 'config.yml')
       if (!existsSync(file)) await runOnceUntil(join(dir, 'Vita3K.exe'), dir, () => existsSync(file) && readFileSync(file, 'utf8').includes('sys-lang'))
       if (!existsSync(file)) return
-      await writeFile(file, patchYaml(await readText(file), { 'sys-lang': fr ? 2 : 1, 'resolution-multiplier': pick(tier, [2, 3, 4]), 'boot-apps-full-screen': true }))
-      return
+      // show-welcome à false : sans ça, Vita3K réaffiche sa fenêtre « Welcome to Vita3K » à chaque lancement de jeu,
+      // même une fois le firmware installé — comme confirmClose pour Azahar. warn-missing-firmware à false : notre
+      // assistant BIOS n'installe que le firmware de base, jamais le paquet de polices (étape séparée, facultative) ;
+      // sans ce réglage, Vita3K bloque l'auto-boot derrière un avertissement « firmware manquant » qui attend un clic
+      // (constaté en vrai : le jeu ne démarre jamais tant que cette boîte n'est pas fermée). confirm_exit_app : clé
+      // héritée d'une ancienne interface (ImGui), gardée sans certitude qu'elle serve encore avec l'interface Qt
+      // actuelle — le vrai réglage Qt est mw_confirmExitApp ci-dessus.
+      return writeFile(file, patchYaml(await readText(file), {
+        'sys-lang': fr ? 2 : 1, 'resolution-multiplier': pick(tier, [2, 3, 4]), 'boot-apps-full-screen': true,
+        'show-welcome': false, 'warn-missing-firmware': false, 'confirm_exit_app': false
+      }))
     }
   }
 }

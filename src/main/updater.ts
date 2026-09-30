@@ -13,10 +13,26 @@ function set(patch: Partial<UpdateState>): void {
 
 export const updateState = (): UpdateState => state
 
-/** `releaseNotes` d'electron-updater : texte simple, ou une entrée par version sautée (mise à jour tardive) qu'on concatène. */
+/**
+ * electron-updater lit les notes de version depuis le flux Atom des releases GitHub, qui les fournit en HTML déjà
+ * rendu (`<ul><li>…`) plutôt qu'en markdown brut : on les reconvertit en texte simple pour rester affichable tel
+ * quel, comme le texte du CHANGELOG.md local (voir `localNotes`).
+ */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<li>/gi, '- ')
+    .replace(/<\/(li|p|div)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&nbsp;/g, ' ')
+    .split('\n').map((l) => l.trim()).filter(Boolean).join('\n')
+}
+
+/** `releaseNotes` d'electron-updater : texte simple ou HTML, ou une entrée par version sautée (mise à jour tardive) qu'on concatène. */
 function notesText(notes: string | { version: string; note: string | null }[] | null | undefined): string {
   if (!notes) return ''
-  return typeof notes === 'string' ? notes : notes.map((n) => n.note ?? '').filter(Boolean).join('\n\n')
+  const text = typeof notes === 'string' ? notes : notes.map((n) => n.note ?? '').filter(Boolean).join('\n\n')
+  return /<[a-z][\s\S]*>/i.test(text) ? htmlToText(text) : text
 }
 
 function put(db: DatabaseSync, key: string, value: unknown): void {
@@ -52,7 +68,9 @@ export function ensureLocalChangelog(db: DatabaseSync): void {
 /** Dernier changelog connu (celui de la mise à jour la plus récemment téléchargée), quelle que soit la version en cours. */
 export function lastChangelog(db: DatabaseSync): UpdateChangelog {
   const c = getRaw(db, 'changelog:data') as UpdateChangelog | undefined
-  return c ?? null
+  if (!c) return null
+  // Auto-corrige les notes stockées avant le passage de notesText() par htmlToText() (ex. mise à jour vers la 0.1.7).
+  return /<[a-z][\s\S]*>/i.test(c.notes) ? { ...c, notes: htmlToText(c.notes) } : c
 }
 
 /**

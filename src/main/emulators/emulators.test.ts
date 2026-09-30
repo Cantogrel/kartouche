@@ -43,6 +43,11 @@ describe('émulateurs : définitions', () => {
     expect(buildArgs(emulatorById('retroarch')!, 'C:/r/a.gba', 'gba')).toEqual(['-f', '-L', 'cores/mgba_libretro.dll', 'C:/r/a.gba'])
     expect(buildArgs(emulatorById('dolphin')!, 'x.iso', 'wii')).toEqual(['-b', '-e', 'x.iso'])
   })
+  it('Vita3K : {titleId} remplacé par le Title ID déjà installé (jamais le .vpk, qui n’auto-boote pas — voir launcher.ts)', () => {
+    expect(buildArgs(emulatorById('vita3k')!, 'x.vpk', 'vita', 'PCSA00029')).toEqual(['-r', 'PCSA00029'])
+    // Pas encore connu (pas encore installé) : la substitution laisse une chaîne vide plutôt que planter.
+    expect(buildArgs(emulatorById('vita3k')!, 'x.vpk', 'vita')).toEqual(['-r', ''])
+  })
   it('refuse une console que l’émulateur ne gère pas', () => {
     expect(buildArgs(emulatorById('dolphin')!, 'x', 'ps1')).toBeNull()
     expect(emulatorForConsole('switch')?.id).toBe('eden')
@@ -116,6 +121,8 @@ describe('émulateurs : installation', () => {
     // un dump mal étiqueté « decrypted » qui ne l'est pas vraiment — Azahar embarque ses propres clés depuis fin 2024, ce n'est
     // presque jamais un problème de clés manquantes de notre côté, voir azahar-emu/azahar#1383).
     expect(explainFailure('Core <Critical> core\\core.cpp:Core::System::Load:353: Failed to determine system mode (Error 8)!')).toBe('play.quickExit3dsCrypto')
+    // Constaté en vrai sur un .vpk Uncharted : Vita3K refuse tout dump au format Vitamin (corruption de sauvegardes connue).
+    expect(explainFailure('[C] [get_archive_contents_path]: A Vitamin dump was detected, aborting installation...')).toBe('play.quickExitVitaminDump')
     expect(explainFailure('I/Core: démarrage normal')).toBeUndefined()
     expect(explainFailure(undefined)).toBeUndefined()
   })

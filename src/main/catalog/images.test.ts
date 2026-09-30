@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { displayTitle } from '@shared/catalog'
-import { cachedImage, sniff } from './images'
+import { displayTitle, type CatalogGame } from '@shared/catalog'
+import { cachedImage, sgdbId, sniff } from './images'
 import { fetchSwitchCatalog } from './switch'
 import { syncCatalog } from './sync'
 import { DEFAULT_SETTINGS } from '@shared/settings'
@@ -39,6 +39,29 @@ describe('cachedImage', () => {
     expect(await cachedImage(dir, '3', [async () => { calls++; return null }])).toBeNull()
     expect(await cachedImage(dir, '3', [async () => { calls++; return PNG }])).toBeNull() // marqueur d’absence
     expect(calls).toBe(2)
+  })
+})
+
+describe('sgdbId', () => {
+  const game = (name: string): CatalogGame => ({ id: 1, console: 'gb', title: name, name, region: 'France', year: null, genre: null, developer: null, crc: null, sha1: null, size: null, popularity: null, img: null })
+  const withFetch = async (data: unknown, run: () => Promise<void>): Promise<void> => {
+    const real = globalThis.fetch
+    globalThis.fetch = (async () => new Response(JSON.stringify({ data }))) as typeof fetch
+    try { await run() } finally { globalThis.fetch = real }
+  }
+  // Bug vécu : Pokémon Jaune (titre français, absent tel quel de SteamGridDB) se voyait attribuer la jaquette de
+  // Pokémon Rouge, premier résultat de l'autocomplete pour une franchise à plusieurs entrées très proches.
+  it("ne retient pas le premier résultat de l'autocomplete si aucun ne correspond au nom recherché (autre jeu de la même franchise)", async () => {
+    const db = new DatabaseSync(':memory:'); migrate(db)
+    await withFetch([{ id: 999, name: 'Pokemon Red Version' }], async () => {
+      expect(await sgdbId(db, game('Pokemon - Version Jaune - Edition Speciale Pikachu'), 'k')).toBeNull()
+    })
+  })
+  it('ignore accents/ponctuation/casse pour reconnaître un vrai match', async () => {
+    const db = new DatabaseSync(':memory:'); migrate(db)
+    await withFetch([{ id: 42, name: 'Pokémon: Yellow Version' }], async () => {
+      expect(await sgdbId(db, game('Pokemon - Yellow Version'), 'k')).toBe(42)
+    })
   })
 })
 

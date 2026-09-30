@@ -10,11 +10,15 @@ interface EmulatorsState {
   checking: boolean
   /** Jeux (ids de la bibliothèque) actuellement ouverts dans un émulateur. */
   running: number[]
+  /** Clic sur Jouer en cours de traitement (avant même que le jeu démarre) : install Vita3K en amont, par ex., peut prendre plusieurs minutes. */
+  launching: number[]
   /** Dernière fermeture suspecte (probable échec de lancement) par jeu ; effacée au lancement suivant. */
   quickExits: Record<number, QuickExit>
   refresh: () => Promise<void>
   install: (id: string) => Promise<void>
   uninstall: (id: string) => Promise<void>
+  /** Désinstalle tous les émulateurs installés (Réglages → Zone dangereuse). */
+  uninstallAll: () => Promise<void>
   locate: (id: string) => Promise<void>
   check: () => Promise<void>
   play: (entryId: number) => Promise<LaunchResult>
@@ -23,7 +27,7 @@ interface EmulatorsState {
 }
 
 export const useEmulators = create<EmulatorsState>((set, get) => ({
-  list: [], loaded: false, progress: {}, errors: {}, latest: {}, checking: false, running: [], quickExits: {},
+  list: [], loaded: false, progress: {}, errors: {}, latest: {}, checking: false, running: [], launching: [], quickExits: {},
   refresh: async () => {
     const [list, running] = await Promise.all([window.api.invoke('emulators:list'), window.api.invoke('game:running')])
     set({ list, running, loaded: true })
@@ -40,6 +44,10 @@ export const useEmulators = create<EmulatorsState>((set, get) => ({
     await get().refresh()
   },
   uninstall: async (id) => { await window.api.invoke('emulators:uninstall', id); await get().refresh() },
+  uninstallAll: async () => {
+    for (const e of get().list.filter((e) => e.installed)) await window.api.invoke('emulators:uninstall', e.id)
+    await get().refresh()
+  },
   locate: async (id) => { if (await window.api.invoke('emulators:locate', id)) await get().refresh() },
   check: async () => {
     set({ checking: true })
@@ -50,13 +58,18 @@ export const useEmulators = create<EmulatorsState>((set, get) => ({
   },
   play: async (entryId) => {
     get().dismissQuickExit(entryId)
-    const r = await window.api.invoke('game:play', entryId)
-    // Échec connu avant même le lancement (zip illisible, .cia refusé…) : même vitrine que les fermetures rapides,
-    // plutôt qu'un texte perdu à côté du bouton — l'utilisateur ne l'associe pas sinon au bon message.
-    if (!r.ok && r.error && r.error !== 'running') {
-      set((s) => ({ quickExits: { ...s.quickExits, [entryId]: { elapsedMs: 0, immediate: r.error, log: r.detail } } }))
+    set((s) => ({ launching: [...s.launching, entryId] }))
+    try {
+      const r = await window.api.invoke('game:play', entryId)
+      // Échec connu avant même le lancement (zip illisible, .cia refusé…) : même vitrine que les fermetures rapides,
+      // plutôt qu'un texte perdu à côté du bouton — l'utilisateur ne l'associe pas sinon au bon message.
+      if (!r.ok && r.error && r.error !== 'running') {
+        set((s) => ({ quickExits: { ...s.quickExits, [entryId]: { elapsedMs: 0, immediate: r.error, log: r.detail } } }))
+      }
+      return r
+    } finally {
+      set((s) => ({ launching: s.launching.filter((x) => x !== entryId) }))
     }
-    return r
   },
   dismissQuickExit: (entryId) => set((s) => {
     if (!(entryId in s.quickExits)) return s

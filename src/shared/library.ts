@@ -1,3 +1,5 @@
+import { CONSOLES } from './consoles'
+
 /** Extensions de ROM reconnues → consoles possibles (plusieurs = ambigu, tranché par le hash ou le nom). */
 export const ROM_EXTENSIONS: Record<string, readonly string[]> = {
   nes: ['nes'], unf: ['nes'], unif: ['nes'],
@@ -5,11 +7,19 @@ export const ROM_EXTENSIONS: Record<string, readonly string[]> = {
   z64: ['n64'], n64: ['n64'], v64: ['n64'],
   gb: ['gb'], gbc: ['gbc'], gba: ['gba'], nds: ['nds'],
   '3ds': ['n3ds'], cci: ['n3ds'], cxi: ['n3ds'], cia: ['n3ds'],
-  gc: ['gc'], gcm: ['gc'], gcz: ['gc'], ciso: ['gc'], rvz: ['gc', 'wii'], wbfs: ['wii'], wad: ['wii'],
+  // Pas de « gc » (n'existe pas : Dolphin ne connaît que .gcm/.iso/.gcz/.ciso/.rvz/.wia pour un dump GameCube, jamais
+  // une extension .gc nue — vérifié dans la liste d'extensions du binaire de Dolphin, aucune trace ailleurs non plus).
+  gcm: ['gc'], gcz: ['gc'], ciso: ['gc'], rvz: ['gc', 'wii'], wbfs: ['wii'], wad: ['wii'],
   wua: ['wiiu'], wud: ['wiiu'], wux: ['wiiu'], rpx: ['wiiu'],
-  nsp: ['switch'], xci: ['switch'], nsz: ['switch'], xcz: ['switch'],
-  pbp: ['ps1', 'psp'], ecm: ['ps1'], cso: ['ps2', 'psp'], pkg: ['ps3'], vpk: ['vita'],
-  iso: ['gc', 'wii', 'ps1', 'ps2', 'ps3', 'psp'], chd: ['ps1', 'ps2'], cue: ['ps1', 'ps2'], bin: ['ps1', 'ps2'], img: ['ps1', 'ps2']
+  // Pas de .nsz/.xcz : formats compressés qu'Eden ne sait pas ouvrir (vérifié : aucune trace dans son binaire), il
+  // faudrait les décompresser en .nsp/.xci avant import (outil externe « nsz ») — jamais implémenté ici.
+  nsp: ['switch'], xci: ['switch'],
+  // Pas de .pkg : RPCS3 a besoin de l'installer d'abord (--installpkg, vérifié dans son binaire, distinct du boot
+  // direct --no-gui) — même famille de piège que le .vpk Vita3K, jamais vérifié faute d'un vrai fichier .pkg. .iso
+  // fonctionne directement pour PS3, en attendant une vraie investigation si le besoin se présente.
+  pbp: ['ps1', 'psp'], ecm: ['ps1'], cso: ['ps2', 'psp'], vpk: ['vita'],
+  // .img : legitime seulement pour PS1 (DuckStation) — absent de la liste de formats de PCSX2 (PS2).
+  iso: ['gc', 'wii', 'ps1', 'ps2', 'ps3', 'psp'], chd: ['ps1', 'ps2'], cue: ['ps1', 'ps2'], bin: ['ps1', 'ps2'], img: ['ps1']
 }
 
 /** Extensions de ROM acceptées pour un ensemble de consoles (+ `.zip`, toujours accepté). Triées, sans doublon. */
@@ -43,6 +53,26 @@ export interface LibraryEntry {
 }
 
 export interface Collection { id: number; name: string; count: number }
+
+/**
+ * Consoles présentes dans la bibliothèque, triées par jeu le plus récemment lancé en tête (la console du tout
+ * dernier lancement passe première) ; les consoles sans aucun historique de lancement suivent, dans l'ordre du
+ * catalogue (`CONSOLES` : Nintendo puis Sony, chronologique).
+ */
+export function orderConsolesByRecency(entries: readonly LibraryEntry[]): string[] {
+  const lastPlayedByConsole = new Map<string, number>()
+  for (const e of entries) {
+    if (e.lastPlayed === null) continue
+    const prev = lastPlayedByConsole.get(e.console)
+    if (prev === undefined || e.lastPlayed > prev) lastPlayedByConsole.set(e.console, e.lastPlayed)
+  }
+  const catalogRank = new Map(CONSOLES.map((c, i) => [c.id, i]))
+  const [withHistory, withoutHistory] = [[], []] as [string[], string[]]
+  for (const c of new Set(entries.map((e) => e.console))) (lastPlayedByConsole.has(c) ? withHistory : withoutHistory).push(c)
+  withHistory.sort((a, b) => lastPlayedByConsole.get(b)! - lastPlayedByConsole.get(a)!)
+  withoutHistory.sort((a, b) => (catalogRank.get(a) ?? Infinity) - (catalogRank.get(b) ?? Infinity))
+  return [...withHistory, ...withoutHistory]
+}
 
 /** Mise à jour ou DLC Switch (identifié par Title ID) rattaché à un jeu de la bibliothèque plutôt que listé à part. */
 export interface LibraryContentItem {

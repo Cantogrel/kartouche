@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { existsSync } from 'node:fs'
 import { copyFile, rm } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import { cueFiles } from './importer'
 import { identify } from './identify'
@@ -91,25 +92,51 @@ async function deleteRomFiles(path: string): Promise<void> {
   for (const f of [path, ...tracks]) await rm(f, { force: true })
 }
 
+// Vita3K n'a pas de mode portable (voir emulators.ts) : ses données vivent dans le dossier utilisateur Windows, pas
+// dans data/emulators/vita3k comme les autres émulateurs.
+const vita3kUserDir = (): string => join(homedir(), 'AppData', 'Roaming', 'Vita3K', 'Vita3K')
+
 /**
  * Suppression, au choix : `file` (ROM supprimée, le jeu reste sans fichier), `entry` (retiré de la bibliothèque, ROM conservée),
  * `save` (sauvegardes seulement) ou `all` (ROM, sauvegardes et entrée).
  */
 export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAction, savesRoot: string): Promise<void> {
-  const r = db.prepare('SELECT console, title, path, title_id FROM library WHERE id = ?').get(id) as { console: string; title: string; path: string; title_id: string | null } | undefined
+  const r = db.prepare('SELECT console, title, path, title_id, vita_title_id FROM library WHERE id = ?').get(id) as
+    { console: string; title: string; path: string; title_id: string | null; vita_title_id: string | null } | undefined
   if (!r) return
   if (action === 'save' || action === 'all') {
     // Avant la ROM : melonDS range ses sauvegardes à côté d'elle. Copies de sécurité (backups/) conservées volontairement.
     await deleteGameSaves(db, savesRoot, { id, console: r.console, path: r.path }).catch(() => {})
     await rm(saveDir(savesRoot, r), { recursive: true, force: true })
   }
-  if (action === 'file' || action === 'all') await deleteRomFiles(r.path)
+  if (action === 'file' || action === 'all') {
+    await deleteRomFiles(r.path)
+    // Vita3K installe sa propre copie du jeu (ux0/app/<Title ID>), indépendante du .vpk : sans ça, le jeu reste visible
+    // dans SA bibliothèque même après suppression ici (constaté en vrai).
+    if (r.vita_title_id) {
+      const dir = vita3kUserDir()
+      await rm(join(dir, 'ux0', 'app', r.vita_title_id), { recursive: true, force: true }).catch(() => undefined)
+      await rm(join(dir, 'ux0', 'license', r.vita_title_id), { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
   if (action === 'all') {
     // Ses mises à jour/DLC éventuels (voir migration v11) : rangés à côté, sous <console>/.content/<title_id>/.
     if (r.title_id) await rm(join(dirname(r.path), '.content', r.title_id), { recursive: true, force: true }).catch(() => undefined)
     db.prepare('DELETE FROM library WHERE id = ?').run(id)
   } else if (action === 'entry') db.prepare('DELETE FROM library WHERE id = ?').run(id)
-  else if (action === 'file') db.prepare('UPDATE library SET missing = 1 WHERE id = ?').run(id)
+  // vita_title_id remis à zéro : sans ça, un fichier relié plus tard relancerait par un Title ID dont la copie Vita3K n'existe plus.
+  else if (action === 'file') db.prepare('UPDATE library SET missing = 1, vita_title_id = NULL WHERE id = ?').run(id)
+}
+
+/** Vide entièrement la bibliothèque (action « Actions dangereuses » des réglages) ; les fichiers ROM ne sont pas touchés. */
+export function clearLibrary(db: DatabaseSync): void {
+  db.exec('DELETE FROM library')
+}
+
+/** Supprime le fichier ROM de tous les jeux (action « Actions dangereuses ») ; `refreshMissing` marquera les entrées sans fichier au prochain chargement. */
+export async function deleteAllRomFiles(db: DatabaseSync): Promise<void> {
+  const rows = db.prepare('SELECT path FROM library WHERE missing = 0').all() as { path: string }[]
+  for (const r of rows) await deleteRomFiles(r.path)
 }
 
 /** Mises à jour/DLC Switch rattachés à un jeu de la bibliothèque (voir migration v11 et `switchContent.ts`). */

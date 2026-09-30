@@ -17,7 +17,7 @@ export const ProgressBar = ({ value }: { value: number }) => (
   <div className="progress"><i style={{ width: `${Math.min(100, Math.max(0, value))}%` }} /></div>
 )
 
-export const Button = ({ variant = 'default', className = '', ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'primary' | 'icon' }) => (
+export const Button = ({ variant = 'default', className = '', ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'primary' | 'icon' | 'danger' }) => (
   <button className={`btn ${variant} ${className}`} {...p} />
 )
 

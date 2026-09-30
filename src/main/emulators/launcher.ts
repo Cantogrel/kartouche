@@ -2,16 +2,16 @@ import type { DatabaseSync } from 'node:sqlite'
 import { app } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { buildArgs, emulatorById, emulatorForConsole, type EmulatorDef, type GameSession, type LaunchResult, type QuickExit } from '@shared/emulators'
 import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
 import { closeGracefully, connectedXInputSlots, watchQuitChord } from './quit'
-import { applyDolphinPad, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
+import { applyDolphinFastDiscExclusion, applyDolphinPad, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
 import { loadSettings } from '../db/settingsStore'
-import { backupSaves, prepareRetroarch } from '../saves/saves'
+import { backupSaves, prepareRetroarch, readDiscId } from '../saves/saves'
 import { extractZipEntries, readZip } from '../library/hash'
 
 const running = new Map<number, { pid: number; stopped: boolean }>()
@@ -98,6 +98,81 @@ async function installCia(exe: string, dir: string, ciaPath: string): Promise<bo
   return outcome ?? false
 }
 
+const VITA_INSTALL_TIMEOUT_MS = 300_000
+
+/**
+ * Un .vpk doit être installé (décrypté dans le ux0 virtuel) avant de pouvoir être lancé — mais contrairement à un .cia
+ * Azahar (le relancer tel quel reboote le titre déjà installé), Vita3K n'auto-boote JAMAIS après un install par chemin
+ * de contenu, constaté en vrai même boîtes de confirmation désactivées (« Content installed, will auto-boot: X » dans
+ * son propre journal, puis rien — il faut relancer par -r <Title ID>, qui lui boote vraiment). Vita3K journalise sur
+ * sa sortie standard (pas de fichier comme Azahar) : on la lit directement.
+ */
+async function installVpk(exe: string, dir: string, vpkPath: string): Promise<{ titleId: string } | { error: string }> {
+  return new Promise((resolve) => {
+    let buf = ''
+    let done = false
+    const child = spawn(exe, [vpkPath], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+    const finish = (result: { titleId: string } | { error: string }): void => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      if (child.pid) execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {})
+      resolve(result)
+    }
+    const onOutput = (chunk: Buffer): void => {
+      buf += chunk.toString('utf8')
+      const ok = /Content installed, will auto-boot: (\S+)/.exec(buf)
+      if (ok) { finish({ titleId: ok[1] }); return }
+      if (/vitamin dump|aborting installation|miniz error/i.test(buf)) finish({ error: relevantLogLines(buf) })
+    }
+    child.stdout?.on('data', onOutput)
+    child.stderr?.on('data', onOutput)
+    child.on('error', (e) => finish({ error: e.message }))
+    const timer = setTimeout(() => finish({ error: relevantLogLines(buf) || 'timeout' }), VITA_INSTALL_TIMEOUT_MS)
+  })
+}
+
+interface RunAttempt { elapsedMs: number; stopped: boolean; captured: string }
+
+/**
+ * Un jeu Dolphin qui se ferme tout seul très vite (voir QUICK_EXIT_MS) peut être bloqué par `FastDiscSpeed`, activé
+ * globalement à l'installation (voir configureDolphin) — sans qu'on sache d'avance lequel : la base officielle des
+ * réglages par jeu de Dolphin ne liste actuellement aucun cas de ce genre (vérifié sur GitHub), donc RomVault n'a pas
+ * de liste fiable à embarquer (voir DOLPHIN_FAST_DISC_EXCLUSIONS dans configure.ts). On le désactive pour CE jeu et on
+ * retente une seule fois avant de conclure à un vrai échec (BIOS, fichier corrompu…) : si ça règle le problème, le
+ * fichier GameSettings créé reste en place pour tous les lancements suivants ; sinon, s'il n'existait pas avant notre
+ * tentative, on le supprime pour ne rien laisser d'inutile, et on garde le diagnostic du premier essai (plus parlant,
+ * puisque le second n'a rien changé).
+ */
+async function retryDolphinWithoutFastDiscSpeed(entryId: number, row: { exe: string; dir: string }, args: string[], cacheDir: string, romPath: string, first: RunAttempt): Promise<RunAttempt> {
+  const gameId = await readDiscId(romPath).catch(() => null)
+  if (!gameId) return first
+  const overrideFile = join(row.dir, 'User', 'GameSettings', `${gameId}.ini`)
+  const existedBefore = existsSync(overrideFile)
+  if (existedBefore && /^\s*FastDiscSpeed\s*=\s*false\s*$/im.test(await readFile(overrideFile, 'utf8').catch(() => ''))) return first
+  await applyDolphinFastDiscExclusion(row.dir, gameId, true).catch(() => {})
+  const retryStarted = Date.now()
+  const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: ['ignore', 'pipe', 'pipe'] })
+  running.set(entryId, { pid: child.pid ?? 0, stopped: false })
+  let captured = ''
+  const onOutput = (chunk: Buffer): void => { captured = (captured + chunk.toString('utf8')).slice(-CAPTURE_MAX) }
+  child.stdout?.on('data', onOutput)
+  child.stderr?.on('data', onOutput)
+  // Réarmé pour cette tentative : si elle règle le problème et devient la vraie session de jeu, l'utilisateur doit
+  // pouvoir la fermer à la manette comme n'importe quel autre lancement (le raccourci de la 1re tentative s'est
+  // déjà arrêté avec elle).
+  const watch: { stop: (() => void) | null } = { stop: null }
+  let over = false
+  void watchQuitChord(cacheDir, () => stopGame(entryId)).then((stop) => { if (over) stop(); else watch.stop = stop }).catch(() => {})
+  await new Promise<void>((resolve) => { child.on('error', () => resolve()); child.on('exit', () => resolve()) })
+  over = true
+  watch.stop?.()
+  const retry: RunAttempt = { elapsedMs: Date.now() - retryStarted, stopped: running.get(entryId)?.stopped ?? false, captured }
+  const fixed = retry.stopped || retry.elapsedMs >= QUICK_EXIT_MS
+  if (!fixed && !existedBefore) await rm(overrideFile, { force: true }).catch(() => {})
+  return fixed ? retry : first
+}
+
 export const isRunning = (entryId: number): boolean => running.has(entryId)
 
 /** Ferme le jeu proprement. */
@@ -111,20 +186,29 @@ export const runningCount = (): number => running.size
 /** Lance le jeu dans son émulateur, puis cumule le temps de jeu à la fermeture. */
 export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: GameSession) => void, cacheDir: string, savesRoot: string): Promise<LaunchResult> {
   if (running.has(entryId)) return { ok: false, error: 'running' }
-  const entry = db.prepare('SELECT console, path, missing, cia_installed FROM library WHERE id = ?').get(entryId) as
-    { console: string; path: string; missing: number; cia_installed: number } | undefined
+  const entry = db.prepare('SELECT console, path, missing, cia_installed, vita_title_id FROM library WHERE id = ?').get(entryId) as
+    { console: string; path: string; missing: number; cia_installed: number; vita_title_id: string | null } | undefined
   if (!entry || entry.missing === 1 || !existsSync(entry.path)) return { ok: false, error: 'noFile' }
   const def = emulatorForConsole(entry.console)
   if (!def) return { ok: false, error: 'noEmulator' }
   const row = getRow(db, def.id)
   if (!row || !existsSync(row.exe)) return { ok: false, error: 'notInstalled', detail: def.id }
-  const romPath = await resolveZippedRom(entry.path, cacheDir)
+  // Vita3K : un .zip (contenu à sa racine) EST la ROM, comme un .vpk — jamais la pré-extraction à fichier unique
+  // ci-dessous, faite pour les émulateurs qui n'acceptent qu'une seule ROM par archive (voir importer.ts, même détection).
+  const romPath = def.id === 'vita3k' ? entry.path : await resolveZippedRom(entry.path, cacheDir)
   if (!romPath) return { ok: false, error: 'zipUnreadable', detail: entry.path }
   if (def.id === 'azahar' && /\.cia$/i.test(romPath) && !entry.cia_installed) {
     if (!(await installCia(row.exe, row.dir, romPath))) return { ok: false, error: 'ciaInstallFailed', detail: entry.path }
     db.prepare('UPDATE library SET cia_installed = 1 WHERE id = ?').run(entryId)
   }
-  const args = buildArgs(def, romPath, entry.console)
+  let vitaTitleId = entry.vita_title_id ?? undefined
+  if (def.id === 'vita3k' && !vitaTitleId) {
+    const installed = await installVpk(row.exe, row.dir, romPath)
+    if ('error' in installed) return { ok: false, error: 'vitaInstallFailed', detail: installed.error }
+    vitaTitleId = installed.titleId
+    db.prepare('UPDATE library SET vita_title_id = ? WHERE id = ?').run(vitaTitleId, entryId)
+  }
+  const args = buildArgs(def, romPath, entry.console, vitaTitleId)
   if (!args) return { ok: false, error: 'unsupported', detail: def.id }
   // Réservé pendant la préparation (détection de la manette) pour qu'un double clic ne lance pas deux fois le jeu.
   running.set(entryId, { pid: 0, stopped: false })
@@ -133,6 +217,10 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     if (def.id === 'dolphin') {
       const slots = await connectedXInputSlots(cacheDir)
       await applyDolphinPad(row.dir, slots.length ? slots[0] : null).catch(() => {})
+      // FastDiscSpeed est activé globalement (voir configureDolphin) ; quelques jeux (liste d'exclusion) en ont besoin
+      // désactivé pour démarrer correctement — réglage propre à ce jeu, réappliqué à chaque lancement.
+      const gameId = await readDiscId(romPath)
+      if (gameId) await applyDolphinFastDiscExclusion(row.dir, gameId).catch(() => {})
     }
     // RetroArch range ses sauvegardes et états dans le dossier de données de RomVault (par jeu, hors de l'installation).
     if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot).catch(() => {})
@@ -165,16 +253,18 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       if (over) return
       over = true
       stopWatch?.()
-      const stopped = running.get(entryId)?.stopped ?? false
+      let attempt: RunAttempt = { elapsedMs: Date.now() - started, stopped: running.get(entryId)?.stopped ?? false, captured }
+      if (def.id === 'dolphin' && !attempt.stopped && attempt.elapsedMs < QUICK_EXIT_MS) {
+        attempt = await retryDolphinWithoutFastDiscSpeed(entryId, row, args, cacheDir, romPath, attempt).catch(() => attempt)
+      }
       running.delete(entryId)
-      const elapsedMs = Date.now() - started
-      const minutes = sessionMinutes(elapsedMs)
+      const minutes = sessionMinutes(attempt.elapsedMs)
       db.prepare('UPDATE library SET play_minutes = play_minutes + ?, last_played = ? WHERE id = ?').run(minutes, Date.now(), entryId)
       const total = db.prepare('SELECT play_minutes FROM library WHERE id = ?').get(entryId) as { play_minutes: number } | undefined
       // Fermé tout seul (pas par l'utilisateur) en moins de QUICK_EXIT_MS : probablement un échec plutôt qu'une vraie partie.
       let quickExit: QuickExit | undefined
-      if (!stopped && elapsedMs < QUICK_EXIT_MS) {
-        quickExit = { elapsedMs, log: captured.trim() || (await readLaunchLog(def, row.dir)) }
+      if (!attempt.stopped && attempt.elapsedMs < QUICK_EXIT_MS) {
+        quickExit = { elapsedMs: attempt.elapsedMs, log: attempt.captured.trim() || (await readLaunchLog(def, row.dir)) }
       }
       notify({ entryId, running: false, playMinutes: total?.play_minutes, quickExit })
       // Copie de sécurité des sauvegardes de ce jeu, seulement si elles ont changé depuis la dernière.
