@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ProviderStatus } from '@shared/catalog'
 import type { UpdateChangelog } from '@shared/ipc'
+import type { SourceListSummary } from '@shared/sourceList'
 import { t } from '@/i18n'
 import { Button } from '@/ui'
 import { useApp } from '@/store/app'
@@ -11,7 +12,7 @@ import { useChangelog } from '@/store/changelog'
 import { useEmulators } from '@/store/emulators'
 import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSetting } from '@shared/settings'
 
-const SECTIONS = ['general', 'import', 'emulation', 'controller', 'appearance', 'apiKeys', 'about', 'danger'] as const
+const SECTIONS = ['general', 'import', 'emulation', 'controller', 'appearance', 'apiKeys', 'sources', 'about', 'danger'] as const
 type Section = (typeof SECTIONS)[number]
 
 const isSection = (s: string | undefined): s is Section => (SECTIONS as readonly string[]).includes(s ?? '')
@@ -150,6 +151,8 @@ export function Settings() {
           </>
         )}
 
+        {section === 'sources' && <SourcesSection />}
+
         {section === 'about' && info && (
           <>
             <p className="muted">RomVault v{info.version} · SQLite {info.sqlite}</p>
@@ -216,6 +219,77 @@ function DangerSection() {
           <Button variant="danger" disabled={busy} onClick={() => void run(t('danger.factoryResetConfirm'), () => window.api.invoke('app:factoryReset'))}>{t('danger.factoryReset')}</Button>
         </div>
       </div>
+    </>
+  )
+}
+
+/**
+ * Listes de sources apportées par l'utilisateur (v0.2.0). RomVault n'en fournit, n'en scrape ni
+ * n'en agrège aucune : chaque liste vient d'une URL que l'utilisateur choisit lui-même.
+ */
+function SourcesSection() {
+  const [lists, setLists] = useState<SourceListSummary[]>([])
+  const [url, setUrl] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<number | 'add' | null>(null)
+
+  const refresh = async (): Promise<void> => setLists(await window.api.invoke('sourceLists:list'))
+  useEffect(() => { void refresh() }, [])
+
+  const add = async (): Promise<void> => {
+    if (!url.trim()) return
+    setBusyId('add')
+    setAddError(null)
+    try {
+      await window.api.invoke('sourceLists:add', url.trim())
+      setUrl('')
+      await refresh()
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const refreshOne = async (id: number): Promise<void> => {
+    setBusyId(id)
+    try { await window.api.invoke('sourceLists:refresh', id) } finally { setBusyId(null); await refresh() }
+  }
+
+  const remove = async (list: SourceListSummary): Promise<void> => {
+    if (!window.confirm(t('sources.removeConfirm', { n: list.entryCount }))) return
+    setBusyId(list.id)
+    try { await window.api.invoke('sourceLists:remove', list.id) } finally { setBusyId(null); await refresh() }
+  }
+
+  return (
+    <>
+      <p className="muted">{t('sources.hint')}</p>
+      <div className="row">
+        <input style={{ flex: 1 }} placeholder={t('sources.urlPlaceholder')} value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void add()} />
+        <Button variant="primary" disabled={busyId === 'add' || !url.trim()} onClick={() => void add()}>{t('sources.add')}</Button>
+      </div>
+      {addError && <p className="notice">{addError}</p>}
+
+      {lists.length === 0 && <p className="muted">{t('sources.empty')}</p>}
+      {lists.map((l) => (
+        <div key={l.id} className="danger-row">
+          <div>
+            <strong>{l.name}</strong>
+            <p className="muted">{l.url}</p>
+            <p className="muted">
+              {t('sources.matched', { matched: l.matchedCount, total: l.entryCount })}
+              {' · '}
+              {l.lastRefreshedAt ? t('sources.lastRefreshed', { date: new Date(l.lastRefreshedAt).toLocaleString() }) : t('sources.neverRefreshed')}
+            </p>
+            {l.error && <p className="notice">{l.error}</p>}
+          </div>
+          <div className="row">
+            <Button disabled={busyId === l.id} onClick={() => void refreshOne(l.id)}>{t('sources.refresh')}</Button>
+            <Button variant="danger" disabled={busyId === l.id} onClick={() => void remove(l)}>{t('sources.remove')}</Button>
+          </div>
+        </div>
+      ))}
     </>
   )
 }
