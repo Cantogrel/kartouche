@@ -11,7 +11,7 @@ export function artStyle(seed: string): { background: string } {
 export const Badge = ({ children, side = 'l' }: { children: ReactNode; side?: 'l' | 'r' }) => (
   <span className={`badge ${side}`}>{children}</span>
 )
-export const Tag = ({ children }: { children: ReactNode }) => <span className="tag">{children}</span>
+export const Tag = ({ children, title }: { children: ReactNode; title?: string }) => <span className="tag" title={title}>{children}</span>
 
 export const ProgressBar = ({ value }: { value: number }) => (
   <div className="progress"><i style={{ width: `${Math.min(100, Math.max(0, value))}%` }} /></div>

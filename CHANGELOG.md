@@ -26,6 +26,18 @@ Une section `## <version>` par version ; le texte est repris tel quel dans le po
   fait défiler l'Accueil, la Bibliothèque et le Catalogue comme il le fait déjà sur une fiche.
 - Corrigé : certains jeux (titres avec un sous-titre, ex. « Special Edition ») n'affichaient jamais d'icône dans
   la Bibliothèque alors que SteamGridDB l'a bien.
+- Corrigé : importer une liste de sources dont le hash (CRC32/SHA1) est absent — valeur `null` plutôt qu'omise,
+  un cas fréquent selon l'export — provoquait un message d'erreur interminable au lieu d'être simplement accepté ;
+  ce champ reste optionnel. Les erreurs de format, quand il y en a, tiennent maintenant en quelques lignes lisibles.
+- Catalogue : les jeux proposés par au moins une de vos sources affichent désormais un repère (nom de la liste)
+  sous leurs genres.
+- Sur la fiche d'un jeu, quand plusieurs options de téléchargement sont proposées, chacune affiche maintenant son
+  propre intitulé (région, langues, révision…) au lieu d'options identiques impossibles à distinguer entre elles.
+- Poids des fichiers affiché de façon plus lisible partout où il apparaît (ex. « 59.1 MB », « 2.84 GB »).
+- Téléchargement : le bouton indique clairement qu'un téléchargement est en cours, et une tâche apparaît dans la
+  barre d'état en bas de l'app — visible même en changeant de page entre-temps.
+- Paramètres → Sources : un bouton d'aide (ⓘ) détaille le format JSON attendu pour une liste, avec un exemple.
+- Le popup des nouveautés de version s'affiche maintenant comme une vraie liste plutôt qu'un bloc de texte brut.
 
 ## 0.1.8
 

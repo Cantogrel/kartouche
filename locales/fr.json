@@ -42,6 +42,7 @@
   "inLibrary": "Dans la bibliothèque",
   "linkRom": "Associer une ROM",
   "download.button": "Télécharger",
+  "download.downloading": "Téléchargement…",
   "download.cancel": "Annuler",
   "addGame": "Ajouter un jeu",
   "library.empty": "Votre bibliothèque est vide",
@@ -86,7 +87,12 @@
   "settings.appearance": "Apparence",
   "settings.apiKeys": "Succès",
   "settings.sources": "Sources",
-  "sources.hint": "Listes de téléchargement que vous ajoutez vous-même. RomVault n'en fournit, n'en scrape ni n'en agrège aucune.",
+  "sources.hint": "Ajoutez ici vos propres listes de sources, à usage personnel. RomVault ne fournit, n'héberge ni ne référence aucune liste ni aucun contenu téléchargeable : le choix, l'ajout et la légalité de chaque source relèvent entièrement de votre responsabilité.",
+  "sources.formatInfo": "Format attendu",
+  "sources.formatTitle": "Format d'une liste de sources (JSON)",
+  "sources.formatIntro": "Une liste de sources est un document JSON au format « romvault.sourcelist/v1 » : un nom, et une liste d'entrées, chacune reliée à une console et à un ou plusieurs liens de téléchargement.",
+  "sources.formatFields": "Champs optionnels : « homepage » et « generatedAt » pour le document ; « sizeBytes », « hash » et « note » pour une entrée. « hash » (crc32/sha1) ne sert qu'à filtrer une taille fantaisiste avant un gros téléchargement — l'intégrité réelle du fichier est vérifiée après coup contre le catalogue.",
+  "sources.formatExampleLabel": "Exemple (valeurs fictives) :",
   "sources.urlPlaceholder": "URL de la liste (JSON)",
   "sources.browse": "Parcourir…",
   "sources.dropHint": "Ou glissez-déposez un fichier .json ici.",
@@ -117,6 +123,7 @@
   "catalog.empty": "Le catalogue est vide. Il se télécharge depuis les bases Libretro (connexion requise).",
   "catalog.more": "Afficher plus",
   "catalog.variants": "Inclure bêtas, démos et prototypes",
+  "catalog.sourceTagTitle": "Téléchargeable depuis « {name} »",
   "game.regionLabel": "Région",
   "game.source": "Détails fournis par {p}",
   "game.refreshDetails": "Actualiser les détails",
@@ -401,5 +408,6 @@
   "footer.installing": "Installation de {name}",
   "footer.importing": "Import… {n}/{total}",
   "footer.importing0": "Import…",
-  "footer.importingFile": "Import : {name}… {n}/{total}"
+  "footer.importingFile": "Import : {name}… {n}/{total}",
+  "footer.downloading": "Téléchargement de {name}"
 }

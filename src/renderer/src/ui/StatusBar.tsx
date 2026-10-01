@@ -4,6 +4,7 @@ import { emulatorById } from '@shared/emulators'
 import { t } from '@/i18n'
 import { useEmulators } from '@/store/emulators'
 import { useLibrary } from '@/store/library'
+import { useDownloads } from '@/store/downloads'
 
 interface Job { label: string; fraction: number | null }
 
@@ -16,6 +17,7 @@ export function StatusBar() {
   const emu = useEmulators((s) => s.progress)
   const libBusy = useLibrary((s) => s.busy)
   const libProgress = useLibrary((s) => s.progress)
+  const downloads = useDownloads((s) => s.jobs)
   useEffect(() => window.api.on('catalog:progress', (p) => setSync(p.total > 0 && p.done >= p.total ? null : p)), [])
 
   const jobs: Job[] = []
@@ -23,6 +25,10 @@ export function StatusBar() {
   for (const p of Object.values(emu)) {
     const fraction = p.total > 0 ? p.done / p.total : null
     jobs.push({ label: t('footer.installing', { name: emulatorById(p.id)?.name ?? p.id }) + (fraction !== null ? ` ${Math.round(fraction * 100)} %` : ' …'), fraction })
+  }
+  for (const d of Object.values(downloads)) {
+    const fraction = d.phase === 'downloading' && d.total > 0 ? d.done / d.total : null
+    jobs.push({ label: t('footer.downloading', { name: d.label }) + (fraction !== null ? ` ${Math.round(fraction * 100)} %` : ' …'), fraction })
   }
   if (libBusy) {
     // Fraction du fichier en cours (empreinte + copie) mêlée au compte de fichiers : une seule grosse ROM avance en continu au lieu de rester bloquée à 0/1.
