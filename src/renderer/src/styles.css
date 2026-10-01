@@ -188,6 +188,7 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .ctx button { display: block; width: 100%; text-align: left; padding: 9px 14px; background: transparent; color: var(--text-strong); border: 0; cursor: pointer; }
 .ctx button:hover { background: var(--bg-card); }
 .ctx button.danger { color: #ff7b7b; }
+.ctx-sep { height: 1px; margin: 4px 0; background: var(--border); }
 
 .game-icon { position: relative; flex: none; width: 26px; height: 26px; }
 .game-icon-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }

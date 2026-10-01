@@ -4,7 +4,7 @@ import { orderConsolesByRecency, type LibraryEntry } from './library'
 let nextId = 1
 const entry = (console: string, lastPlayed: number | null): LibraryEntry => ({
   id: nextId++, gameId: null, console, title: console, path: '', size: 0, match: 'none',
-  missing: false, addedAt: 0, playMinutes: 0, lastPlayed, favorite: false, pinned: false, collections: []
+  missing: false, addedAt: 0, playMinutes: 0, lastPlayed, favorite: false, pinned: false, collections: [], hasSources: false
 })
 
 describe('orderConsolesByRecency', () => {

@@ -13,7 +13,7 @@ import { useLibrary } from '@/store/library'
 import { useDownloads } from '@/store/downloads'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
 import { OpenEmulatorButton, PlayButton, QuickExitNotice } from '@/ui/PlayButton'
-import { AchievementsPanel, ContentPanel, FlagButtons, SavesPanel } from '@/ui/GameExtras'
+import { AchievementsPanel, ContentPanel, FlagButtons, SavesPanel, UninstallButton } from '@/ui/GameExtras'
 
 /** Fiche d'un jeu du catalogue : données du DAT + description enrichie si un fournisseur (IGDB) est configuré. */
 export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEntry }) {
@@ -52,6 +52,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
             {(!owned || owned.missing) && sources.length > 0 && <DownloadButton sources={sources} gameName={game.name} />}
             {owned && !owned.missing && <PlayButton entry={owned} />}
             {owned && !owned.missing && <OpenEmulatorButton entry={owned} />}
+            {owned && !owned.missing && sources.length > 0 && <UninstallButton entry={owned} />}
             {owned && <FlagButtons entry={owned} />}
             {owned && <Button onClick={(e) => openEntryMenuAt(e, owned.id)}>⚙ {t('options')}</Button>}
           </div>

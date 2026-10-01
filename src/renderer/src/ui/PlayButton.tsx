@@ -7,35 +7,40 @@ import { useLibrary } from '@/store/library'
 import { useApp } from '@/store/app'
 import type { LibraryEntry } from '@shared/library'
 
+/**
+ * Lance un jeu (installe-d'abord si l'émulateur manque, propose de fermer l'autre partie en cours si besoin) — hors
+ * composant pour être réutilisable depuis une action de menu contextuel (EntryMenu) et pas seulement depuis ce bouton.
+ */
+export async function playEntry(entry: LibraryEntry): Promise<void> {
+  const def = emulatorForConsole(entry.console)
+  const installed = useEmulators.getState().list.find((e) => e.id === def?.id)?.installed
+  if (def && installed === false) { useApp.getState().go('emulators'); return }
+  // Un échec est affiché via QuickExitNotice (même vitrine qu'une fermeture rapide) : voir useEmulators.play.
+  const r = await useEmulators.getState().play(entry.id)
+  // Un seul jeu à la fois (cf. launchGame) : on propose de fermer l'autre plutôt que de laisser un message sec.
+  if (!r.ok && r.error === 'otherRunning') {
+    const otherId = useEmulators.getState().running.find((id) => id !== entry.id)
+    const other = otherId !== undefined ? useLibrary.getState().entries.find((e) => e.id === otherId) : undefined
+    if (otherId !== undefined && window.confirm(t('play.confirmStopOther', { title: other?.title ?? '' }))) {
+      await window.api.invoke('game:stopAndWait', otherId)
+      await useEmulators.getState().play(entry.id)
+    }
+  }
+}
+
 /** Bouton « Jouer » : lance le jeu ; si l'émulateur manque, propose d'aller l'installer. */
 export function PlayButton({ entry }: { entry: LibraryEntry }) {
   const running = useEmulators((s) => s.running.includes(entry.id))
   const launching = useEmulators((s) => s.launching.includes(entry.id))
-  const play = useEmulators((s) => s.play)
   const installed = useEmulators((s) => s.list.find((e) => e.id === emulatorForConsole(entry.console)?.id)?.installed)
-  const navigate = useApp((s) => s.go)
   const def = emulatorForConsole(entry.console)
-  const click = async (): Promise<void> => {
-    if (def && installed === false) { navigate('emulators'); return }
-    // Un échec est affiché via QuickExitNotice (même vitrine qu'une fermeture rapide) : voir useEmulators.play.
-    const r = await play(entry.id)
-    // Un seul jeu à la fois (cf. launchGame) : on propose de fermer l'autre plutôt que de laisser un message sec.
-    if (!r.ok && r.error === 'otherRunning') {
-      const otherId = useEmulators.getState().running.find((id) => id !== entry.id)
-      const other = otherId !== undefined ? useLibrary.getState().entries.find((e) => e.id === otherId) : undefined
-      if (otherId !== undefined && window.confirm(t('play.confirmStopOther', { title: other?.title ?? '' }))) {
-        await window.api.invoke('game:stopAndWait', otherId)
-        await play(entry.id)
-      }
-    }
-  }
   return (
     <>
       {running
         ? <Button onClick={() => void window.api.invoke('game:stop', entry.id)}>■ {t('play.stop')}</Button>
         // launching : le clic est pris en compte mais rien n'est encore lancé (peut prendre plusieurs minutes la
         // première fois pour un jeu Vita — install avant de pouvoir jouer) ; désactivé pour éviter un double clic.
-        : <Button variant="primary" disabled={launching} onClick={() => void click()}>
+        : <Button variant="primary" disabled={launching} onClick={() => void playEntry(entry)}>
             {launching ? t('play.launching') : installed === false && def ? t('play.installFirst', { name: def.name }) : `▶ ${t('play')}`}
           </Button>}
       {running && <span className="muted">{t('play.quitHint')}</span>}

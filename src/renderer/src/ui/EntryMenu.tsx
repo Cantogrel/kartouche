@@ -3,43 +3,89 @@ import { create } from 'zustand'
 import { t } from '@/i18n'
 import { useApp } from '@/store/app'
 import { useLibrary } from '@/store/library'
+import { useEmulators } from '@/store/emulators'
 import { useDialog } from '@/ui/CollectionDialogs'
+import { playEntry } from '@/ui/PlayButton'
 import { emulatorForConsole } from '@shared/emulators'
 import type { LibraryEntry } from '@shared/library'
 
+type MenuMode = 'quick' | 'full'
+
 interface MenuState {
-  at: { x: number; y: number; entryId: number } | null
-  show: (x: number, y: number, entryId: number) => void
+  at: { x: number; y: number; entryId: number; mode: MenuMode } | null
+  show: (x: number, y: number, entryId: number, mode: MenuMode) => void
   hide: () => void
 }
-export const useEntryMenu = create<MenuState>((set) => ({ at: null, show: (x, y, entryId) => set({ at: { x, y, entryId } }), hide: () => set({ at: null }) }))
+export const useEntryMenu = create<MenuState>((set) => ({
+  at: null, show: (x, y, entryId, mode) => set({ at: { x, y, entryId, mode } }), hide: () => set({ at: null })
+}))
 
-/** Ouvre le menu des actions d'un jeu de la bibliothèque au clic droit. */
+/** Ouvre le menu rapide (jouer, favoris, collections, désinstaller…) d'un jeu au clic droit — tuiles et liste latérale. */
 export const onEntryContext = (entryId: number) => (e: MouseEvent): void => {
   e.preventDefault(); e.stopPropagation()
-  useEntryMenu.getState().show(e.clientX, e.clientY, entryId)
+  useEntryMenu.getState().show(e.clientX, e.clientY, entryId, 'quick')
 }
 
-/** Ouvre le même menu sous un bouton (fiche du jeu). */
+/** Ouvre le menu complet (toutes les actions) sous le bouton ⚙ Options de la fiche du jeu. */
 export const openEntryMenuAt = (e: MouseEvent<HTMLElement>, entryId: number): void => {
   const r = e.currentTarget.getBoundingClientRect()
   e.stopPropagation()
-  useEntryMenu.getState().show(r.left, r.bottom + 4, entryId)
+  useEntryMenu.getState().show(r.left, r.bottom + 4, entryId, 'full')
 }
 
-interface Action { key: string; label: string; danger?: boolean; run: () => Promise<void> | void }
+interface Action { key: string; label?: string; danger?: boolean; separator?: boolean; run?: () => Promise<void> | void }
+const sep = (key: string): Action => ({ key, separator: true })
 
-function actionsFor(entry: LibraryEntry, back: () => void): Action[] {
+const favAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>): Action =>
+  ({ key: 'fav', label: `${entry.favorite ? '♥' : '♡'} ${t(entry.favorite ? 'fav.remove' : 'fav.add')}`, run: () => lib.setFlag(entry.id, { favorite: !entry.favorite }) })
+const pinAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>): Action =>
+  ({ key: 'pin', label: `${entry.pinned ? '★' : '☆'} ${t(entry.pinned ? 'pin.remove' : 'pin.add')}`, run: () => lib.setFlag(entry.id, { pinned: !entry.pinned }) })
+const collectionAction = (entry: LibraryEntry): Action =>
+  ({ key: 'collection', label: `▤ ${t('collection.addTo')}`, run: () => useDialog.getState().open({ kind: 'picker', entryId: entry.id }) })
+/** Même action que `action.deleteFile` dans le menu complet, mais relabellée « Désinstaller » : une liste de
+ * sources permet de retélécharger ce jeu, donc ce n'est pas un aller simple comme pour une ROM importée à la main. */
+const uninstallAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>): Action =>
+  ({ key: 'uninstall', label: t('action.uninstall'), danger: true, run: async () => { if (window.confirm(t('confirm.uninstall', { title: entry.title }))) await lib.removeEntry(entry.id, 'file') } })
+
+/**
+ * Menu rapide (clic droit sur une tuile ou dans la liste latérale) : seulement les actions les plus courantes, pas
+ * les suppressions fines (ça reste dans le menu ⚙ Options complet de la fiche, pour ne pas supprimer quelque chose
+ * par erreur depuis un simple clic droit).
+ */
+function quickActionsFor(entry: LibraryEntry): Action[] {
+  const lib = useLibrary.getState()
+  const hasFile = !entry.missing
+  const def = emulatorForConsole(entry.console)
+  const emulatorInstalled = useEmulators.getState().list.find((e) => e.id === def?.id)?.installed === true
+  const running = useEmulators.getState().running.includes(entry.id)
+  const list: Action[] = []
+  if (hasFile && emulatorInstalled) {
+    list.push(running
+      ? { key: 'stop', label: `■ ${t('play.stop')}`, run: () => window.api.invoke('game:stop', entry.id) }
+      : { key: 'play', label: `▶ ${t('play')}`, run: () => playEntry(entry) })
+  } else if (!hasFile) {
+    list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
+  }
+  if (list.length) list.push(sep('sep1'))
+  list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry))
+  if (hasFile && entry.hasSources) list.push(sep('sep2'), uninstallAction(entry, lib))
+  return list
+}
+
+/** Menu complet (bouton ⚙ Options de la fiche) : toutes les actions, groupées par nature et séparées par des barres. */
+function fullActionsFor(entry: LibraryEntry, back: () => void): Action[] {
   const lib = useLibrary.getState()
   const hasFile = !entry.missing
   const ask = (key: string): boolean => window.confirm(t(`confirm.${key}`, { title: entry.title }))
-  const list: Action[] = []
-  list.push({ key: 'fav', label: `${entry.favorite ? '♥' : '♡'} ${t(entry.favorite ? 'fav.remove' : 'fav.add')}`, run: () => lib.setFlag(entry.id, { favorite: !entry.favorite }) })
-  list.push({ key: 'pin', label: `${entry.pinned ? '★' : '☆'} ${t(entry.pinned ? 'pin.remove' : 'pin.add')}`, run: () => lib.setFlag(entry.id, { pinned: !entry.pinned }) })
-  list.push({ key: 'collection', label: `▤ ${t('collection.addTo')}`, run: () => useDialog.getState().open({ kind: 'picker', entryId: entry.id }) })
+  const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), sep('sep1')]
   if (!hasFile) list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
-  if (hasFile) list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })
-  if (hasFile) list.push({ key: 'file', label: t('action.deleteFile'), danger: true, run: async () => { if (ask('file')) await lib.removeEntry(entry.id, 'file') } })
+  if (hasFile) {
+    list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })
+    list.push(entry.hasSources
+      ? uninstallAction(entry, lib)
+      : { key: 'file', label: t('action.deleteFile'), danger: true, run: async () => { if (ask('file')) await lib.removeEntry(entry.id, 'file') } })
+  }
+  list.push(sep('sep2'))
   list.push({ key: 'save', label: t('action.deleteSave'), danger: true, run: () => deleteSaves(entry, ask) })
   list.push({ key: 'entry', label: t('action.removeEntry'), run: async () => { if (ask('entry')) { await lib.removeEntry(entry.id, 'entry'); leaveIfOpen(entry.id, back) } } })
   list.push({ key: 'all', label: t('action.deleteAll'), danger: true, run: async () => { if (ask('all')) { await lib.removeEntry(entry.id, 'all'); leaveIfOpen(entry.id, back) } } })
@@ -93,14 +139,14 @@ export function EntryMenu() {
     setPos({ x: Math.max(8, Math.min(at.x, window.innerWidth - w - 8)), y: Math.max(8, Math.min(at.y, window.innerHeight - h - 8)) })
   }, [at, entry])
   if (!at || !entry) return null
-  const actions = actionsFor(entry, back)
+  const actions = at.mode === 'quick' ? quickActionsFor(entry) : fullActionsFor(entry, back)
   const { x, y } = pos ?? at
   return (
     <div ref={ref} className="ctx" style={{ left: x, top: y }} onClick={(e) => e.stopPropagation()}>
       <div className="ctx-title">{entry.title}</div>
-      {actions.map((a) => (
-        <button key={a.key} className={a.danger ? 'danger' : ''} onClick={() => { hide(); void a.run() }}>{a.label}</button>
-      ))}
+      {actions.map((a) => (a.separator
+        ? <div key={a.key} className="ctx-sep" />
+        : <button key={a.key} className={a.danger ? 'danger' : ''} onClick={() => { hide(); void a.run?.() }}>{a.label}</button>))}
     </div>
   )
 }

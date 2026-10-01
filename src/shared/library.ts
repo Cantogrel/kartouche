@@ -75,6 +75,8 @@ export interface LibraryEntry {
   pinned: boolean
   /** Ids des collections auxquelles le jeu appartient. */
   collections: number[]
+  /** Au moins une liste de sources propose un téléchargement pour ce jeu (bouton/action « Désinstaller »). */
+  hasSources: boolean
 }
 
 export interface Collection { id: number; name: string; count: number }

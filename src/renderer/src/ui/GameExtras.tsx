@@ -22,6 +22,20 @@ export function FlagButtons({ entry }: { entry: LibraryEntry }) {
   )
 }
 
+/**
+ * Bouton « Désinstaller » mis en avant sur la fiche (en plus de l'action équivalente dans le menu Options) : une
+ * liste de sources permet de retélécharger ce jeu, donc supprimer son fichier n'est pas un aller simple comme pour
+ * une ROM importée à la main — ça mérite un accès direct plutôt que d'être caché dans un menu.
+ */
+export function UninstallButton({ entry }: { entry: LibraryEntry }) {
+  const removeEntry = useLibrary((s) => s.removeEntry)
+  return (
+    <Button onClick={() => { if (window.confirm(t('confirm.uninstall', { title: entry.title }))) void removeEntry(entry.id, 'file') }}>
+      {t('action.uninstall')}
+    </Button>
+  )
+}
+
 /** Sauvegardes du jeu : ce que l'émulateur a écrit, copies de sécurité (auto après chaque partie ou à la demande) et restauration. */
 export function SavesPanel({ entry }: { entry: LibraryEntry }) {
   const running = useEmulators((s) => s.running.includes(entry.id))

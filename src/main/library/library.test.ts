@@ -188,6 +188,18 @@ describe('bibliothèque', () => {
     expect(list).toHaveLength(1)
     expect(list[0]).toMatchObject({ id: e.id, missing: false, match: 'hash' })
   })
+  it("hasSources reflète si une liste de sources propose un téléchargement pour ce jeu", async () => {
+    const withSource = addGame('nes', 'Avec source (Europe)', 'avecsource', 'cbf43926', 9)
+    const withoutSource = addGame('nes', 'Sans source (Europe)', 'sanssource', 'AAAAAAAA', 9)
+    addCatalogGame(db, withSource)
+    addCatalogGame(db, withoutSource)
+    db.prepare("INSERT INTO source_lists (id, name, url, added_at) VALUES (1, 'L', 'https://x/l.json', 0)").run()
+    db.prepare("INSERT INTO sources (list_id, game_id, console, title, uris) VALUES (1, ?, 'nes', 'Avec source', '[]')").run(withSource)
+    const list = listLibrary(db)
+    expect(list.find((e) => e.gameId === withSource)).toMatchObject({ hasSources: true })
+    expect(list.find((e) => e.gameId === withoutSource)).toMatchObject({ hasSources: false })
+  })
+
   it('un paquet PS Vita en .zip (eboot.bin + sce_sys/, un .vpk n’est qu’un zip renommé) est importé tel quel, jamais extrait', async () => {
     const f = join(dir, 'src', 'Game.zip')
     mkdirSync(join(dir, 'src'), { recursive: true })

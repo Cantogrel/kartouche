@@ -13,10 +13,10 @@ interface Row {
   missing: number; added_at: number; play_minutes: number; last_played: number | null; favorite: number; pinned: number
 }
 
-const toEntry = (r: Row, collections: number[] = []): LibraryEntry => ({
+const toEntry = (r: Row, collections: number[] = [], hasSources = false): LibraryEntry => ({
   id: r.id, gameId: r.game_id, console: r.console, title: r.title, path: r.path, size: r.size, match: r.match as MatchKind,
   missing: r.missing === 1, addedAt: r.added_at, playMinutes: r.play_minutes, lastPlayed: r.last_played,
-  favorite: r.favorite === 1, pinned: r.pinned === 1, collections
+  favorite: r.favorite === 1, pinned: r.pinned === 1, collections, hasSources
 })
 
 /** Collections de chaque jeu (id de bibliothèque → ids de collection), en une seule requête. */
@@ -42,10 +42,17 @@ export function refreshMissing(db: DatabaseSync): number {
   return n
 }
 
+/** Jeux du catalogue (id) pour lesquels au moins une liste de sources propose un téléchargement. */
+function gamesWithSources(db: DatabaseSync): Set<number> {
+  return new Set((db.prepare('SELECT DISTINCT game_id FROM sources WHERE game_id IS NOT NULL').all() as { game_id: number }[]).map((r) => r.game_id))
+}
+
 export function listLibrary(db: DatabaseSync): LibraryEntry[] {
   refreshMissing(db)
   const mem = membership(db)
-  return (db.prepare('SELECT * FROM library ORDER BY title COLLATE NOCASE').all() as unknown as Row[]).map((r) => toEntry(r, mem.get(r.id)))
+  const withSources = gamesWithSources(db)
+  return (db.prepare('SELECT * FROM library ORDER BY title COLLATE NOCASE').all() as unknown as Row[])
+    .map((r) => toEntry(r, mem.get(r.id), r.game_id !== null && withSources.has(r.game_id)))
 }
 
 /**
