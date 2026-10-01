@@ -3,6 +3,25 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.2.2
+
+- Téléchargement : un jeu dont le fichier ne correspond ni au catalogue officiel ni à l'empreinte déclarée par la
+  liste de sources est maintenant installé quand même, rattaché au jeu que la liste avait déjà associé à cette
+  entrée — c'était auparavant refusé par défaut, alors que la plupart des listes ne déclarent pas d'empreinte.
+  Reste refusé le seul cas où le fichier correspond, par empreinte officielle, à un AUTRE jeu du catalogue.
+- Corrigé : un échec inattendu pendant la vérification ou l'installation d'un téléchargement (fichier verrouillé,
+  disque plein…) le faisait disparaître sans aucun message ; une erreur est maintenant toujours affichée, et le
+  fichier n'est plus laissé dans le cache.
+- Nouveau bouton « Vider le cache » dans Paramètres → Général (téléchargements en attente ou en échec, archives
+  d'installation d'émulateurs, fichiers temporaires), avec la taille actuelle affichée à côté. Les fiches et images
+  du catalogue ne sont jamais vidées par ce bouton.
+- Bouton « Désinstaller » directement sur la fiche d'un jeu installé via une liste de sources.
+- Le clic droit sur une tuile ou dans la liste latérale ouvre un menu rapide simplifié (Jouer, Favori, Épingler,
+  Collection, Désinstaller) ; le menu ⚙ Options complet de la fiche garde toutes les actions, maintenant groupées
+  et séparées par des barres.
+- Big Picture : possibilité de télécharger un jeu du catalogue directement depuis sa fiche, à la manette ; plusieurs
+  versions disponibles se choisissent dans une fenêtre dédiée.
+
 ## 0.2.1
 
 - Catalogue : nouveau filtre par source de téléchargement, avec une option « Toutes sources » pour lister d'un
