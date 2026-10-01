@@ -27,7 +27,17 @@ export function moveFocus(dir: Dir): void {
   if (!items.length) return
   const cur = items.find((i) => i === document.activeElement)
   if (!cur) { focusEl(items[0]); return }
-  const box = (e: HTMLElement): { x: number; y: number; w: number; h: number } => { const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height } }
+  // Coordonnées indépendantes du défilement : un élément de la zone `[data-scroll]` garde sa position dans le flux
+  // même hors champ, sinon il se retrouve géométriquement "loin" une fois scrollé et un élément fixe hors de cette
+  // zone (ex. le ☰ du header, jamais affecté par le scroll) gagne la navigation à sa place — vécu sur l'Accueil :
+  // remonter depuis une rangée qui n'est plus la toute première envoyait le focus sur le menu au lieu de la rangée
+  // juste au-dessus, dès que le défilement avait poussé cette rangée hors de l'écran.
+  const scroller = activeRoot()?.querySelector<HTMLElement>('[data-scroll]') ?? null
+  const box = (e: HTMLElement): { x: number; y: number; w: number; h: number } => {
+    const r = e.getBoundingClientRect()
+    const dy = scroller?.contains(e) ? scroller.scrollTop : 0
+    return { x: r.left, y: r.top + dy, w: r.width, h: r.height }
+  }
   // Zone défilable (description d'une fiche) : haut/bas la font défiler tant qu'elle peut, puis le focus reprend sa route.
   if (cur.dataset.scroll !== undefined && (dir === 'up' || dir === 'down')) {
     const room = dir === 'down' ? cur.scrollHeight - cur.clientHeight - cur.scrollTop > 1 : cur.scrollTop > 1

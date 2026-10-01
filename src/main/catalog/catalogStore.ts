@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { CatalogGame, CatalogPage, CatalogQuery } from '@shared/catalog'
 import { displayTitle } from '@shared/catalog'
 import { canonicalGenre } from '@shared/genres'
+import { PUBLISHER_OTHER, PUBLISHERS } from '@shared/publishers'
 import { matchKey } from './popularity'
 
 export interface CatalogRow {
@@ -99,8 +100,26 @@ export const catalogCount = (db: DatabaseSync): number =>
   (db.prepare('SELECT COUNT(*) AS n FROM catalog_games').get() as { n: number }).n
 
 const escapeLike = (s: string): string => s.replace(/[\\%_]/g, (c) => '\\' + c)
+const likeAny = (col: string, needles: string[]): { sql: string; args: string[] } =>
+  ({ sql: `(${needles.map(() => `${col} LIKE ? ESCAPE '\\'`).join(' OR ')})`, args: needles.map((n) => `%${escapeLike(n)}%`) })
 
-function where(q: CatalogQuery, skip?: 'consoles' | 'genres'): { sql: string; args: (string | number)[] } {
+/**
+ * Clause d'un éditeur (`PublisherDef.id`, ou `PUBLISHER_OTHER`) : `developer` n'est qu'un nom de studio venu des DAT
+ * ou d'IGDB, pas un vrai champ éditeur — voir shared/publishers.ts. `'other'`/un id inconnu = ni vide ni reconnu.
+ */
+function publisherClause(id: string): { sql: string; args: string[] } {
+  const def = PUBLISHERS.find((p) => p.id === id)
+  if (def) return likeAny('developer', def.match)
+  const any = likeAny('developer', PUBLISHERS.flatMap((p) => p.match))
+  return { sql: `(developer IS NULL OR NOT ${any.sql})`, args: any.args }
+}
+
+function publishersClause(ids: string[]): { sql: string; args: string[] } {
+  const parts = ids.map(publisherClause)
+  return { sql: `(${parts.map((p) => p.sql).join(' OR ')})`, args: parts.flatMap((p) => p.args) }
+}
+
+function where(q: CatalogQuery, skip?: 'consoles' | 'genres' | 'publishers'): { sql: string; args: (string | number)[] } {
   const parts: string[] = []
   const args: (string | number)[] = []
   if (!q.includeVariants) parts.push('variant = 0 AND dup = 0')
@@ -110,6 +129,7 @@ function where(q: CatalogQuery, skip?: 'consoles' | 'genres'): { sql: string; ar
   }
   if (skip !== 'consoles' && q.consoles?.length) { parts.push(`console IN (${q.consoles.map(() => '?').join(',')})`); args.push(...q.consoles) }
   if (skip !== 'genres' && q.genres?.length) { parts.push(`genre IN (${q.genres.map(() => '?').join(',')})`); args.push(...q.genres) }
+  if (skip !== 'publishers' && q.publishers?.length) { const c = publishersClause(q.publishers); parts.push(c.sql); args.push(...c.args) }
   return { sql: parts.length ? `WHERE ${parts.join(' AND ')}` : '', args }
 }
 
@@ -137,7 +157,18 @@ export function queryCatalog(db: DatabaseSync, q: CatalogQuery): CatalogPage {
   const wg = where(q, 'genres')
   const genres = db.prepare(`SELECT genre AS name, COUNT(*) AS count FROM catalog_games ${wg.sql ? wg.sql + ' AND' : 'WHERE'} genre IS NOT NULL
     GROUP BY genre ORDER BY count DESC`).all(...wg.args) as { name: string; count: number }[]
-  return { total, games, consoles, genres }
+  // `developer` n'est qu'un nom de studio, pas un champ éditeur : chaque éditeur connu est sa propre requête de
+  // comptage (LIKE ne se prête pas à un GROUP BY), et seuls ceux qui ont au moins un résultat sont renvoyés.
+  const wp = where(q, 'publishers')
+  const publishers = [...PUBLISHERS.map((p) => p.id), PUBLISHER_OTHER]
+    .map((id) => {
+      const c = publisherClause(id)
+      const sql = wp.sql ? `${wp.sql} AND ${c.sql}` : `WHERE ${c.sql}`
+      const count = (db.prepare(`SELECT COUNT(*) AS n FROM catalog_games ${sql}`).get(...wp.args, ...c.args) as { n: number }).n
+      return { id, count }
+    })
+    .filter((p) => p.count > 0)
+  return { total, games, consoles, genres, publishers }
 }
 
 export function getGame(db: DatabaseSync, id: number): CatalogGame | null {

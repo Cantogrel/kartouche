@@ -237,8 +237,7 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .bp-tile.dim { filter: grayscale(1) brightness(.6); }
 .bp-tile.dim:focus { filter: none; }
 .bp-more { display: grid; place-items: center; color: var(--text-strong); }
-.bp-summary { max-height: 170px; overflow-y: auto; font-size: 16px; line-height: 1.5; border: 2px solid transparent; border-radius: var(--radius); padding: 6px 10px; margin: 0 -10px; }
-.bp-summary:focus { outline: none; border-color: var(--accent); }
+.bp-summary { max-height: 170px; overflow-y: auto; font-size: 16px; line-height: 1.5; padding: 6px 10px; margin: 0 -10px; }
 .bp-detail { width: min(1000px, 90vw); }
 .bp-menu { display: flex; flex-direction: column; gap: 14px; min-width: 360px; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: 16px; padding: 28px; }
 .bp-settings { display: flex; flex-direction: column; gap: 10px; padding: 10px; max-width: 900px; }

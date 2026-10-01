@@ -183,9 +183,29 @@ export function stopGame(entryId: number): void {
 export const stopAllGames = (): void => { for (const id of running.keys()) stopGame(id) }
 export const runningCount = (): number => running.size
 
+/**
+ * Ferme un jeu et attend sa fin réelle (le renderer veut relancer un autre jeu juste après, cf. `otherRunning` dans
+ * `launchGame`) : `stopGame` ne fait que signaler la fermeture, le process met un instant à sortir. Abandonne (faux)
+ * après `timeoutMs` plutôt que d'attendre indéfiniment un émulateur qui ignore le signal de fermeture.
+ */
+export async function stopGameAndWait(entryId: number, timeoutMs = 8000): Promise<boolean> {
+  if (!running.has(entryId)) return true
+  stopGame(entryId)
+  const start = Date.now()
+  while (running.has(entryId)) {
+    if (Date.now() - start > timeoutMs) return false
+    await new Promise((r) => setTimeout(r, 150))
+  }
+  return true
+}
+
 /** Lance le jeu dans son émulateur, puis cumule le temps de jeu à la fermeture. */
 export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: GameSession) => void, cacheDir: string, savesRoot: string): Promise<LaunchResult> {
   if (running.has(entryId)) return { ok: false, error: 'running' }
+  // Un seul jeu à la fois : deux émulateurs en parallèle se disputent la manette/le focus, et rien n'avertit qu'une
+  // partie tourne déjà si on en relance une autre depuis un autre écran. Le renderer propose de fermer l'autre jeu
+  // (cf. `stopGameAndWait`) plutôt que de bloquer sans recours.
+  if (running.size > 0) return { ok: false, error: 'otherRunning' }
   const entry = db.prepare('SELECT console, path, missing, cia_installed, vita_title_id FROM library WHERE id = ?').get(entryId) as
     { console: string; path: string; missing: number; cia_installed: number; vita_title_id: string | null } | undefined
   if (!entry || entry.missing === 1 || !existsSync(entry.path)) return { ok: false, error: 'noFile' }

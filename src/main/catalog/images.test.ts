@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { displayTitle, type CatalogGame } from '@shared/catalog'
-import { cachedImage, sgdbId, sniff } from './images'
+import { cachedImage, cancelImage, getImage, limited, sgdbId, sniff } from './images'
 import { fetchSwitchCatalog } from './switch'
 import { syncCatalog } from './sync'
 import { DEFAULT_SETTINGS } from '@shared/settings'
@@ -42,6 +42,55 @@ describe('cachedImage', () => {
   })
 })
 
+describe('limited', () => {
+  // Bug vécu : en Big Picture, changer vite de filtre abandonne des tuiles (donc leur `<img>`) en rafale ; une tâche
+  // en attente derrière les 4 emplacements ne doit jamais s'exécuter ni en occuper un si elle est déjà obsolète,
+  // sinon les vraies requêtes suivantes (ex. retour à la Bibliothèque) restent bloquées derrière du travail perdu.
+  it("libère une tâche en attente sans l'exécuter si elle est abandonnée avant son tour", async () => {
+    const release: (() => void)[] = []
+    const hold = (): Promise<void> => new Promise((r) => release.push(r))
+    const busy = [0, 1, 2, 3].map(() => limited(() => hold()))
+    const ac = new AbortController()
+    let ran = false
+    const waiting = limited(() => { ran = true; return Promise.resolve() }, ac.signal).catch((e: unknown) => e)
+    ac.abort()
+    const err = await waiting
+    expect(err).toBeInstanceOf(DOMException)
+    expect(ran).toBe(false)
+    release.forEach((r) => r())
+    await Promise.all(busy)
+  })
+  it('rejette tout de suite une tâche déjà abandonnée, même avec un emplacement libre', async () => {
+    const ac = new AbortController()
+    ac.abort()
+    await expect(limited(() => Promise.resolve('x'), ac.signal)).rejects.toBeInstanceOf(DOMException)
+  })
+})
+
+describe('cancelImage', () => {
+  // Bug vécu : `req.signal` (Electron protocol.handle) ne s'arme PAS quand le rendu retire l'`<img>` qui a émis la
+  // requête (vérifié sur un mini-Electron isolé) — sans ce contrôleur par clé, une résolution réseau lente pour une
+  // tuile abandonnée tournerait jusqu'à son terme (ici simulé par un `fetch` qui ne se résout qu'à l'abandon).
+  it("coupe une résolution réseau en cours quand la tuile correspondante est annulée", async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rv-img-'))
+    const db = new DatabaseSync(':memory:')
+    migrate(db)
+    const game: CatalogGame = { id: 4242, console: 'gb', title: 'Test', name: 'Test', region: 'Europe', year: null, genre: null, developer: null, crc: null, sha1: null, size: null, popularity: null, img: null }
+    let sawAbort = false
+    const real = globalThis.fetch
+    globalThis.fetch = ((_url: string, opts?: { signal?: AbortSignal }) => new Promise((_resolve, reject) => {
+      opts?.signal?.addEventListener('abort', () => { sawAbort = true; reject(new DOMException('Aborted', 'AbortError')) })
+    })) as typeof fetch
+    try {
+      const p = getImage(db, dir, game, 'tile', DEFAULT_SETTINGS)
+      await new Promise((r) => setTimeout(r, 50)) // laisse la tâche atteindre le `fetch` (mis en attente ci-dessus)
+      cancelImage('tile', game.id)
+      await expect(p).resolves.toBeNull()
+      expect(sawAbort).toBe(true)
+    } finally { globalThis.fetch = real }
+  })
+})
+
 describe('sgdbId', () => {
   const game = (name: string): CatalogGame => ({ id: 1, console: 'gb', title: name, name, region: 'France', year: null, genre: null, developer: null, crc: null, sha1: null, size: null, popularity: null, img: null })
   const withFetch = async (data: unknown, run: () => Promise<void>): Promise<void> => {
@@ -61,6 +110,26 @@ describe('sgdbId', () => {
     const db = new DatabaseSync(':memory:'); migrate(db)
     await withFetch([{ id: 42, name: 'Pokémon: Yellow Version' }], async () => {
       expect(await sgdbId(db, game('Pokemon - Yellow Version'), 'k')).toBe(42)
+    })
+  })
+  // Bug vécu (2026-10-01) : un titre de DAT avec sous-titre ("Special Pikachu Edition") ne correspondait plus jamais
+  // au nom court de SteamGridDB, qui l'omet — la plupart des éditions/versions sous-titrées perdaient leur icône.
+  it('accepte le nom court de SteamGridDB comme préfixe du titre complet (sous-titre en trop)', async () => {
+    const db = new DatabaseSync(':memory:'); migrate(db)
+    await withFetch([{ id: 42, name: 'Pokémon: Yellow Version' }], async () => {
+      expect(await sgdbId(db, game('Pokemon - Yellow Version - Special Pikachu Edition'), 'k')).toBe(42)
+    })
+  })
+  it('rejette toujours un autre jeu de la franchise même avec la comparaison élargie', async () => {
+    const db = new DatabaseSync(':memory:'); migrate(db)
+    await withFetch([{ id: 999, name: 'Pokemon Red Version' }], async () => {
+      expect(await sgdbId(db, game('Pokemon - Yellow Version - Special Pikachu Edition'), 'k')).toBeNull()
+    })
+  })
+  it('ignore un préfixe trivialement court plutôt que de matcher au hasard', async () => {
+    const db = new DatabaseSync(':memory:'); migrate(db)
+    await withFetch([{ id: 1, name: 'Mario' }], async () => {
+      expect(await sgdbId(db, game('Mario Kart 8 Deluxe'), 'k')).toBeNull()
     })
   })
 })

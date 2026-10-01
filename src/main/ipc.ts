@@ -11,6 +11,7 @@ import { igdb } from './catalog/igdb'
 import { tgdb } from './catalog/tgdb'
 import { syncPopularity } from './catalog/popularity'
 import { localizeDetails } from './catalog/l10n'
+import { cancelImage } from './catalog/images'
 import { importPaths } from './library/importer'
 import { addCatalogGame, clearLibrary, deleteAllRomFiles, entryPath, importSbi, listContent, listLibrary, refreshMissing, relinkUnmatched, removeEntry } from './library/libraryStore'
 import { createCollection, deleteCollection, listCollections, renameCollection, setFlags, setMembers, setMembership } from './library/collections'
@@ -28,7 +29,7 @@ import { latestRelease } from './emulators/source'
 import { getRow, listEmulators, saveEmulator } from './emulators/emulatorStore'
 import { biosStatus, importBiosFile, removeBios } from './bios/bios'
 import { autoInstallFirmware } from './bios/official'
-import { isRunning, launchGame, openEmulator, runningCount, stopAllGames, stopGame } from './emulators/launcher'
+import { isRunning, launchGame, openEmulator, runningCount, stopAllGames, stopGame, stopGameAndWait } from './emulators/launcher'
 import { dirname, join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -124,6 +125,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
       return n
     } catch { return 0 } finally { syncing = false }
   })
+  handle('images:cancel', ({ kind, gameId }) => cancelImage(kind, gameId))
   handle('catalog:status', () => {
     const r = db.prepare('SELECT MAX(synced_at) AS at FROM catalog_sync').get() as { at: number | null }
     const e = db.prepare("SELECT value FROM settings WHERE key = '_enrich'").get() as { value: string } | undefined
@@ -283,6 +285,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     else if (runningCount() === 0) globalShortcut.unregister(QUIT_KEY)
   }, join(paths.cache, 'tools'), paths.saves))
   handle('game:stop', (entryId) => stopGame(entryId))
+  handle('game:stopAndWait', (entryId) => stopGameAndWait(entryId))
   handle('game:running', () => listLibrary(db).map((e) => e.id).filter(isRunning))
   handle('providers:status', () => providerStatus(db, PROVIDERS, loadSettings(db)))
 

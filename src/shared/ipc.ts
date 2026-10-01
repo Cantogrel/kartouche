@@ -46,6 +46,8 @@ export interface IpcChannels {
   'catalog:status': { req: void; res: { total: number; syncedAt: number | null; syncing: boolean; enriched: boolean } }
   /** Passe IGDB (si configuré) : popularité, genre, développeur, année ; renvoie le nombre de jeux rapprochés. */
   'catalog:popularity': { req: void; res: number }
+  /** Une tuile (`Cover`/`GameIcon`) qui disparaît avant la résolution de son image annule la tâche en cours côté principal, voir images.ts. */
+  'images:cancel': { req: { kind: 'card' | 'tile' | 'hero' | 'icon'; gameId: number }; res: void }
   'library:list': { req: void; res: LibraryEntry[] }
   /** Importe des fichiers/dossiers (glisser-déposer : chemins fournis par le renderer). */
   'library:import': { req: ImportRequest; res: ImportResult }
@@ -130,6 +132,10 @@ export interface IpcChannels {
   'game:play': { req: number; res: LaunchResult }
   /** Ferme le jeu proprement (fermeture des fenêtres de l'émulateur, de force au bout de 5 s). */
   'game:stop': { req: number; res: void }
+  /** Comme `game:stop`, mais attend la fin réelle du process (ou 8 s) avant de répondre : utilisé pour fermer l'autre
+   * jeu en cours (`LaunchResult.error === 'otherRunning'`) juste avant de relancer, sans quoi le nouveau lancement
+   * retomberait sur la même erreur. */
+  'game:stopAndWait': { req: number; res: boolean }
   'game:running': { req: void; res: number[] }
   'providers:status': { req: void; res: ProviderStatus[] }
   'update:state': { req: void; res: UpdateState }

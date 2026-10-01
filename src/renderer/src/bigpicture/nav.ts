@@ -10,21 +10,31 @@ const center = (b: Box): { cx: number; cy: number } => ({ cx: b.x + b.w / 2, cy:
  * Indice du voisin le plus adapté dans la direction demandée, -1 s'il n'y en a pas.
  * Un candidat doit être du bon côté (centre à l'avant du centre courant) ; le score favorise la distance sur l'axe
  * puis pénalise le décalage latéral, ce qui garde le curseur dans sa colonne / sa ligne.
+ *
+ * Pour haut/bas, on se limite d'abord à la rangée la plus proche (tolérance de 50 % sur sa distance) avant de
+ * départager par décalage latéral : sinon, dans une grille à rangées inégales (dernière rangée d'une section
+ * incomplète, sections empilées), une tuile bien alignée en colonne mais une rangée plus loin gagnait contre la
+ * tuile réellement adjacente quand la rangée immédiate n'a pas de tuile dans cette colonne — on sautait des lignes.
  */
 export function pickNext(cur: Box, others: Box[], dir: Dir): number {
   const c = center(cur)
-  let best = -1
-  let bestScore = Infinity
-  others.forEach((o, i) => {
+  const candidates = others.map((o, i) => {
     const p = center(o)
     const dx = p.cx - c.cx
     const dy = p.cy - c.cy
     const along = dir === 'right' ? dx : dir === 'left' ? -dx : dir === 'down' ? dy : -dy
-    if (along <= 1) return
     const across = Math.abs(dir === 'left' || dir === 'right' ? dy : dx)
-    const score = along + across * 3
-    if (score < bestScore) { bestScore = score; best = i }
-  })
+    return { i, along, across }
+  }).filter((s) => s.along > 1)
+  if (!candidates.length) return -1
+  const minAlong = Math.min(...candidates.map((s) => s.along))
+  const band = dir === 'up' || dir === 'down' ? candidates.filter((s) => s.along <= minAlong * 1.5) : candidates
+  let best = -1
+  let bestScore = Infinity
+  for (const s of band) {
+    const score = s.along + s.across * 3
+    if (score < bestScore) { bestScore = score; best = s.i }
+  }
   return best
 }
 

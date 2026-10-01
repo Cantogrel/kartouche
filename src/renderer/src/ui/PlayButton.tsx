@@ -3,6 +3,7 @@ import { Button } from '@/ui'
 import { t } from '@/i18n'
 import { emulatorForConsole, explainFailure } from '@shared/emulators'
 import { useEmulators } from '@/store/emulators'
+import { useLibrary } from '@/store/library'
 import { useApp } from '@/store/app'
 import type { LibraryEntry } from '@shared/library'
 
@@ -17,7 +18,16 @@ export function PlayButton({ entry }: { entry: LibraryEntry }) {
   const click = async (): Promise<void> => {
     if (def && installed === false) { navigate('emulators'); return }
     // Un échec est affiché via QuickExitNotice (même vitrine qu'une fermeture rapide) : voir useEmulators.play.
-    await play(entry.id)
+    const r = await play(entry.id)
+    // Un seul jeu à la fois (cf. launchGame) : on propose de fermer l'autre plutôt que de laisser un message sec.
+    if (!r.ok && r.error === 'otherRunning') {
+      const otherId = useEmulators.getState().running.find((id) => id !== entry.id)
+      const other = otherId !== undefined ? useLibrary.getState().entries.find((e) => e.id === otherId) : undefined
+      if (otherId !== undefined && window.confirm(t('play.confirmStopOther', { title: other?.title ?? '' }))) {
+        await window.api.invoke('game:stopAndWait', otherId)
+        await play(entry.id)
+      }
+    }
   }
   return (
     <>

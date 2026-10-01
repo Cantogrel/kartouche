@@ -22,11 +22,11 @@ interface Opened { gameId: number | null; entryId?: number }
 /** Dernière tuile ouverte : le focus y revient à la fermeture de la fiche. */
 let lastOpened: string | null = null
 
-function Tile({ id, gameId, title, cons, dim, fav, pinned, onOpen }: { id: string; gameId: number | null; title: string; cons: string; dim?: boolean; fav?: boolean; pinned?: boolean; onOpen: () => void }) {
+function Tile({ id, gameId, entryId, title, cons, dim, fav, pinned, onOpen }: { id: string; gameId: number | null; entryId?: number; title: string; cons: string; dim?: boolean; fav?: boolean; pinned?: boolean; onOpen: () => void }) {
   const tag = <Badge>{label(cons)}</Badge>
   const name = <span className="card-title">{title}</span>
   return (
-    <button data-nav data-tile={id} className={`bp-tile${dim ? ' dim' : ''}`} onClick={() => { lastOpened = id; onOpen() }}>
+    <button data-nav data-tile={id} data-entry={entryId} className={`bp-tile${dim ? ' dim' : ''}`} onClick={() => { lastOpened = id; onOpen() }}>
       {gameId !== null
         ? <Cover className="cover-fill" gameId={gameId} title={title} kind="tile">{name}{tag}</Cover>
         : <div className="cover-fill" style={artStyle(title)}>{name}{tag}</div>}
@@ -101,13 +101,27 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
 
   useNav((a, fromKeyboard) => {
     if (menu) { if (a === 'back' || a === 'start') setMenu(false) }
-    else if (opened) { if (a === 'back') setOpened(null) }
+    else if (opened) {
+      if (a === 'back') setOpened(null)
+      // X bascule les favoris depuis la fiche sans devoir y amener le focus (cf. Detail.tsx, indice Ⓧ).
+      else if (a === 'x') {
+        const e = opened.entryId !== undefined ? entries.find((en) => en.id === opened.entryId) : entries.find((en) => en.gameId === opened.gameId)
+        if (e) void useLibrary.getState().setFlag(e.id, { favorite: !e.favorite })
+      }
+    }
     else if (a === 'start') setMenu(true)
     else if (a === 'prev') cycle(-1)
     else if (a === 'next') cycle(1)
     else if (a === 'prevFilter') cycleFilter(-1)
     else if (a === 'nextFilter') cycleFilter(1)
     else if (a === 'y' && (section === 'library' || section === 'catalog')) setKeyboard(true)
+    // X bascule les favoris de la tuile qui a le focus, même sans avoir ouvert sa fiche (cf. data-entry posé par Tile).
+    else if (a === 'x') {
+      const raw = (document.activeElement as HTMLElement | null)?.dataset.entry
+      const id = raw !== undefined ? Number(raw) : NaN
+      const e = Number.isFinite(id) ? entries.find((en) => en.id === id) : undefined
+      if (e) void useLibrary.getState().setFlag(e.id, { favorite: !e.favorite })
+    }
     else if (a === 'back' && query) setQuery('')
     // Au clavier, Échap au niveau le plus haut ouvre le menu (Reprendre / Quitter) : on peut quitter sans manette. À la manette, B ne quitte jamais.
     else if (a === 'back' && fromKeyboard) setMenu(true)
@@ -116,7 +130,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   const openEntry = (e: LibraryEntry): void => setOpened({ gameId: e.gameId, entryId: e.id })
   const openedEntry = opened?.entryId !== undefined ? entries.find((e) => e.id === opened.entryId) : undefined
   const playing = entries.find((e) => running.includes(e.id))
-  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} title={e.title} cons={e.console} fav={e.favorite} pinned={e.pinned} onOpen={() => openEntry(e)} />)
+  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} entryId={e.id} title={e.title} cons={e.console} fav={e.favorite} pinned={e.pinned} onOpen={() => openEntry(e)} />)
   const searchable = section === 'library' || section === 'catalog'
 
   return (
@@ -125,7 +139,8 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
         <h1>RomVault</h1>
         <div className="bp-tabs">
           <span className="bp-key">LB</span>
-          {SECTIONS.map((s) => <button key={s} data-nav className={`bp-tab${section === s ? ' active' : ''}`} onClick={() => go(s)}>{t(`nav.${s}`)}</button>)}
+          {/* Sections : LB/RB seulement, jamais le focus du stick (déjà accessibles à la gachette). */}
+          {SECTIONS.map((s) => <button key={s} className={`bp-tab${section === s ? ' active' : ''}`} onClick={() => go(s)}>{t(`nav.${s}`)}</button>)}
           <span className="bp-key">RB</span>
         </div>
         {searchable && <button data-nav className="bp-search" onClick={() => setKeyboard(true)}>🔍 {query || t('bp.searchHint')}</button>}
@@ -134,15 +149,17 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
       {chips.length > 0 && (
         <div className="bp-chips">
           <span className="bp-key">LT</span>
+          {/* Filtres console/collection : LT/RT seulement, jamais le focus du stick (déjà accessibles à la gachette). */}
           {(section === 'collections' ? chips : ['all', ...chips]).map((k) => {
             const active = section === 'collections' ? activeColKey === k : consoleTab === k
-            return <button key={k} data-nav className={`bp-chip${active ? ' active' : ''}`} onClick={() => { setConsoleTab(k); setLimit(PAGE) }}>{k === 'all' ? t('bp.all') : section === 'collections' ? (k === 'fav' ? t('home.favorites') : colList.find((c) => String(c.id) === k)?.name) : label(k)}</button>
+            return <button key={k} className={`bp-chip${active ? ' active' : ''}`} onClick={() => { setConsoleTab(k); setLimit(PAGE) }}>{k === 'all' ? t('bp.all') : section === 'collections' ? (k === 'fav' ? t('home.favorites') : colList.find((c) => String(c.id) === k)?.name) : label(k)}</button>
           })}
           <span className="bp-key">RT</span>
         </div>
       )}
 
-      <div className="bp-body">
+      {/* data-scroll : défilable au stick droit, comme la description d'une fiche — seulement pris en compte quand aucune fiche/menu n'a la main (racine de focus = .bpv, cf. activeRoot dans useNav.ts). */}
+      <div className="bp-body" data-scroll>
         {section === 'home' && (playable.length === 0 ? <p className="empty">{t('bp.empty')}</p> : (
           <>
             {playable.some((e) => e.lastPlayed) && <><h2 className="bp-h">{t('home.continue')}</h2><div className="bp-grid">{libTiles(playable.filter((e) => e.lastPlayed).slice(0, 8), 'c')}</div></>}
@@ -159,7 +176,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
 
         {section === 'catalog' && (
           <div className="bp-grid">
-            {(page?.games ?? []).map((g) => <Tile key={g.id} id={`g${g.id}`} gameId={g.id} title={g.name} cons={g.console} dim={!entries.some((e) => e.gameId === g.id)} onOpen={() => setOpened({ gameId: g.id })} />)}
+            {(page?.games ?? []).map((g) => <Tile key={g.id} id={`g${g.id}`} gameId={g.id} entryId={entries.find((e) => e.gameId === g.id)?.id} title={g.name} cons={g.console} dim={!entries.some((e) => e.gameId === g.id)} onOpen={() => setOpened({ gameId: g.id })} />)}
             {page && page.total > page.games.length && <button data-nav className="bp-tile bp-more" onClick={() => setLimit(limit + PAGE)}>{t('catalog.more')}</button>}
           </div>
         )}
@@ -167,7 +184,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
         {section === 'settings' && <BpSettings onExit={onExit} />}
       </div>
 
-      <footer className="bp-hints"><span>Ⓐ {t('bp.select')}</span><span>Ⓑ {t('bp.back')}</span>{searchable && <span>Ⓨ {t('bp.search')}</span>}<span>LB/RB {t('bp.section')}</span>{chips.length > 0 && <span>LT/RT {t('bp.console')}</span>}<span>☰ / Esc / F11 {t('bp.menu')}</span></footer>
+      <footer className="bp-hints"><span>Ⓐ {t('bp.select')}</span><span>Ⓑ {t('bp.back')}</span>{section !== 'settings' && <span>Ⓧ {t('home.favorites')}</span>}{searchable && <span>Ⓨ {t('bp.search')}</span>}<span>LB/RB {t('bp.section')}</span>{chips.length > 0 && <span>LT/RT {t('bp.console')}</span>}<span>☰ / Esc / F11 {t('bp.menu')}</span></footer>
 
       {opened && <Detail gameId={opened.gameId} entry={openedEntry} onClose={() => setOpened(null)} />}
       {keyboard && <VirtualKeyboard value={query} onChange={(v) => { setQuery(v); setLimit(PAGE) }} onClose={() => setKeyboard(false)} />}

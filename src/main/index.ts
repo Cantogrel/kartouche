@@ -1,5 +1,6 @@
 import { app, BrowserWindow, protocol, screen } from 'electron'
 import { join } from 'node:path'
+import { readdir, rm } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { migrate } from './db/migrations'
 import { buildPaths, ensureDirs, resolveDataDir } from './paths'
@@ -49,35 +50,65 @@ function createWindow(db: DatabaseSync): BrowserWindow {
   return win
 }
 
-app.whenReady().then(() => {
-  const paths = buildPaths(resolveDataDir())
-  ensureDirs(paths)
-  const db = new DatabaseSync(join(paths.dataDir, 'romvault.db'))
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON')
-  migrate(db)
-  const { v } = db.prepare('select sqlite_version() as v').get() as { v: string }
-  // Colonnes dérivées (titre lisible, regroupement Europe d'abord) : recalculées quand la règle change.
-  const DERIVED = '3'
-  const cur = db.prepare("SELECT value FROM settings WHERE key = '_derived'").get() as { value: string } | undefined
-  if (cur?.value !== DERIVED) {
-    rebuildDerived(db)
-    db.prepare("INSERT INTO settings (key, value) VALUES ('_derived', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(DERIVED)
-  }
-  // Les fiches mises en cache avant la correction du choix de jeu IGDB (un mod pouvait remplacer le jeu) sont refaites une fois.
-  if ((db.prepare("SELECT value FROM settings WHERE key = '_meta'").get() as { value: string } | undefined)?.value !== '2') {
-    db.exec("DELETE FROM game_meta WHERE provider IN ('igdb') OR provider LIKE 'l10n-%'")
-    db.prepare("INSERT INTO settings (key, value) VALUES ('_meta', '2') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run()
-  }
-  protocol.handle('rvimg', async (req) => {
-    const u = new URL(req.url)
-    const game = getGame(db, Number(u.pathname.split('/').filter(Boolean)[0]))
-    const kind: ImageKind = u.hostname === 'hero' || u.hostname === 'icon' || u.hostname === 'tile' ? u.hostname : 'card'
-    const img = game ? await getImage(db, paths.cache, game, kind, loadSettings(db)) : null
-    return img ? new Response(new Uint8Array(img.data), { headers: { 'content-type': img.type, 'cache-control': 'max-age=86400' } }) : new Response(null, { status: 404 })
+// Une seule instance : cliquer plusieurs fois sur l'exécutable (ou un raccourci) ne doit pas ouvrir plusieurs fenêtres
+// sur la même base SQLite (écritures concurrentes) — l'instance déjà lancée reprend juste le premier plan. Doit être
+// tranché avant `whenReady` : l'instance perdante ne doit ni créer de fenêtre ni toucher la base.
+let mainWindow: BrowserWindow | null = null
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
   })
-  registerIpc({ db, paths, sqliteVersion: v })
-  createWindow(db)
-  initUpdater(db)
-  void autoSyncCatalogOnUpdate(db)
-})
-app.on('window-all-closed', () => app.quit())
+
+  app.whenReady().then(() => {
+    const paths = buildPaths(resolveDataDir())
+    ensureDirs(paths)
+    const db = new DatabaseSync(join(paths.dataDir, 'romvault.db'))
+    db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON')
+    migrate(db)
+    const { v } = db.prepare('select sqlite_version() as v').get() as { v: string }
+    // Colonnes dérivées (titre lisible, regroupement Europe d'abord) : recalculées quand la règle change.
+    const DERIVED = '3'
+    const cur = db.prepare("SELECT value FROM settings WHERE key = '_derived'").get() as { value: string } | undefined
+    if (cur?.value !== DERIVED) {
+      rebuildDerived(db)
+      db.prepare("INSERT INTO settings (key, value) VALUES ('_derived', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(DERIVED)
+    }
+    // Les fiches mises en cache avant la correction du choix de jeu IGDB (un mod pouvait remplacer le jeu) sont refaites une fois.
+    // v3 : les échecs de recherche d'icône SteamGridDB mémorisés avant l'assouplissement de `sgdbId` (préfixe accepté,
+    // pas seulement l'égalité stricte) sont retentés une fois — une bonne partie n'était refusée qu'à cause d'un
+    // sous-titre ("Special Pikachu Edition"...) absent du nom court de SteamGridDB. Les identifiants déjà trouvés
+    // (json non nul) ne sont pas relancés : ils restent valables.
+    if ((db.prepare("SELECT value FROM settings WHERE key = '_meta'").get() as { value: string } | undefined)?.value !== '3') {
+      db.exec("DELETE FROM game_meta WHERE provider IN ('igdb') OR provider LIKE 'l10n-%' OR (provider = 'sgdb-id' AND json_extract(json, '$.id') IS NULL)")
+      db.prepare("INSERT INTO settings (key, value) VALUES ('_meta', '3') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run()
+      // L'icône est le seul format à ne tenter QUE SteamGridDB (pas de repli Libretro/IGDB) : son marqueur `.miss`
+      // (7 jours) doit sauter tout de suite, sinon le geste ci-dessus ne se voit qu'après son expiration naturelle.
+      const iconDir = join(paths.cache, 'images', 'icon')
+      readdir(iconDir).then((files) => Promise.all(files.filter((f) => f.endsWith('.miss')).map((f) => rm(join(iconDir, f))))).catch(() => { /* dossier pas encore créé : rien à nettoyer */ })
+    }
+    protocol.handle('rvimg', async (req) => {
+      const u = new URL(req.url)
+      const game = getGame(db, Number(u.pathname.split('/').filter(Boolean)[0]))
+      const kind: ImageKind = u.hostname === 'hero' || u.hostname === 'icon' || u.hostname === 'tile' ? u.hostname : 'card'
+      try {
+        const img = game ? await getImage(db, paths.cache, game, kind, loadSettings(db), req.signal) : null
+        return img ? new Response(new Uint8Array(img.data), { headers: { 'content-type': img.type, 'cache-control': 'max-age=86400' } }) : new Response(null, { status: 404 })
+      } catch (e) {
+        // Tuile refermée avant la fin de la résolution (filtres changés vite) : la requête est déjà abandonnée côté rendu.
+        if (e instanceof DOMException && e.name === 'AbortError') return new Response(null, { status: 499 })
+        throw e
+      }
+    })
+    registerIpc({ db, paths, sqliteVersion: v })
+    mainWindow = createWindow(db)
+    mainWindow.on('closed', () => { mainWindow = null })
+    initUpdater(db)
+    void autoSyncCatalogOnUpdate(db)
+  })
+  app.on('window-all-closed', () => app.quit())
+}

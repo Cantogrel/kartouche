@@ -23,6 +23,8 @@ export interface CatalogQuery {
   q?: string
   consoles?: string[]
   genres?: string[]
+  /** Identifiants `PublisherDef.id` (shared/publishers.ts) ; `'other'` pour le reste. */
+  publishers?: string[]
   sort?: CatalogSort
   offset?: number
   /** Sens du tri ; par défaut : décroissant pour la popularité et l'année, croissant pour le titre. */
@@ -37,6 +39,8 @@ export interface CatalogPage {
   games: CatalogGame[]
   consoles: { id: string; count: number }[]
   genres: { name: string; count: number }[]
+  /** Un par `PublisherDef` (+ `'other'`), seulement ceux qui ont au moins un résultat. */
+  publishers: { id: string; count: number }[]
 }
 
 export interface SyncProgress {

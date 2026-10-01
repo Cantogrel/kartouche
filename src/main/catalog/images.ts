@@ -28,8 +28,13 @@ export function sniff(b: Buffer): string {
   return ''
 }
 
-async function fetchImage(url: string, headers?: Record<string, string>): Promise<Buffer | null> {
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) })
+function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
+  const timeout = AbortSignal.timeout(ms)
+  return signal ? AbortSignal.any([signal, timeout]) : timeout
+}
+
+async function fetchImage(url: string, headers?: Record<string, string>, signal?: AbortSignal): Promise<Buffer | null> {
+  const res = await fetch(url, { headers, signal: withTimeout(signal, 30_000) })
   if (!res.ok) return null
   const b = Buffer.from(await res.arrayBuffer())
   return sniff(b) ? b : null
@@ -61,19 +66,37 @@ export async function cachedImage(dir: string, key: string, sources: ImageSource
 const SGDB = 'https://www.steamgriddb.com/api/v2'
 const IMG_LIMIT = 4000
 
-/** Appels réseau limités à 4 en parallèle : une page de catalogue déclenche des dizaines de résolutions d'images. */
-const queue: (() => void)[] = []
+/**
+ * Appels réseau limités à 4 en parallèle : une page de catalogue déclenche des dizaines de résolutions d'images.
+ * `signal` (celui de la requête `rvimg://`) permet d'abandonner tôt une tâche dont la tuile a déjà disparu (filtres
+ * changés très vite) : en attente, elle ne consomme jamais un des 4 emplacements ; déjà lancée, `fetchImage` coupe
+ * la requête réseau en cours au lieu de tourner jusqu'à son terme (jusqu'à 30 s) et de retarder les suivantes.
+ */
+const queue: { resolve: () => void }[] = []
 let running = 0
-export async function limited<T>(fn: () => Promise<T>): Promise<T> {
-  if (running >= 4) await new Promise<void>((r) => queue.push(r))
+export async function limited<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+  if (running >= 4) {
+    await new Promise<void>((resolve, reject) => {
+      const waiter = { resolve: () => { signal?.removeEventListener('abort', onAbort); resolve() } }
+      const onAbort = (): void => {
+        const i = queue.indexOf(waiter)
+        if (i >= 0) queue.splice(i, 1)
+        reject(new DOMException('Aborted', 'AbortError'))
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
+      queue.push(waiter)
+    })
+  }
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
   running++
-  try { return await fn() } finally { running--; queue.shift()?.() }
+  try { return await fn() } finally { running--; queue.shift()?.resolve() }
 }
 
-async function sgdbApi<T>(db: DatabaseSync, path: string, key: string): Promise<T | null> {
+async function sgdbApi<T>(db: DatabaseSync, path: string, key: string, signal?: AbortSignal): Promise<T | null> {
   if (usedToday(db, 'sgdb-img') >= IMG_LIMIT) return null
   recordUse(db, 'sgdb-img', Date.now())
-  const res = await fetch(`${key === PROXY_KEY ? `${PROXY_URL}/sgdb` : SGDB}${path}`, { headers: key === PROXY_KEY ? PROXY_HEADERS : { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(30_000) })
+  const res = await fetch(`${key === PROXY_KEY ? `${PROXY_URL}/sgdb` : SGDB}${path}`, { headers: key === PROXY_KEY ? PROXY_HEADERS : { Authorization: `Bearer ${key}` }, signal: withTimeout(signal, 30_000) })
   if (!res.ok) return null
   return ((await res.json()) as { data: T }).data
 }
@@ -82,37 +105,51 @@ async function sgdbApi<T>(db: DatabaseSync, path: string, key: string): Promise<
 const normalizeName = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
 /**
- * Identifiant SteamGridDB du jeu (recherche par nom), mémorisé y compris quand il n'y en a pas. Aucun résultat
- * approché n'est retenu : sur une franchise (Pokémon Rouge/Jaune, Final Fantasy…), le premier résultat de
- * l'autocomplete est souvent un AUTRE jeu de la même série (un titre régional ne correspond à aucune entrée SGDB
- * telle quelle) plutôt que celui recherché — mieux vaut aucune image que celle d'un autre jeu.
+ * Un nom « correspond » à `want` s'il est égal, ou si le plus court des deux est un début propre de l'autre (le nom
+ * court de SteamGridDB, ex. « Pokémon Yellow Version », est presque toujours un simple préfixe du titre complet du
+ * DAT avec son sous-titre, ex. « Pokemon - Yellow Version - Special Pikachu Edition » — les rejeter faute d'égalité
+ * stricte privait d'icône une bonne partie du catalogue). `minLen` évite qu'un préfixe trivialement court (« Mario »)
+ * ne matche n'importe quel jeu de la série.
  */
-export async function sgdbId(db: DatabaseSync, game: CatalogGame, key: string): Promise<number | null> {
+function looseNameMatch(want: string, name: string, minLen = 6): boolean {
+  const k = normalizeName(name)
+  if (k === want) return true
+  const [shorter, longer] = k.length <= want.length ? [k, want] : [want, k]
+  return shorter.length >= minLen && longer.startsWith(shorter)
+}
+
+/**
+ * Identifiant SteamGridDB du jeu (recherche par nom), mémorisé y compris quand il n'y en a pas. Aucun résultat
+ * approché n'est retenu au-delà de `looseNameMatch` : sur une franchise (Pokémon Rouge/Jaune, Final Fantasy…), le
+ * premier résultat de l'autocomplete est souvent un AUTRE jeu de la même série (un titre régional ne correspond à
+ * aucune entrée SGDB telle quelle) plutôt que celui recherché — mieux vaut aucune image que celle d'un autre jeu.
+ */
+export async function sgdbId(db: DatabaseSync, game: CatalogGame, key: string, signal?: AbortSignal): Promise<number | null> {
   const row = db.prepare("SELECT json FROM game_meta WHERE game_id = ? AND provider = 'sgdb-id'").get(game.id) as { json: string } | undefined
   if (row) return (JSON.parse(row.json) as { id: number | null }).id
   const term = searchTerm(game.name)
-  const found = term ? await sgdbApi<{ id: number; name: string }[]>(db, `/search/autocomplete/${encodeURIComponent(term)}`, key) : null
+  const found = term ? await sgdbApi<{ id: number; name: string }[]>(db, `/search/autocomplete/${encodeURIComponent(term)}`, key, signal) : null
   if (found === null) throw new Error('SteamGridDB indisponible')
   const want = normalizeName(term)
-  const hit = found.find((f) => normalizeName(f.name) === want)
+  const hit = found.find((f) => looseNameMatch(want, f.name))
   db.prepare("INSERT OR REPLACE INTO game_meta (game_id, provider, json, fetched_at) VALUES (?, 'sgdb-id', ?, ?)").run(game.id, JSON.stringify({ id: hit?.id ?? null }), Date.now())
   return hit?.id ?? null
 }
 
-const sgdbSource = (db: DatabaseSync, game: CatalogGame, s: Settings, kind: 'grids' | 'heroes' | 'icons', dims?: string): ImageSource => async () => {
+const sgdbSource = (db: DatabaseSync, game: CatalogGame, s: Settings, kind: 'grids' | 'heroes' | 'icons', dims?: string, signal?: AbortSignal): ImageSource => async () => {
   if (!s.sgdbApiKey) return null
-  const id = await sgdbId(db, game, s.sgdbApiKey)
+  const id = await sgdbId(db, game, s.sgdbApiKey, signal)
   if (id === null) return null
   const q = kind === 'grids' ? `?dimensions=${dims ?? '460x215,920x430'}&limit=1` : kind === 'icons' ? '?mimes=image/png&limit=1' : '?limit=1'
-  const list = await sgdbApi<{ url: string }[]>(db, `/${kind}/game/${id}${q}`, s.sgdbApiKey)
-  return list?.[0] ? fetchImage(list[0].url) : null
+  const list = await sgdbApi<{ url: string }[]>(db, `/${kind}/game/${id}${q}`, s.sgdbApiKey, signal)
+  return list?.[0] ? fetchImage(list[0].url, undefined, signal) : null
 }
 
 const igdbUrl = (imageId: string, size: 't_screenshot_big' | 't_1080p'): string => `https://images.igdb.com/igdb/image/upload/${size}/${imageId}.jpg`
 
 /** Illustration IGDB : celle mémorisée au moment de la synchro (Switch), sinon recherche par nom sur la plateforme du jeu. */
-const igdbSource = (db: DatabaseSync, game: CatalogGame, s: Settings, size: 't_screenshot_big' | 't_1080p'): ImageSource => async () => {
-  if (game.img) return fetchImage(igdbUrl(game.img, size))
+const igdbSource = (db: DatabaseSync, game: CatalogGame, s: Settings, size: 't_screenshot_big' | 't_1080p', signal?: AbortSignal): ImageSource => async () => {
+  if (game.img) return fetchImage(igdbUrl(game.img, size), undefined, signal)
   const platform = consoleById(game.console)?.igdb
   if (!s.igdbClientId || !s.igdbClientSecret || !platform || usedToday(db, 'igdb-img') >= IMG_LIMIT) return null
   recordUse(db, 'igdb-img', Date.now())
@@ -120,12 +157,12 @@ const igdbSource = (db: DatabaseSync, game: CatalogGame, s: Settings, size: 't_s
   const [g] = await igdbQuery<{ artworks?: { image_id: string }[]; screenshots?: { image_id: string }[] }>(s, await igdbToken(s),
     `search "${term}"; where platforms = (${platform}); fields artworks.image_id,screenshots.image_id; limit 1;`)
   const id = g?.artworks?.[0]?.image_id ?? g?.screenshots?.[0]?.image_id
-  return id ? fetchImage(igdbUrl(id, size)) : null
+  return id ? fetchImage(igdbUrl(id, size), undefined, signal) : null
 }
 
-const libretroSource = (game: CatalogGame, kind: 'Named_Boxarts' | 'Named_Snaps' | 'Named_Titles'): ImageSource => async () => {
+const libretroSource = (game: CatalogGame, kind: 'Named_Boxarts' | 'Named_Snaps' | 'Named_Titles', signal?: AbortSignal): ImageSource => async () => {
   const def = consoleById(game.console)
-  return def && def.dat !== 'igdb' ? fetchImage(thumbnailUrl(def, game.title, kind)) : null
+  return def && def.dat !== 'igdb' ? fetchImage(thumbnailUrl(def, game.title, kind), undefined, signal) : null
 }
 
 /**
@@ -138,21 +175,43 @@ const libretroSource = (game: CatalogGame, kind: 'Named_Boxarts' | 'Named_Snaps'
  *   pour remplir la tuile sans recadrage agressif ; un écran-titre/capture (horizontal) y resterait fortement rogné,
  *   donc relégué en dernier recours.
  */
-export function imageSources(db: DatabaseSync, game: CatalogGame, kind: ImageKind, s: Settings): ImageSource[] {
+export function imageSources(db: DatabaseSync, game: CatalogGame, kind: ImageKind, s: Settings, signal?: AbortSignal): ImageSource[] {
   // Icône : uniquement de vraies icônes carrées (SteamGridDB) ; sans icône, l'interface affiche la pastille de la console, jamais une jaquette rognée.
-  if (kind === 'icon') return [sgdbSource(db, game, s, 'icons')]
+  if (kind === 'icon') return [sgdbSource(db, game, s, 'icons', undefined, signal)]
   if (kind === 'hero') {
-    return [sgdbSource(db, game, s, 'heroes'), igdbSource(db, game, s, 't_1080p'), sgdbSource(db, game, s, 'grids'),
-      libretroSource(game, 'Named_Titles'), libretroSource(game, 'Named_Snaps'), libretroSource(game, 'Named_Boxarts')]
+    return [sgdbSource(db, game, s, 'heroes', undefined, signal), igdbSource(db, game, s, 't_1080p', signal), sgdbSource(db, game, s, 'grids', undefined, signal),
+      libretroSource(game, 'Named_Titles', signal), libretroSource(game, 'Named_Snaps', signal), libretroSource(game, 'Named_Boxarts', signal)]
   }
-  const first = game.img ? [igdbSource(db, game, s, 't_screenshot_big')] : []
+  const first = game.img ? [igdbSource(db, game, s, 't_screenshot_big', signal)] : []
   if (kind === 'tile') {
-    return [sgdbSource(db, game, s, 'grids', '600x900'), libretroSource(game, 'Named_Boxarts'), ...first,
-      libretroSource(game, 'Named_Titles'), libretroSource(game, 'Named_Snaps'), igdbSource(db, game, s, 't_screenshot_big')]
+    return [sgdbSource(db, game, s, 'grids', '600x900', signal), libretroSource(game, 'Named_Boxarts', signal), ...first,
+      libretroSource(game, 'Named_Titles', signal), libretroSource(game, 'Named_Snaps', signal), igdbSource(db, game, s, 't_screenshot_big', signal)]
   }
-  return [...first, sgdbSource(db, game, s, 'grids'), libretroSource(game, 'Named_Titles'), libretroSource(game, 'Named_Snaps'),
-    igdbSource(db, game, s, 't_screenshot_big'), libretroSource(game, 'Named_Boxarts')]
+  return [...first, sgdbSource(db, game, s, 'grids', undefined, signal), libretroSource(game, 'Named_Titles', signal), libretroSource(game, 'Named_Snaps', signal),
+    igdbSource(db, game, s, 't_screenshot_big', signal), libretroSource(game, 'Named_Boxarts', signal)]
 }
 
-export const getImage = (db: DatabaseSync, cacheDir: string, game: CatalogGame, kind: ImageKind, s: Settings): Promise<Img | null> =>
-  limited(() => cachedImage(join(cacheDir, 'images', kind), String(game.id), imageSources(db, game, kind, s)))
+/**
+ * Annulation explicite : `req.signal` (Electron `protocol.handle`) NE s'arme PAS quand le rendu retire l'`<img>`
+ * qui a émis la requête (vérifié : `signal.aborted` reste `false` jusqu'au bout même après la suppression du nœud) —
+ * seul un rechargement/fermeture de page l'arme. Le renderer doit donc annuler lui-même (`images:cancel`, cf.
+ * `Cover`/`GameIcon`) une tuile qui disparaît avant sa résolution ; c'est ce contrôleur par clé qui porte l'annulation
+ * réelle jusqu'au `fetch` en cours (cf. [[bigpicture-images-abort-gotcha]] côté mémoire projet).
+ */
+const pending = new Map<string, AbortController>()
+
+export function cancelImage(kind: ImageKind, gameId: number): void {
+  pending.get(`${kind}:${gameId}`)?.abort()
+}
+
+export async function getImage(db: DatabaseSync, cacheDir: string, game: CatalogGame, kind: ImageKind, s: Settings, signal?: AbortSignal): Promise<Img | null> {
+  const key = `${kind}:${game.id}`
+  const ac = new AbortController()
+  pending.set(key, ac)
+  const combined = signal ? AbortSignal.any([signal, ac.signal]) : ac.signal
+  try {
+    return await limited(() => cachedImage(join(cacheDir, 'images', kind), String(game.id), imageSources(db, game, kind, s, combined)), combined)
+  } finally {
+    if (pending.get(key) === ac) pending.delete(key)
+  }
+}

@@ -5,6 +5,7 @@ import { useApp } from '@/store/app'
 import { useSettings } from '@/store/settings'
 import { CONSOLES, MAKERS, consoleById } from '@shared/consoles'
 import { genreLabel } from '@shared/genres'
+import { PUBLISHER_OTHER, publisherLabel } from '@shared/publishers'
 import type { CatalogPage, CatalogSort, SyncProgress } from '@shared/catalog'
 
 const PAGE = 60
@@ -16,7 +17,7 @@ let lastScrollTop = 0
 
 export function Catalog({ query }: { query: string }) {
   const { go, catalog: view, setCatalog } = useApp()
-  const { consoles, genres, sort, dir, variants, limit } = view
+  const { consoles, genres, publishers, sort, dir, variants, limit } = view
   const lang = useSettings((s) => s.lang)
   const effectiveDir = dir ?? DEFAULT_DIR[sort]
   const [page, setPage] = useState<CatalogPage | null>(null)
@@ -47,18 +48,18 @@ export function Catalog({ query }: { query: string }) {
   useEffect(() => {
     const id = ++reqId.current
     const h = setTimeout(() => {
-      window.api.invoke('catalog:search', { q: query, consoles, genres, sort, dir: effectiveDir, limit, includeVariants: variants })
+      window.api.invoke('catalog:search', { q: query, consoles, genres, publishers, sort, dir: effectiveDir, limit, includeVariants: variants })
         .then((p) => { if (id === reqId.current) setPage(p) })
     }, 150)
     return () => clearTimeout(h)
-  }, [query, consoles, genres, sort, effectiveDir, limit, variants, status?.total, status?.enriched])
+  }, [query, consoles, genres, publishers, sort, effectiveDir, limit, variants, status?.total, status?.enriched])
 
   // Tout changement de filtre ou de recherche (après le premier rendu) revient à la première page.
   const first = useRef(true)
   useEffect(() => {
     if (first.current) { first.current = false; return }
     setCatalog({ limit: PAGE })
-  }, [query, consoles, genres, sort, effectiveDir, variants, setCatalog])
+  }, [query, consoles, genres, publishers, sort, effectiveDir, variants, setCatalog])
 
   const sync = async (): Promise<void> => {
     setStatus((s) => ({ total: s?.total ?? 0, syncing: true, enriched: s?.enriched ?? false }))
@@ -135,6 +136,9 @@ export function Catalog({ query }: { query: string }) {
         <FilterGroup title={t('filter.console')} count={CONSOLES.length} selected={consoles}
           groups={MAKERS.map((m) => ({ title: m, options: CONSOLES.filter((c) => c.maker === m).map((c) => c.id) }))}
           format={(id) => `${labelOf(id)} (${page?.consoles.find((c) => c.id === id)?.count ?? 0})`} onToggle={(o) => setCatalog({ consoles: toggle(consoles, o) })} />
+        <FilterGroup title={t('filter.publisher')} count={page?.publishers.length ?? 0} options={(page?.publishers ?? []).map((p) => p.id)} selected={publishers}
+          format={(id) => `${id === PUBLISHER_OTHER ? t('filter.publisherOther') : publisherLabel(id)} (${page?.publishers.find((p) => p.id === id)?.count ?? 0})`}
+          onToggle={(o) => setCatalog({ publishers: toggle(publishers, o) })} />
         <FilterGroup title={t('filter.genre')} count={page?.genres.length ?? 0} options={(page?.genres ?? []).map((g) => g.name)} selected={genres}
           format={(n) => `${genreLabel(n, lang)} (${page?.genres.find((g) => g.name === n)?.count ?? 0})`} onToggle={(o) => setCatalog({ genres: toggle(genres, o) })} />
         <label className="check"><input type="checkbox" checked={variants} onChange={(e) => setCatalog({ variants: e.target.checked })} /> {t('catalog.variants')}</label>

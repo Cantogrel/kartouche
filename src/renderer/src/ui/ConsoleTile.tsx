@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { consoleById } from '@shared/consoles'
 
 /** Pastille de console : sigle court sur la couleur de la marque (Nintendo en rouge/violet selon la famille, Sony en bleu). */
@@ -21,6 +21,8 @@ export function ConsoleTile({ id }: { id: string }) {
 export function GameIcon({ gameId, console: cons }: { gameId: number | null; console: string }) {
   const [state, setState] = useState<{ id: number; ok: boolean } | null>(null)
   const ok = gameId !== null && state?.id === gameId && state.ok
+  // cf. Cover dans ui/index.tsx : annule côté principal une icône abandonnée avant sa résolution.
+  useEffect(() => () => { if (gameId !== null) void window.api.invoke('images:cancel', { kind: 'icon', gameId }) }, [gameId])
   return (
     <span className="game-icon">
       {!ok && <ConsoleTile id={cons} />}

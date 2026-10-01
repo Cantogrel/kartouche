@@ -19,6 +19,19 @@ describe('pickNext', () => {
     expect(pickNext(cur, [box(0, 200)], 'right')).toBe(-1)
     expect(pickNext(cur, [], 'up')).toBe(-1)
   })
+  // Bug vécu (Accueil, 2026-10-01) : une rangée incomplète (dernière rangée d'une section, ou section suivante après
+  // l'en-tête) n'a pas de tuile dans la colonne courante ; il ne faut jamais sauter par-dessus elle pour retomber sur
+  // une tuile plus lointaine mais bien alignée en colonne.
+  it('ne saute pas une rangée trouée pour une tuile plus loin mais alignée', () => {
+    const twoRowsDownAligned = box(200, 500) // même colonne, 2 rangées plus bas (ex. section suivante)
+    const nextRowOffColumn = box(0, 350) // rangée immédiatement en dessous, mais décalée
+    expect(pickNext(cur, [twoRowsDownAligned, nextRowOffColumn], 'down')).toBe(1)
+  })
+  it('garde la colonne quand la rangée la plus proche a bien une tuile à cet emplacement', () => {
+    const sameColumnNextRow = box(200, 354) // rangée immédiate, même colonne
+    const offColumnSameRow = box(420, 354) // même rangée, colonne voisine
+    expect(pickNext(cur, [sameColumnNextRow, offColumnSameRow], 'down')).toBe(0)
+  })
 })
 
 describe('manette', () => {

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { CatalogSort } from '@shared/catalog'
 
 /** Filtres du catalogue, conservés quand on ouvre une fiche puis qu'on revient. */
-export interface CatalogView { consoles: string[]; genres: string[]; sort: CatalogSort; /** null = sens par défaut du critère */ dir: 'asc' | 'desc' | null; variants: boolean; limit: number }
+export interface CatalogView { consoles: string[]; genres: string[]; publishers: string[]; sort: CatalogSort; /** null = sens par défaut du critère */ dir: 'asc' | 'desc' | null; variants: boolean; limit: number }
 
 /** Onglet de la Bibliothèque : un filtre fixe ou `c<id>` pour une collection. */
 export type LibraryTab = 'all' | 'ready' | 'missing' | 'favorites' | `c${number}`
@@ -40,7 +40,7 @@ function initialLoc(): Loc {
 export const useApp = create<AppState>((set, get) => ({
   ...initialLoc(), history: [], librarySearch: '', pageTitle: null, bigPicture: location.hash === '#bigpicture',
   setBigPicture: (bigPicture) => set({ bigPicture }),
-  catalog: { consoles: [], genres: [], sort: 'popularity', dir: null, variants: false, limit: 60 },
+  catalog: { consoles: [], genres: [], publishers: [], sort: 'popularity', dir: null, variants: false, limit: 60 },
   setCatalog: (patch) => set({ catalog: { ...get().catalog, ...patch } }),
   library: { tab: 'all', consoleFilter: null },
   setLibraryView: (patch) => set({ library: { ...get().library, ...patch } }),

@@ -1,5 +1,5 @@
 import { t } from '@/i18n'
-import { useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 /** Dégradé déterministe servant de jaquette tant qu'aucune image n'est disponible. */
 export function artStyle(seed: string): { background: string } {
@@ -86,6 +86,10 @@ export function Cover({ gameId, title, kind = 'card', className, children }: { g
   // L'état est rattaché à l'URL : quand la liste est refiltrée et que le composant est réutilisé pour un autre jeu, on repart de « chargement »
   // sans effet différé (un effet remettait « chargement » APRÈS l'événement load d'une image en cache, et l'image restait invisible).
   const [res, setRes] = useState<{ src: string; v: 'wide' | 'tall' | 'none' } | null>(null)
+  // Une tuile qui disparaît avant la fin de la résolution (filtres changés vite) annule la tâche côté principal :
+  // sinon elle tourne jusqu'au bout (jusqu'à plusieurs x 30 s de repli réseau) en gardant un des 4 emplacements
+  // parallèles, ce qui retarde les vraies requêtes suivantes ailleurs dans l'appli (`req.signal` ne s'arme pas ici).
+  useEffect(() => () => void window.api.invoke('images:cancel', { kind, gameId }), [kind, gameId])
   const state = res && res.src === src ? res.v : 'loading'
   const settle = (img: HTMLImageElement | null): void => {
     if (img && img.complete && img.naturalWidth > 0 && !(res && res.src === src)) setRes({ src, v: img.naturalHeight > img.naturalWidth ? 'tall' : 'wide' })
