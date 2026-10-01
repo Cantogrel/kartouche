@@ -9,6 +9,7 @@ import { PUBLISHER_OTHER, publisherLabel } from '@shared/publishers'
 import type { CatalogPage, CatalogSort, SyncProgress } from '@shared/catalog'
 
 const PAGE = 60
+const SOURCE_TAGS_SHOWN = 3
 const toggle = (arr: string[], v: string): string[] => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
 const labelOf = (id: string): string => consoleById(id)?.label ?? id
 const DEFAULT_DIR = { popularity: 'desc', year: 'desc', title: 'asc' } as const
@@ -127,6 +128,12 @@ export function Catalog({ query }: { query: string }) {
               <div className="title">{g.name}</div>
               <div className="muted">{[g.developer, g.year].filter(Boolean).join(' · ')}</div>
               <div className="tags">{g.genre && <Tag>{genreLabel(g.genre, lang)}</Tag>}</div>
+              {(g.sourceLists?.length ?? 0) > 0 && (
+                <div className="tags source-tags">
+                  {g.sourceLists!.slice(0, SOURCE_TAGS_SHOWN).map((name) => <Tag key={name} title={t('catalog.sourceTagTitle', { name })}>⬇ {name}</Tag>)}
+                  {g.sourceLists!.length > SOURCE_TAGS_SHOWN && <Tag>+{g.sourceLists!.length - SOURCE_TAGS_SHOWN}</Tag>}
+                </div>
+              )}
             </div>
           </div>
         ))}

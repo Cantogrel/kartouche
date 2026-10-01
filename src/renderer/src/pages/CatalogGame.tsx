@@ -4,12 +4,13 @@ import { useApp } from '@/store/app'
 import { t } from '@/i18n'
 import { consoleById } from '@shared/consoles'
 import { canonicalGenre, genreLabel } from '@shared/genres'
+import { formatSize } from '@shared/format'
 import { useSettings } from '@/store/settings'
 import type { CatalogGame, GameDetails } from '@shared/catalog'
 import type { LibraryEntry } from '@shared/library'
 import type { GameSource } from '@shared/sourceList'
-import type { DownloadProgress } from '@shared/downloads'
 import { useLibrary } from '@/store/library'
+import { useDownloads } from '@/store/downloads'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
 import { OpenEmulatorButton, PlayButton, QuickExitNotice } from '@/ui/PlayButton'
 import { AchievementsPanel, ContentPanel, FlagButtons, SavesPanel } from '@/ui/GameExtras'
@@ -48,7 +49,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
           <div className="row">
             {!owned && <Button variant="primary" onClick={() => void addToLibrary(game.id)}>{t('addToLibrary')}</Button>}
             {owned?.missing && <Button variant="primary" onClick={() => void link()}>{t('linkRom')}</Button>}
-            {(!owned || owned.missing) && sources.length > 0 && <DownloadButton sources={sources} />}
+            {(!owned || owned.missing) && sources.length > 0 && <DownloadButton sources={sources} gameName={game.name} />}
             {owned && !owned.missing && <PlayButton entry={owned} />}
             {owned && !owned.missing && <OpenEmulatorButton entry={owned} />}
             {owned && <FlagButtons entry={owned} />}
@@ -78,37 +79,43 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
  * Télécharge une source choisie par l'utilisateur (Paramètres → Sources, P03-S1), puis vérifie son hash contre le
  * jeu attendu et l'installe dans la bibliothèque (P05) — jamais d'installation silencieuse si le hash ne correspond pas.
  */
-function DownloadButton({ sources }: { sources: GameSource[] }) {
+function DownloadButton({ sources, gameName }: { sources: GameSource[]; gameName: string }) {
   const [selected, setSelected] = useState(sources[0]?.id)
-  const [progress, setProgress] = useState<DownloadProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const busy = progress?.phase === 'downloading'
+  const job = useDownloads((s) => (selected !== undefined ? s.jobs[selected] : undefined))
+  const startDownload = useDownloads((s) => s.start)
+  const cancelDownload = useDownloads((s) => s.cancel)
+  const busy = job?.phase === 'downloading'
 
   const start = async (): Promise<void> => {
     if (selected === undefined || busy) return
     setError(null)
-    setProgress(null)
-    const off = window.api.on('download:progress', (p) => { if (p.sourceId === selected) setProgress(p) })
-    try {
-      const r = await window.api.invoke('downloads:start', selected)
-      if (!r.ok) setError(r.error ?? null)
-      else await useLibrary.getState().refresh()
-    } finally {
-      off()
-    }
+    const r = await startDownload(selected, gameName)
+    if (!r.ok) setError(r.error ?? null)
+    else await useLibrary.getState().refresh()
   }
-  const cancel = (): void => { if (selected !== undefined) void window.api.invoke('downloads:cancel', selected) }
-  const percent = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : null
+  const cancel = (): void => { if (selected !== undefined) cancelDownload(selected) }
+  const percent = job && job.total > 0 ? Math.round((job.done / job.total) * 100) : null
+  // Plusieurs entrées d'une même liste n'ont souvent ni nom ni poids distincts : le titre brut de l'entrée
+  // (convention No-Intro/Redump) porte lui la région/langues/révision qui les différencient vraiment.
+  const sameList = sources.every((s) => s.listName === sources[0]?.listName)
 
   return (
     <div className="row">
       {sources.length > 1 && (
         <select value={selected} disabled={busy} onChange={(e) => setSelected(Number(e.target.value))}>
-          {sources.map((s) => <option key={s.id} value={s.id}>{s.listName}{s.sizeBytes ? ` · ${(s.sizeBytes / 1048576).toFixed(0)} MB` : ''}</option>)}
+          {sources.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.title}{!sameList ? ` · ${s.listName}` : ''}{s.sizeBytes ? ` · ${formatSize(s.sizeBytes)}` : ''}
+            </option>
+          ))}
         </select>
       )}
       {busy
-        ? <Button onClick={cancel}>{t('download.cancel')}{percent !== null ? ` (${percent} %)` : ''}</Button>
+        // Juste après le clic, avant la première mesure réelle (comme « Lancement… » sur le bouton Jouer) : pas encore annulable.
+        ? (percent !== null
+            ? <Button onClick={cancel}>{t('download.cancel')} ({percent} %)</Button>
+            : <Button disabled>{t('download.downloading')}</Button>)
         : <Button variant="primary" onClick={() => void start()}>{t('download.button')}</Button>}
       {error && <span className="muted">{error}</span>}
     </div>
@@ -122,7 +129,7 @@ export function LibraryFile({ entry }: { entry: LibraryEntry }) {
     <div className="lib-file">
       {entry.missing
         ? <div className="muted">{t('game.noFile')}</div>
-        : <><div className="muted">{entry.path}</div><div className="muted">{t(`match.${entry.match}`)} · {(entry.size / 1048576).toFixed(entry.size > 10485760 ? 0 : 1)} MB</div></>}
+        : <><div className="muted">{entry.path}</div><div className="muted">{t(`match.${entry.match}`)} · {formatSize(entry.size)}</div></>}
       <div className="muted">{days === null ? t('game.neverPlayed') : t('game.lastPlayed', { n: days })}{entry.playMinutes > 0 && ` · ${t('game.playtime', { n: entry.playMinutes })}`}</div>
     </div>
   )

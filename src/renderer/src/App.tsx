@@ -5,6 +5,7 @@ import { useApp, type Route } from '@/store/app'
 import { PageHead } from '@/ui'
 import { useLibrary } from '@/store/library'
 import { useEmulators } from '@/store/emulators'
+import { useDownloads } from '@/store/downloads'
 import { useUpdate } from '@/store/update'
 import { useChangelog } from '@/store/changelog'
 import { GameIcon } from '@/ui/ConsoleTile'
@@ -34,6 +35,8 @@ export default function App() {
   const startBp = useSettings((s) => s.settings.startInBigPicture)
   useEffect(() => { if (ready && !started.current) { started.current = true; if (startBp) setBigPicture(true) } }, [ready, startBp, setBigPicture])
   useEffect(() => { void load(); void useLibrary.getState().refresh(); void useEmulators.getState().refresh(); return useEmulators.getState().listen() }, [load])
+  // Barre d'état : un téléchargement démarré depuis une fiche continue, et doit y rester visible, même après avoir changé de page.
+  useEffect(() => useDownloads.getState().listen(), [])
   // Mises à jour : état tenu à jour partout (pas seulement pendant que Paramètres est monté), et changelog de la
   // version qu'on vient de démarrer proposé une seule fois, où que l'utilisateur se trouve dans l'app.
   useEffect(() => { void useUpdate.getState().refresh(); void useChangelog.getState().showPending(); return useUpdate.getState().listen() }, [])
