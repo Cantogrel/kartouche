@@ -244,6 +244,11 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .bp-summary { max-height: 170px; overflow-y: auto; font-size: 16px; line-height: 1.5; padding: 6px 10px; margin: 0 -10px; }
 .bp-detail { width: min(1000px, 90vw); }
 .bp-menu { display: flex; flex-direction: column; gap: 14px; min-width: 360px; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: 16px; padding: 28px; }
+/* Titres de source souvent longs (région, langues…) : le bouton générique est en `white-space: nowrap`, ce qui
+   débordait ou cassait la mise en page quand il était affiché en ligne dans la barre d'actions — ici il peut
+   revenir à la ligne dans sa propre fenêtre, qui a une largeur maximale pour rester lisible. */
+.bp-source-picker { max-width: min(640px, 90vw); }
+.bp-source-picker .bp-btn { white-space: normal; text-align: left; }
 .bp-settings { display: flex; flex-direction: column; gap: 10px; padding: 10px; max-width: 900px; }
 .bp-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; border: 2px solid transparent; background: var(--bg-elevated); border-radius: var(--radius-lg); padding: 14px 22px; text-align: left; color: var(--text); }
 .bp-row:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--focus-glow); }

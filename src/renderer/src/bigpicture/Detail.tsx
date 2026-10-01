@@ -3,12 +3,15 @@ import { t } from '@/i18n'
 import { Badge, Cover, Tag, artStyle } from '@/ui'
 import { useLibrary } from '@/store/library'
 import { useEmulators } from '@/store/emulators'
+import { useDownloads } from '@/store/downloads'
 import { useSettings } from '@/store/settings'
 import { emulatorForConsole } from '@shared/emulators'
 import { consoleById } from '@shared/consoles'
 import { canonicalGenre, genreLabel } from '@shared/genres'
+import { formatSize } from '@shared/format'
 import type { CatalogGame, GameDetails } from '@shared/catalog'
 import type { LibraryEntry } from '@shared/library'
+import type { GameSource } from '@shared/sourceList'
 import { focusEl, navItems } from './useNav'
 
 const label = (c: string): string => consoleById(c)?.label ?? c
@@ -27,14 +30,27 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   // Un seul jeu à la fois (cf. launchGame) : `otherRunning` propose de fermer l'autre plutôt qu'un message sec, avec
   // le même mécanisme que PlayButton en mode classique (window.confirm), mais navigable à la manette ici.
   const [confirmStop, setConfirmStop] = useState<{ otherId: number; title: string } | null>(null)
+  // Téléchargement (P03/P05, même pipeline que la fiche classique) : plusieurs sources possibles pour un même jeu
+  // (régions, révisions…) — choisies via une liste dans une fenêtre dédiée plutôt qu'un <select> natif ou un bouton
+  // qui ferait défiler les titres en place (souvent longs, ex. « (Europe, Australia) (En,Fr,De,Es,It) » : ça débordait
+  // et cassait la barre d'actions avec `white-space: nowrap` sur `.bp-btn`).
+  const [sources, setSources] = useState<GameSource[]>([])
+  const [sourceId, setSourceId] = useState<number | undefined>(undefined)
+  const [pickingSource, setPickingSource] = useState(false)
+  const job = useDownloads((s) => (sourceId !== undefined ? s.jobs[sourceId] : undefined))
+  const startDownload = useDownloads((s) => s.start)
+  const cancelDownload = useDownloads((s) => s.cancel)
+  const downloading = job?.phase === 'downloading'
 
   useEffect(() => {
     if (gameId === null) return
     void window.api.invoke('catalog:get', gameId).then(setGame)
     void window.api.invoke('catalog:details', { id: gameId }).then(setDetails)
+    void window.api.invoke('sources:forGame', gameId).then((s) => { setSources(s); setSourceId(s[0]?.id) })
   }, [gameId])
   useEffect(() => { focusEl(navItems()[0]) }, [])
   useEffect(() => { if (confirmStop) focusEl(navItems()[0]) }, [confirmStop])
+  useEffect(() => { if (pickingSource) focusEl(navItems()[0]) }, [pickingSource])
 
   const title = game?.name ?? owned?.title ?? ''
   const cons = game?.console ?? owned?.console ?? ''
@@ -59,6 +75,19 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
     await launch()
   }
   const playable = owned && !owned.missing
+  const downloadable = (!owned || owned.missing) && sources.length > 0
+  const startDl = async (id: number): Promise<void> => {
+    if (useDownloads.getState().jobs[id]) return
+    setSourceId(id)
+    setError(null)
+    const r = await startDownload(id, title)
+    if (!r.ok) setError(r.error ?? null)
+    else await useLibrary.getState().refresh()
+  }
+  const clickDownload = (): void => {
+    if (sources.length > 1) setPickingSource(true)
+    else if (sources[0]) void startDl(sources[0].id)
+  }
   return (
     <div className="bp-overlay">
       <div className="bp-detail" data-focus-root>
@@ -78,6 +107,11 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
               ? <button data-nav className="bp-btn primary" onClick={() => void window.api.invoke('game:stop', owned.id)}>■ {t('play.stop')}</button>
               : <button data-nav className="bp-btn primary" onClick={() => void launch()}>▶ {t('play')}</button>)}
             {!owned && gameId !== null && <button data-nav className="bp-btn primary" onClick={() => void useLibrary.getState().add(gameId)}>+ {t('addToLibrary')}</button>}
+            {downloadable && (downloading
+              ? <button data-nav className="bp-btn" onClick={() => sourceId !== undefined && cancelDownload(sourceId)}>
+                  {job && job.total > 0 ? `${t('download.cancel')} (${Math.round((job.done / job.total) * 100)}%)` : t('download.downloading')}
+                </button>
+              : <button data-nav className="bp-btn primary" onClick={clickDownload}>⬇ {t('download.button')}</button>)}
             {owned && <button data-nav className="bp-btn" onClick={() => void useLibrary.getState().setFlag(owned.id, { favorite: !owned.favorite })}>{owned.favorite ? '♥' : '♡'} {t(owned.favorite ? 'fav.remove' : 'fav.add')}</button>}
             {owned?.missing && <span className="muted">{t('game.noFile')}</span>}
             <button data-nav className="bp-btn" onClick={onClose}>{t('bp.back')}</button>
@@ -91,6 +125,19 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
             <p>{t('play.confirmStopOther', { title: confirmStop.title })}</p>
             <button data-nav className="bp-btn" onClick={() => setConfirmStop(null)}>{t('dialog.cancel')}</button>
             <button data-nav className="bp-btn primary" onClick={() => void stopOtherAndLaunch()}>{t('play.confirmStopOtherYes')}</button>
+          </div>
+        </div>
+      )}
+      {pickingSource && (
+        <div className="bp-overlay">
+          <div className="bp-menu bp-source-picker" data-focus-root>
+            <p>{t('download.choose')}</p>
+            {sources.map((s) => (
+              <button key={s.id} data-nav className="bp-btn" onClick={() => { setPickingSource(false); void startDl(s.id) }}>
+                {s.title}{s.sizeBytes ? ` · ${formatSize(s.sizeBytes)}` : ''}
+              </button>
+            ))}
+            <button data-nav className="bp-btn" onClick={() => setPickingSource(false)}>{t('dialog.cancel')}</button>
           </div>
         </div>
       )}
