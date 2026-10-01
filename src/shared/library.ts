@@ -5,11 +5,20 @@ export const ROM_EXTENSIONS: Record<string, readonly string[]> = {
   nes: ['nes'], unf: ['nes'], unif: ['nes'],
   sfc: ['snes'], smc: ['snes'], fig: ['snes'], swc: ['snes'],
   z64: ['n64'], n64: ['n64'], v64: ['n64'],
-  gb: ['gb'], gbc: ['gbc'], gba: ['gba'], nds: ['nds'],
-  '3ds': ['n3ds'], cci: ['n3ds'], cxi: ['n3ds'], cia: ['n3ds'],
-  // Pas de « gc » (n'existe pas : Dolphin ne connaît que .gcm/.iso/.gcz/.ciso/.rvz/.wia pour un dump GameCube, jamais
-  // une extension .gc nue — vérifié dans la liste d'extensions du binaire de Dolphin, aucune trace ailleurs non plus).
-  gcm: ['gc'], gcz: ['gc'], ciso: ['gc'], rvz: ['gc', 'wii'], wbfs: ['wii'], wad: ['wii'],
+  gb: ['gb'], gbc: ['gbc'], gba: ['gba'],
+  // .dsi/.srl/.ids : variantes NDS/DSi reconnues par melonDS au même titre que .nds (vérifié dans son binaire,
+  // liste d'extensions contiguë .gba/.agb/.nds/.srl/.dsi/.ids — .agb exclu, c'est le slot GBA de la DS, pas la console GBA).
+  nds: ['nds'], dsi: ['nds'], srl: ['nds'], ids: ['nds'],
+  // .zcci : CCI compressé, reconnu par Azahar au même titre que .cci (vérifié dans son binaire).
+  '3ds': ['n3ds'], cci: ['n3ds'], cxi: ['n3ds'], cia: ['n3ds'], zcci: ['n3ds'],
+  // Pas de « gc » (n'existe pas : Dolphin ne connaît que .gcm/.iso/.gcz/.ciso/.rvz/.wia/.tgc/.nfs/.wbfs/.wad pour un
+  // dump GC/Wii, jamais une extension .gc nue — vérifié dans la liste d'extensions ET les filtres de fichiers du
+  // binaire de Dolphin). .wia (WIA GC/Wii images) et .tgc (GameCube trimmé) existent pour les deux consoles comme
+  // .rvz ; .nfs (dump Wii extrait d'une archive Wii U eShop) n'existe que pour Wii.
+  gcm: ['gc'], gcz: ['gc'], ciso: ['gc'], rvz: ['gc', 'wii'], wia: ['gc', 'wii'], tgc: ['gc', 'wii'], nfs: ['wii'],
+  wbfs: ['wii'], wad: ['wii', 'wiiu'],
+  // .iso et .wad (Wii U) : vérifiés dans les filtres de fichiers du binaire de Cemu (« Wii U image (*.wud, *.wux,
+  // *.iso, *.wad) »), au même titre que .wud/.wux/.wua/.rpx déjà reconnus.
   wua: ['wiiu'], wud: ['wiiu'], wux: ['wiiu'], rpx: ['wiiu'],
   // Pas de .nsz/.xcz : formats compressés qu'Eden ne sait pas ouvrir (vérifié : aucune trace dans son binaire), il
   // faudrait les décompresser en .nsp/.xci avant import (outil externe « nsz ») — jamais implémenté ici.
@@ -18,8 +27,16 @@ export const ROM_EXTENSIONS: Record<string, readonly string[]> = {
   // direct --no-gui) — même famille de piège que le .vpk Vita3K, jamais vérifié faute d'un vrai fichier .pkg. .iso
   // fonctionne directement pour PS3, en attendant une vraie investigation si le besoin se présente.
   pbp: ['ps1', 'psp'], ecm: ['ps1'], cso: ['ps2', 'psp'], vpk: ['vita'],
+  // .mds/.ccd/.psx : vérifiés dans le filtre de fichiers de DuckStation, même famille que .cue/.bin/.ecm déjà reconnus
+  // (« Media Descriptor Sidecar Images », « CloneCD Images », alias .psx pour une image brute mono-piste).
+  mds: ['ps1'], ccd: ['ps1'], psx: ['ps1'],
+  // .mdf/.zso/.gz : vérifiés dans le filtre de fichiers de PCSX2 (« Media Descriptor File », « ZSO Images »,
+  // « Gzip Compressed ISO »), même famille que .cso/.chd déjà reconnus. .gz est générique (n'importe quel fichier
+  // gzippé) mais c'est le format officiellement listé par PCSX2 ; une extension ambiguë est déjà le cas pour .bin/.iso.
+  mdf: ['ps2'], zso: ['ps2'], gz: ['ps2'],
   // .img : legitime seulement pour PS1 (DuckStation) — absent de la liste de formats de PCSX2 (PS2).
-  iso: ['gc', 'wii', 'ps1', 'ps2', 'ps3', 'psp'], chd: ['ps1', 'ps2'], cue: ['ps1', 'ps2'], bin: ['ps1', 'ps2'], img: ['ps1']
+  // .chd pour psp : ajouté par PPSSPP (vérifié dans son binaire), au même titre que ps1/ps2.
+  iso: ['gc', 'wii', 'wiiu', 'ps1', 'ps2', 'ps3', 'psp'], chd: ['ps1', 'ps2', 'psp'], cue: ['ps1', 'ps2'], bin: ['ps1', 'ps2'], img: ['ps1']
 }
 
 /** Extensions de ROM acceptées pour un ensemble de consoles (+ `.zip`, toujours accepté). Triées, sans doublon. */
@@ -29,7 +46,8 @@ export function extensionsForConsoles(consoles: readonly string[]): string[] {
   return [...set].sort()
 }
 
-export type MatchKind = 'hash' | 'name' | 'none'
+/** 'source' : empreinte vérifiée contre celle déclarée par une liste de sources (téléchargement), pas contre le DAT officiel — cas d'une ROM volontairement modifiée (patch, traduction…) dont le hash ne peut jamais correspondre au catalogue. */
+export type MatchKind = 'hash' | 'name' | 'source' | 'none'
 
 export interface LibraryEntry {
   id: number
