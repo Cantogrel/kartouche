@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateSourceList } from './validate'
+import { formatValidationErrors, validateSourceList } from './validate'
 
 const valid = () => ({
   schemaVersion: 1,
@@ -52,5 +52,34 @@ describe('validateSourceList', () => {
     expect(validateSourceList(null).ok).toBe(false)
     expect(validateSourceList('oops').ok).toBe(false)
     expect(validateSourceList([]).ok).toBe(false)
+  })
+
+  it('accepte un hash à null (champ optionnel absent exporté comme null en JSON)', () => {
+    const doc: Record<string, unknown> = valid()
+    doc.entries = [{ ...((doc.entries as Record<string, unknown>[])[0]), hash: { crc32: null, sha1: null } }]
+    const result = validateSourceList(doc)
+    expect(result.ok).toBe(true)
+  })
+
+  it('accepte sizeBytes, note, homepage et generatedAt à null', () => {
+    const doc = valid()
+    doc.homepage = null as unknown as string
+    doc.generatedAt = null as unknown as string
+    doc.entries[0] = { ...doc.entries[0], sizeBytes: null as unknown as number, note: null as unknown as string }
+    const result = validateSourceList(doc)
+    expect(result.ok).toBe(true)
+  })
+})
+
+describe('formatValidationErrors', () => {
+  it('reste courte même avec des milliers d’entrées en erreur', () => {
+    const doc = valid()
+    doc.entries = Array.from({ length: 5000 }, (_, i) => ({ ...doc.entries[0], title: `Jeu ${i}`, console: 'megadrive' }))
+    const result = validateSourceList(doc)
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    const message = formatValidationErrors(result.errors)
+    expect(message.length).toBeLessThan(500)
+    expect(message).toContain('5000 entrées')
   })
 })

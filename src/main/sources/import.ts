@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { readFile } from 'node:fs/promises'
 import type { SourceListDocument, SourceListImportResult } from '@shared/sourceList'
-import { validateSourceList } from './validate'
+import { formatValidationErrors, validateSourceList } from './validate'
 import { normalizeTitle } from '../achievements/retroachievements'
 
 export type Fetcher = (url: string) => Promise<unknown>
@@ -54,7 +54,7 @@ export async function addSourceList(db: DatabaseSync, url: string, fetcher: Fetc
 
   const data = await fetcher(url)
   const result = validateSourceList(data)
-  if (!result.ok) throw new Error(`liste invalide : ${result.errors.map((e) => `${e.path || '(racine)'} — ${e.message}`).join('; ')}`)
+  if (!result.ok) throw new Error(`liste invalide : ${formatValidationErrors(result.errors)}`)
   const doc = result.document
 
   db.exec('BEGIN')

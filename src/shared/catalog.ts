@@ -17,6 +17,8 @@ export interface CatalogGame {
   popularity: number | null
   /** Identifiant d'image IGDB, si le catalogue en fournit (Switch). */
   img: string | null
+  /** Noms des listes de sources (Paramètres → Sources) ayant une entrée reconnue pour ce jeu ; absent sur `catalog:get`. */
+  sourceLists?: string[]
 }
 
 export interface CatalogQuery {

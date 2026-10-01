@@ -62,6 +62,8 @@ export interface SourceListSummary {
 export interface GameSource {
   id: number
   listName: string
+  /** Titre tel que donné par la liste pour cette entrée précise : seul moyen de distinguer 2 entrées d'une même liste (région, langues, révision…). */
+  title: string
   sizeBytes: number | null
   note: string | null
   uris: string[]

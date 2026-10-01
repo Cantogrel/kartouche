@@ -73,6 +73,33 @@ describe('sourcesForGame', () => {
     const gameId = queryCatalog(db, {}).games[0].id
     expect(sourcesForGame(db, gameId)).toEqual([])
   })
+
+  it("expose le titre brut de l'entrée, seul moyen de distinguer 2 entrées d'une même liste au même nom/poids", async () => {
+    const gameId = queryCatalog(db, {}).games[0].id
+    await addSourceList(db, 'https://x/list.json', fetchOk({
+      ...LIST,
+      entries: [
+        { title: 'Super Mario World (Europe)', console: 'snes', uris: ['https://x/smw-eu.zip'] },
+        { title: 'Super Mario World (USA)', console: 'snes', uris: ['https://x/smw-us.zip'] }
+      ]
+    }))
+    const result = sourcesForGame(db, gameId)
+    expect(result.map((s) => s.title).sort()).toEqual(['Super Mario World (Europe)', 'Super Mario World (USA)'])
+  })
+})
+
+describe('queryCatalog — listes de sources associées', () => {
+  it('liste les noms des listes ayant une entrée reconnue pour un jeu', async () => {
+    await addSourceList(db, 'https://x/a.json', fetchOk({ ...LIST, name: 'Liste A' }))
+    await addSourceList(db, 'https://x/b.json', fetchOk({ ...LIST, name: 'Liste B' }))
+    const game = queryCatalog(db, {}).games[0]
+    expect(game.sourceLists?.sort()).toEqual(['Liste A', 'Liste B'])
+  })
+
+  it('tableau vide pour un jeu sans source', () => {
+    const game = queryCatalog(db, {}).games[0]
+    expect(game.sourceLists).toEqual([])
+  })
 })
 
 describe('removeSourceList', () => {
