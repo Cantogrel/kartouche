@@ -22,6 +22,19 @@ Une section `## <version>` par version ; le texte est repris tel quel dans le po
 - Dolphin (GameCube/Wii) : lancement et chargements accélérés (vitesse de lecture disque simulée plus rapide,
   particulièrement sensible sur Wii) ; les rares jeux qui en auraient besoin sont détectés automatiquement (un jeu
   qui plante au lancement est retenté une fois sans ce réglage) et exemptés durablement, sans intervention.
+- Un seul jeu à la fois : lancer un jeu pendant qu'un autre tourne déjà propose maintenant de fermer l'autre
+  d'abord, plutôt que de laisser deux émulateurs ouverts en même temps.
+- RomVault ne s'ouvre plus en double si on clique plusieurs fois sur son icône ou son raccourci : l'instance déjà
+  ouverte est juste remise au premier plan.
+- Catalogue : nouveau filtre par éditeur (Nintendo, Sony, Microsoft, Electronic Arts, Rockstar, ou Autre).
+- Corrigé : en Big Picture, changer de filtre très vite dans le Catalogue pouvait laisser des jaquettes vides
+  pendant un bon moment, même en changeant d'écran ensuite.
+- Corrigé : à la manette, remonter dans l'Accueil envoyait parfois le focus directement sur le menu ☰ au lieu de
+  la rangée de jeux juste au-dessus ; les filtres/onglets du haut (gérés aux gâchettes) ne volent plus le focus
+  du stick ; le bouton X bascule maintenant les favoris même sans avoir ouvert la fiche d'un jeu ; le stick droit
+  fait défiler l'Accueil, la Bibliothèque et le Catalogue comme il le fait déjà sur une fiche.
+- Corrigé : certains jeux (titres avec un sous-titre, ex. « Special Edition ») n'affichaient jamais d'icône dans
+  la Bibliothèque alors que SteamGridDB l'a bien.
 
 ## 0.1.7
 
