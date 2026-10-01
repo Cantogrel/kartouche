@@ -3,6 +3,26 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.2.1
+
+- Catalogue : nouveau filtre par source de téléchargement, avec une option « Toutes sources » pour lister d'un
+  coup tous les jeux téléchargeables ; cumulable avec plusieurs sources précises à la fois.
+- Catalogue : les éditeurs sans résultat pour la sélection actuelle restent affichés (à 0) au lieu de disparaître,
+  comme le font déjà les consoles. Meilleure séparation visuelle entre le filtre « inclure bêtas/démos… » et les genres.
+- Reconnaissance des fichiers : plusieurs extensions pourtant acceptées par l'émulateur assigné étaient refusées
+  par RomVault — `.zcci` (Azahar), `.wia`/`.tgc`/`.nfs` (Dolphin), `.dsi`/`.srl`/`.ids` (melonDS), `.iso`/`.wad`
+  (Cemu, Wii U), `.mds`/`.ccd`/`.psx` (DuckStation), `.mdf`/`.zso`/`.gz` (PCSX2), `.chd` (PPSSPP, PSP).
+- Corrigé : le rapprochement d'une liste de sources pouvait s'attacher à une variante régionale masquée du
+  catalogue plutôt qu'au jeu réellement affiché, faisant croire à tort qu'un jeu pourtant présent n'était « pas
+  reconnu ».
+- Corrigé : un suffixe ajouté par certaines collections de ROMs patchées (ex. « _apfix ») au nom de fichier
+  empêchait toute reconnaissance par titre.
+- Corrigé : le téléchargement d'une ROM volontairement modifiée (patch anti-piratage, traduction…) était toujours
+  refusé même quand elle correspondait exactement à ce que la liste de sources annonçait ; accepté désormais,
+  avec une étiquette distincte de la vérification officielle contre le catalogue. Cette vérification pouvait elle-
+  même porter par erreur sur le contenu extrait d'une archive `.zip` plutôt que sur le fichier tel que téléchargé,
+  la faisant échouer systématiquement.
+
 ## 0.2.0
 
 - Listes de sources de téléchargement : dans Paramètres → Sources, ajoutez vos propres listes (URL ou fichier JSON
