@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { CatalogGame, CatalogPage, CatalogQuery } from '@shared/catalog'
-import { displayTitle } from '@shared/catalog'
+import { displayTitle, SOURCE_FILTER_ANY } from '@shared/catalog'
 import { canonicalGenre } from '@shared/genres'
 import { PUBLISHER_OTHER, PUBLISHERS } from '@shared/publishers'
 import { matchKey } from './popularity'
@@ -107,29 +107,38 @@ const likeAny = (col: string, needles: string[]): { sql: string; args: string[] 
  * Clause d'un éditeur (`PublisherDef.id`, ou `PUBLISHER_OTHER`) : `developer` n'est qu'un nom de studio venu des DAT
  * ou d'IGDB, pas un vrai champ éditeur — voir shared/publishers.ts. `'other'`/un id inconnu = ni vide ni reconnu.
  */
-function publisherClause(id: string): { sql: string; args: string[] } {
+function publisherClause(id: string, alias: string): { sql: string; args: string[] } {
   const def = PUBLISHERS.find((p) => p.id === id)
-  if (def) return likeAny('developer', def.match)
-  const any = likeAny('developer', PUBLISHERS.flatMap((p) => p.match))
-  return { sql: `(developer IS NULL OR NOT ${any.sql})`, args: any.args }
+  if (def) return likeAny(`${alias}developer`, def.match)
+  const any = likeAny(`${alias}developer`, PUBLISHERS.flatMap((p) => p.match))
+  return { sql: `(${alias}developer IS NULL OR NOT ${any.sql})`, args: any.args }
 }
 
-function publishersClause(ids: string[]): { sql: string; args: string[] } {
-  const parts = ids.map(publisherClause)
+function publishersClause(ids: string[], alias: string): { sql: string; args: string[] } {
+  const parts = ids.map((id) => publisherClause(id, alias))
   return { sql: `(${parts.map((p) => p.sql).join(' OR ')})`, args: parts.flatMap((p) => p.args) }
 }
 
-function where(q: CatalogQuery, skip?: 'consoles' | 'genres' | 'publishers'): { sql: string; args: (string | number)[] } {
+/** `sources` : liste(s) précise(s) (id `source_lists`), ou `SOURCE_FILTER_ANY` = au moins une source toutes listes confondues. */
+function sourcesClause(sources: string[], alias: string): { sql: string; args: number[] } {
+  if (sources.includes(SOURCE_FILTER_ANY)) return { sql: `${alias}id IN (SELECT game_id FROM sources WHERE matched = 1)`, args: [] }
+  const ids = sources.map(Number).filter(Number.isFinite)
+  if (!ids.length) return { sql: '1 = 0', args: [] }
+  return { sql: `${alias}id IN (SELECT game_id FROM sources WHERE matched = 1 AND list_id IN (${ids.map(() => '?').join(',')}))`, args: ids }
+}
+
+function where(q: CatalogQuery, skip?: 'consoles' | 'genres' | 'publishers' | 'sources', alias = ''): { sql: string; args: (string | number)[] } {
   const parts: string[] = []
   const args: (string | number)[] = []
-  if (!q.includeVariants) parts.push('variant = 0 AND dup = 0')
+  if (!q.includeVariants) parts.push(`${alias}variant = 0 AND ${alias}dup = 0`)
   const text = q.q?.trim()
   if (text) {
-    for (const w of text.split(/\s+/)) { parts.push("name LIKE ? ESCAPE '\\'"); args.push(`%${escapeLike(w)}%`) }
+    for (const w of text.split(/\s+/)) { parts.push(`${alias}name LIKE ? ESCAPE '\\'`); args.push(`%${escapeLike(w)}%`) }
   }
-  if (skip !== 'consoles' && q.consoles?.length) { parts.push(`console IN (${q.consoles.map(() => '?').join(',')})`); args.push(...q.consoles) }
-  if (skip !== 'genres' && q.genres?.length) { parts.push(`genre IN (${q.genres.map(() => '?').join(',')})`); args.push(...q.genres) }
-  if (skip !== 'publishers' && q.publishers?.length) { const c = publishersClause(q.publishers); parts.push(c.sql); args.push(...c.args) }
+  if (skip !== 'consoles' && q.consoles?.length) { parts.push(`${alias}console IN (${q.consoles.map(() => '?').join(',')})`); args.push(...q.consoles) }
+  if (skip !== 'genres' && q.genres?.length) { parts.push(`${alias}genre IN (${q.genres.map(() => '?').join(',')})`); args.push(...q.genres) }
+  if (skip !== 'publishers' && q.publishers?.length) { const c = publishersClause(q.publishers, alias); parts.push(c.sql); args.push(...c.args) }
+  if (skip !== 'sources' && q.sources?.length) { const c = sourcesClause(q.sources, alias); parts.push(c.sql); args.push(...c.args) }
   return { sql: parts.length ? `WHERE ${parts.join(' AND ')}` : '', args }
 }
 
@@ -158,18 +167,38 @@ export function queryCatalog(db: DatabaseSync, q: CatalogQuery): CatalogPage {
   const genres = db.prepare(`SELECT genre AS name, COUNT(*) AS count FROM catalog_games ${wg.sql ? wg.sql + ' AND' : 'WHERE'} genre IS NOT NULL
     GROUP BY genre ORDER BY count DESC`).all(...wg.args) as { name: string; count: number }[]
   // `developer` n'est qu'un nom de studio, pas un champ éditeur : chaque éditeur connu est sa propre requête de
-  // comptage (LIKE ne se prête pas à un GROUP BY), et seuls ceux qui ont au moins un résultat sont renvoyés.
+  // comptage (LIKE ne se prête pas à un GROUP BY). Renvoyés même à 0 résultat (comme les consoles) : la liste des
+  // filtres reste stable, seul le compteur change.
   const wp = where(q, 'publishers')
   const publishers = [...PUBLISHERS.map((p) => p.id), PUBLISHER_OTHER]
     .map((id) => {
-      const c = publisherClause(id)
+      const c = publisherClause(id, '')
       const sql = wp.sql ? `${wp.sql} AND ${c.sql}` : `WHERE ${c.sql}`
       const count = (db.prepare(`SELECT COUNT(*) AS n FROM catalog_games ${sql}`).get(...wp.args, ...c.args) as { n: number }).n
       return { id, count }
     })
-    .filter((p) => p.count > 0)
+  const sources = sourcesFacet(db, q)
   attachSourceLists(db, games)
-  return { total, games, consoles, genres, publishers }
+  return { total, games, consoles, genres, publishers, sources }
+}
+
+/**
+ * Facette des sources : une ligne par liste ayant au moins un résultat, plus `SOURCE_FILTER_ANY` en tête si au
+ * moins un jeu a une source (toutes listes confondues) — permet de filtrer « tous les jeux téléchargeables » sans
+ * choisir une liste précise. Jointure via EXISTS (pas de grosse liste d'id passée en paramètres) pour respecter
+ * les autres filtres actifs sans celui des sources lui-même, comme les autres facettes.
+ */
+function sourcesFacet(db: DatabaseSync, q: CatalogQuery): { id: string; name: string; count: number }[] {
+  const ws = where(q, 'sources', 'cg.')
+  const cond = ws.sql ? ws.sql.slice('WHERE '.length) : '1 = 1'
+  const anyCount = (db.prepare(`SELECT COUNT(DISTINCT s.game_id) AS n FROM sources s
+    WHERE s.matched = 1 AND EXISTS (SELECT 1 FROM catalog_games cg WHERE cg.id = s.game_id AND ${cond})`).get(...ws.args) as { n: number }).n
+  const perList = db.prepare(`SELECT sl.id AS id, sl.name AS name, COUNT(DISTINCT s.game_id) AS count
+    FROM source_lists sl JOIN sources s ON s.list_id = sl.id AND s.matched = 1
+    WHERE EXISTS (SELECT 1 FROM catalog_games cg WHERE cg.id = s.game_id AND ${cond})
+    GROUP BY sl.id, sl.name ORDER BY sl.name COLLATE NOCASE`).all(...ws.args) as { id: number; name: string; count: number }[]
+  const list = perList.filter((r) => r.count > 0).map((r) => ({ id: String(r.id), name: r.name, count: r.count }))
+  return anyCount > 0 ? [{ id: SOURCE_FILTER_ANY, name: '', count: anyCount }, ...list] : list
 }
 
 /** Associe à chaque jeu de la page les noms des listes de sources ayant une entrée reconnue pour lui (requête groupée, pas de jointure dans la page paginée pour éviter la duplication de lignes). */

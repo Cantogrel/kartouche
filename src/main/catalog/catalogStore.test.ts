@@ -28,12 +28,12 @@ describe('queryCatalog — filtre éditeur', () => {
     expect(names).toEqual(['Half-Life', 'Sans studio'])
   })
 
-  it('les facettes ignorent leur propre filtre et ne comptent que les éditeurs présents', () => {
+  it('les facettes ignorent leur propre filtre ; un éditeur sans résultat reste listé, à 0 (comme les consoles)', () => {
     const page = queryCatalog(db, { publishers: ['nintendo'] })
     const byId = new Map(page.publishers.map((p) => [p.id, p.count]))
     expect(byId.get('nintendo')).toBe(2)
     expect(byId.get('sony')).toBe(1)
     expect(byId.get(PUBLISHER_OTHER)).toBe(2)
-    expect(byId.has('rockstar')).toBe(false) // aucun jeu Rockstar dans ce jeu de données
+    expect(byId.get('rockstar')).toBe(0) // aucun jeu Rockstar dans ce jeu de données, mais toujours listé
   })
 })

@@ -1,5 +1,8 @@
 export type CatalogSort = 'popularity' | 'title' | 'year'
 
+/** Valeur spéciale de `CatalogQuery.sources`/`CatalogPage.sources` : jeux ayant au moins une source de téléchargement (toutes listes confondues), plutôt qu'une liste précise. */
+export const SOURCE_FILTER_ANY = 'any'
+
 export interface CatalogGame {
   id: number
   console: string
@@ -27,6 +30,8 @@ export interface CatalogQuery {
   genres?: string[]
   /** Identifiants `PublisherDef.id` (shared/publishers.ts) ; `'other'` pour le reste. */
   publishers?: string[]
+  /** Identifiants `source_lists.id` (en texte) ; `SOURCE_FILTER_ANY` pour « au moins une source, toutes listes confondues ». */
+  sources?: string[]
   sort?: CatalogSort
   offset?: number
   /** Sens du tri ; par défaut : décroissant pour la popularité et l'année, croissant pour le titre. */
@@ -43,6 +48,8 @@ export interface CatalogPage {
   genres: { name: string; count: number }[]
   /** Un par `PublisherDef` (+ `'other'`), seulement ceux qui ont au moins un résultat. */
   publishers: { id: string; count: number }[]
+  /** Listes de sources ayant au moins un résultat, plus `SOURCE_FILTER_ANY` en tête si au moins un jeu a une source (toutes listes confondues). */
+  sources: { id: string; name: string; count: number }[]
 }
 
 export interface SyncProgress {

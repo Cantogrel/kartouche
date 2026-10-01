@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
+import { SOURCE_FILTER_ANY } from '@shared/catalog'
 import { migrate } from '../db/migrations'
 import { replaceConsole } from '../catalog/catalogStore'
 import { addSourceList, type Fetcher } from './import'
@@ -99,6 +100,47 @@ describe('queryCatalog — listes de sources associées', () => {
   it('tableau vide pour un jeu sans source', () => {
     const game = queryCatalog(db, {}).games[0]
     expect(game.sourceLists).toEqual([])
+  })
+})
+
+describe('queryCatalog — filtre par source', () => {
+  beforeEach(() => {
+    const row = (title: string) => ({ title, region: 'Europe', year: null, genre: null, developer: null, crc: null, sha1: null, size: null, variant: false })
+    replaceConsole(db, 'snes', [row('Super Mario World (Europe)'), row('Zelda (Europe)')], null)
+  })
+
+  it('sans filtre sources, la facette est vide tant qu’aucune liste n’est ajoutée', () => {
+    expect(queryCatalog(db, {}).sources).toEqual([])
+  })
+
+  it(`${SOURCE_FILTER_ANY} : ne garde que les jeux ayant au moins une source, toutes listes confondues`, async () => {
+    await addSourceList(db, 'https://x/a.json', fetchOk({ ...LIST, name: 'Liste A' })) // ne reconnaît que Super Mario World
+    const names = queryCatalog(db, { sources: [SOURCE_FILTER_ANY] }).games.map((g) => g.name)
+    expect(names).toEqual(['Super Mario World'])
+  })
+
+  it('un id de liste précis ne garde que les jeux reconnus par CETTE liste', async () => {
+    const a = await addSourceList(db, 'https://x/a.json', fetchOk({ ...LIST, name: 'Liste A' }))
+    await addSourceList(db, 'https://x/b.json', fetchOk({ ...LIST, name: 'Liste B', entries: [{ title: 'Zelda', console: 'snes', uris: ['https://x/z.zip'] }] }))
+
+    expect(queryCatalog(db, { sources: [String(a.listId)] }).games.map((g) => g.name)).toEqual(['Super Mario World'])
+    expect(queryCatalog(db, { sources: ['999999'] }).games).toEqual([]) // id de liste inexistant : aucun résultat, pas une erreur
+  })
+
+  it('facette sources : une ligne par liste ayant un résultat, plus SOURCE_FILTER_ANY en tête', async () => {
+    const a = await addSourceList(db, 'https://x/a.json', fetchOk({ ...LIST, name: 'Liste A' }))
+    const page = queryCatalog(db, {})
+    expect(page.sources).toEqual([
+      { id: SOURCE_FILTER_ANY, name: '', count: 1 },
+      { id: String(a.listId), name: 'Liste A', count: 1 }
+    ])
+  })
+
+  it('la facette sources ignore son propre filtre (compte toutes les listes, pas seulement celle sélectionnée)', async () => {
+    const a = await addSourceList(db, 'https://x/a.json', fetchOk({ ...LIST, name: 'Liste A' }))
+    await addSourceList(db, 'https://x/b.json', fetchOk({ ...LIST, name: 'Liste B', entries: [{ title: 'Zelda', console: 'snes', uris: ['https://x/z.zip'] }] }))
+    const page = queryCatalog(db, { sources: [String(a.listId)] })
+    expect(page.sources.map((s) => s.name).sort()).toEqual(['', 'Liste A', 'Liste B'])
   })
 })
 

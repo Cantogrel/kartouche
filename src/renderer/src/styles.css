@@ -107,6 +107,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .filters { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: sticky; top: 0; max-height: calc(100vh - 170px); overflow-y: auto; }
 .fgroup h3 { font-size: 15px; margin: 0 0 8px; color: var(--text-strong); } .fgroup .count { background: var(--active); border-radius: 5px; font-size: 11px; padding: 1px 6px; }
 .check { display: block; padding: 3px 0; }
+/* Case à cocher hors des groupes de filtres (ex. variantes) : séparée visuellement du dernier .fgroup, pas lue comme une de ses options. */
+.filter-variants { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 select, .field input { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 10px; color: var(--text); }
 .content.nopad { padding: 0; }
 .hero { position: relative; height: 340px; display: flex; flex-direction: column; justify-content: flex-end; }
