@@ -20,6 +20,10 @@ export const useDownloads = create<DownloadsState>((set, get) => ({
     set((s) => ({ jobs: { ...s.jobs, [sourceId]: { sourceId, phase: 'downloading', done: 0, total: 0, label } } }))
     try {
       return await window.api.invoke('downloads:start', sourceId)
+    } catch (e) {
+      // Le canal IPC lui-même ne devrait jamais rejeter (voir le try/catch de downloads:start côté main), mais un
+      // filet ici évite qu'un cas imprévu fasse disparaître le téléchargement sans aucun message à l'écran.
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
     } finally {
       set((s) => { const jobs = { ...s.jobs }; delete jobs[sourceId]; return { jobs } })
     }

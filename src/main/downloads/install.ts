@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { AppPaths } from '@shared/ipc'
+import type { MatchKind } from '@shared/library'
 import { identify } from '../library/identify'
 import { importPaths, prepare } from '../library/importer'
 import { hashFile } from '../library/hash'
@@ -10,14 +11,20 @@ export interface InstallResult {
 }
 
 /**
- * Vérifie qu'un fichier téléchargé pour `sourceId` correspond, par hash, au jeu attendu avant de l'installer —
- * jamais d'installation silencieuse sur un hash qui ne correspond pas (P05-S1). Deux hash de référence possibles :
- * 1) celui du catalogue (DAT No-Intro/Redump officiel) → match 'hash', le cas normal ; 2) à défaut, celui que LA
- * LISTE DE SOURCES elle-même a déclaré pour cette entrée (`sources.crc`/`sha1`, posé à l'import de la liste) →
- * match 'source'. Le second cas couvre les ROMs volontairement modifiées (patch anti-piratage, traduction…) dont le
- * hash ne correspondra JAMAIS au dump d'origine : on fait alors confiance à l'auteur de la liste pour le contenu
- * (sous sa responsabilité, comme toute liste ajoutée par l'utilisateur), mais seulement après avoir vérifié que le
- * fichier reçu est bien celui que cette liste a annoncé — jamais une simple confiance au nom de fichier.
+ * Installe un fichier téléchargé pour `sourceId`, avec le meilleur niveau de confiance possible — jamais d'échec
+ * silencieux : toute exception (fichier verrouillé, disque plein…) est convertie en erreur renvoyée plutôt que de
+ * remonter telle quelle, pour que l'UI puisse toujours l'afficher. Trois niveaux, du meilleur au moins bon :
+ * 1) `hash` — empreinte identique au DAT officiel du catalogue (cas normal).
+ * 2) `source` — à défaut, empreinte identique à celle que LA LISTE DE SOURCES elle-même a déclarée pour cette
+ *    entrée (`sources.crc`/`sha1`, posée à l'import de la liste). Couvre les ROMs volontairement modifiées (patch
+ *    anti-piratage, traduction…) dont le hash ne correspondra JAMAIS au dump d'origine.
+ * 3) `unverified` — ni l'un ni l'autre (liste sans hash déclaré pour cette entrée — le cas le plus courant en
+ *    pratique —, ou hash déclaré qui ne correspond pas) : installé quand même, rattaché au jeu que LA LISTE a déjà
+ *    associé à cette entrée au moment de son import (rapprochement par titre, voir sources/import.ts). Cette
+ *    association existe déjà qu'on puisse ou non vérifier le contenu par hash, et la liste reste de toute façon
+ *    sous la responsabilité de son auteur, comme toute liste ajoutée par l'utilisateur (voir CLAUDE.md).
+ *    Seule exception bloquante : l'empreinte officielle identifie sans ambiguïté un AUTRE jeu du catalogue que
+ *    celui attendu — une preuve contraire positive, pas une simple absence de preuve, donc refusée.
  *
  * Le hash déclaré par une liste porte sur le FICHIER TEL QUE TÉLÉCHARGÉ (le .zip lui-même quand l'archive en est un),
  * pas sur la ROM qu'il contient une fois extraite — vérifié en comparant le hash du .zip brut d'un vrai téléchargement
@@ -27,34 +34,36 @@ export interface InstallResult {
  * `importPaths`) pour la copie et l'enregistrement en bibliothèque.
  */
 export async function installDownload(db: DatabaseSync, sourceId: number, file: string, paths: AppPaths): Promise<InstallResult> {
-  const source = db.prepare('SELECT game_id, console, title, crc, sha1 FROM sources WHERE id = ?').get(sourceId) as
-    { game_id: number | null; console: string; title: string; crc: string | null; sha1: string | null } | undefined
-  if (!source) return { ok: false, error: 'source introuvable' }
-  if (source.game_id === null) return { ok: false, error: 'aucun jeu du catalogue associé à cette source' }
+  try {
+    const source = db.prepare('SELECT game_id, console, title, crc, sha1 FROM sources WHERE id = ?').get(sourceId) as
+      { game_id: number | null; console: string; title: string; crc: string | null; sha1: string | null } | undefined
+    if (!source) return { ok: false, error: 'source introuvable' }
+    if (source.game_id === null) return { ok: false, error: 'aucun jeu du catalogue associé à cette source' }
 
-  const prep = await prepare(file, [])
-  if (typeof prep === 'string') return { ok: false, error: prep }
+    const prep = await prepare(file, [])
+    if (typeof prep === 'string') return { ok: false, error: prep }
 
-  const identified = identify(db, prep)
-  if (identified.match === 'hash' && identified.gameId === source.game_id) {
-    const result = await importPaths(db, [file], { copy: true, deleteSource: true, romsDir: paths.roms })
+    const identified = identify(db, prep)
+    let match: Extract<MatchKind, 'hash' | 'source' | 'unverified'>
+    if (identified.match === 'hash' && identified.gameId === source.game_id) {
+      match = 'hash'
+    } else if (identified.match === 'hash' && identified.gameId !== null) {
+      return { ok: false, error: 'le fichier téléchargé correspond, par empreinte officielle, à un autre jeu du catalogue que celui attendu' }
+    } else {
+      const raw = await hashFile(file)
+      const declaredMatch = (source.crc && source.crc.toUpperCase() === raw.crc.toUpperCase())
+        || (source.sha1 && source.sha1.toUpperCase() === raw.sha1.toUpperCase())
+      match = declaredMatch ? 'source' : 'unverified'
+    }
+
+    const opts = { copy: true, deleteSource: true, romsDir: paths.roms }
+    const result = await importPaths(db, [file], match === 'hash'
+      ? opts
+      : { ...opts, expected: { gameId: source.game_id, console: source.console, title: source.title, match } })
     const item = result.items[0]
     if (!item || item.status === 'error') return { ok: false, error: item?.error ?? "échec de l'installation" }
     return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
-
-  const raw = await hashFile(file)
-  const declaredMatch = (source.crc && source.crc.toUpperCase() === raw.crc.toUpperCase())
-    || (source.sha1 && source.sha1.toUpperCase() === raw.sha1.toUpperCase())
-  if (!declaredMatch) {
-    return { ok: false, error: 'le fichier téléchargé ne correspond pas au jeu attendu (hash différent du catalogue et de la liste de sources)' }
-  }
-
-  const result = await importPaths(db, [file], {
-    copy: true, deleteSource: true, romsDir: paths.roms,
-    expected: { gameId: source.game_id, console: source.console, title: source.title, match: 'source' }
-  })
-  const item = result.items[0]
-  if (!item || item.status === 'error') return { ok: false, error: item?.error ?? "échec de l'installation" }
-  return { ok: true }
 }

@@ -12,6 +12,7 @@ import { useUpdate } from '@/store/update'
 import { useChangelog } from '@/store/changelog'
 import { useEmulators } from '@/store/emulators'
 import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSetting } from '@shared/settings'
+import { formatSize } from '@shared/format'
 
 const SECTIONS = ['general', 'import', 'emulation', 'controller', 'appearance', 'apiKeys', 'sources', 'about', 'danger'] as const
 type Section = (typeof SECTIONS)[number]
@@ -24,12 +25,20 @@ export function Settings() {
   const [section, setSection] = useState<Section>(isSection(requestedSection) ? requestedSection : 'general')
   const { settings, info, update } = useSettings()
   const [restart, setRestart] = useState(false)
+  const [cacheMsg, setCacheMsg] = useState<string | null>(null)
+  const [clearingCache, setClearingCache] = useState(false)
+  const [cacheBytes, setCacheBytes] = useState<number | null>(null)
+  const refreshCacheSize = (): void => void window.api.invoke('cache:size').then(setCacheBytes)
 
   const upd = useUpdate((s) => s.state)
   const [lastChangelog, setLastChangelog] = useState<UpdateChangelog>(null)
   useEffect(() => {
     if (section !== 'about') return
     void window.api.invoke('update:lastChangelog').then(setLastChangelog)
+  }, [section])
+  useEffect(() => {
+    if (section !== 'general') return
+    refreshCacheSize()
   }, [section])
   const updateLabel = upd.status === 'idle' ? t('update.idle')
     : upd.status === 'error' ? t('update.error', { error: upd.error ?? '' })
@@ -38,6 +47,20 @@ export function Settings() {
   const chooseDir = async (): Promise<void> => {
     const r = await window.api.invoke('paths:chooseDataDir')
     if (r?.restartRequired) setRestart(true)
+  }
+
+  const clearCache = async (): Promise<void> => {
+    setClearingCache(true)
+    setCacheMsg(null)
+    try {
+      const r = await window.api.invoke('cache:clear')
+      setCacheMsg(r.freedBytes > 0
+        ? t('settings.clearCacheDone', { size: formatSize(r.freedBytes) })
+        : t('settings.clearCacheEmpty'))
+      refreshCacheSize()
+    } finally {
+      setClearingCache(false)
+    }
   }
 
   return (
@@ -65,6 +88,15 @@ export function Settings() {
                   <Button variant="primary" onClick={() => window.api.invoke('app:relaunch')}>{t('settings.restart')}</Button>
                 </div>
               )}
+            </div>
+            <div className="field">
+              {t('settings.clearCache')}
+              <p className="muted">{t('settings.clearCacheHint')}</p>
+              {cacheBytes !== null && <p className="muted">{t('settings.cacheSize', { size: formatSize(cacheBytes) })}</p>}
+              <div className="row">
+                <Button disabled={clearingCache} onClick={() => void clearCache()}>{t('settings.clearCache')}</Button>
+                {cacheMsg && <span className="muted">{cacheMsg}</span>}
+              </div>
             </div>
             <label className="field">
               {t('settings.language')}

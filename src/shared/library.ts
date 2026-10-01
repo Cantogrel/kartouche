@@ -46,8 +46,15 @@ export function extensionsForConsoles(consoles: readonly string[]): string[] {
   return [...set].sort()
 }
 
-/** 'source' : empreinte vérifiée contre celle déclarée par une liste de sources (téléchargement), pas contre le DAT officiel — cas d'une ROM volontairement modifiée (patch, traduction…) dont le hash ne peut jamais correspondre au catalogue. */
-export type MatchKind = 'hash' | 'name' | 'source' | 'none'
+/**
+ * 'source' : empreinte vérifiée contre celle déclarée par une liste de sources (téléchargement), pas contre le DAT
+ * officiel — cas d'une ROM volontairement modifiée (patch, traduction…) dont le hash ne peut jamais correspondre au
+ * catalogue. 'unverified' : téléchargement installé sans empreinte de référence utilisable (liste sans hash déclaré
+ * pour cette entrée, ou hash déclaré qui ne correspond pas) — rattaché au jeu que la liste avait déjà associé à
+ * cette entrée (rapprochement par titre), sous la responsabilité de son auteur comme toute liste ajoutée par
+ * l'utilisateur.
+ */
+export type MatchKind = 'hash' | 'name' | 'source' | 'unverified' | 'none'
 
 export interface LibraryEntry {
   id: number

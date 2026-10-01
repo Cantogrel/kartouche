@@ -69,16 +69,16 @@ describe('installDownload', () => {
     expect(existsSync(file)).toBe(false) // déplacé, pas laissé dans le cache de téléchargement
   })
 
-  it("refuse un fichier dont le hash ne correspond pas, sans rien installer", async () => {
+  it("installe quand même un fichier dont le hash ne correspond à rien de vérifiable (liste sans hash déclaré), rattaché au jeu déjà associé par la liste", async () => {
     const gameId = addGame('cbf43926')
-    const sourceId = addSource(gameId)
+    const sourceId = addSource(gameId) // pas de crc/sha1 déclaré par la liste : rien à vérifier
     const file = downloadedFile('Test.nes', 'ceci ne correspond pas du tout')
 
     const result = await installDownload(db, sourceId, file, paths)
-    expect(result.ok).toBe(false)
-    expect(result.error).toMatch(/hash/)
-    expect(listLibrary(db)).toHaveLength(0)
-    expect(existsSync(file)).toBe(true) // conservé pour inspection, pas supprimé silencieusement
+    expect(result).toEqual({ ok: true })
+    const [entry] = listLibrary(db)
+    expect(entry).toMatchObject({ gameId, console: 'nes', title: 'Test', match: 'unverified', missing: false })
+    expect(existsSync(file)).toBe(false) // déplacé, pas laissé dans le cache de téléchargement
   })
 
   it("installe un fichier dont le hash ne correspond pas au catalogue (ROM patchée, DAT officiel différent) mais correspond à celui déclaré par la liste de sources", async () => {
@@ -105,15 +105,31 @@ describe('installDownload', () => {
     expect(entry).toMatchObject({ gameId, console: 'nes', title: 'Test', match: 'source', missing: false })
   })
 
-  it("refuse un fichier dont le hash ne correspond ni au catalogue ni à celui déclaré par la liste de sources", async () => {
+  it("installe quand même un fichier dont le hash ne correspond ni au catalogue ni à celui déclaré par la liste de sources (empreinte déclarée probablement erronée, pas une preuve que ce soit le mauvais jeu)", async () => {
     const gameId = addGame('AAAAAAAA')
     const sourceId = addSource(gameId, { crc: 'BBBBBBBB' })
     const file = downloadedFile('Test.nes', '123456789')
 
     const result = await installDownload(db, sourceId, file, paths)
+    expect(result).toEqual({ ok: true })
+    const [entry] = listLibrary(db)
+    expect(entry).toMatchObject({ gameId, console: 'nes', title: 'Test', match: 'unverified', missing: false })
+  })
+
+  it("refuse un fichier dont l'empreinte officielle identifie sans ambiguïté un AUTRE jeu du catalogue (preuve positive, pas une simple absence de preuve)", async () => {
+    const gameId = addGame('cbf43926') // jeu attendu par la source, empreinte '123456789'
+    const otherContent = 'un autre jeu'
+    db.prepare("INSERT INTO catalog_games (console, title, name, crc, size) VALUES ('nes', 'Autre (Europe)', 'Autre', ?, ?)")
+      .run(hex(crc32(Buffer.from(otherContent))), Buffer.byteLength(otherContent))
+    const sourceId = addSource(gameId)
+    // Le fichier téléchargé est en réalité un AUTRE jeu du catalogue, reconnu par empreinte officielle.
+    const file = downloadedFile('Test.nes', otherContent)
+
+    const result = await installDownload(db, sourceId, file, paths)
     expect(result.ok).toBe(false)
-    expect(result.error).toMatch(/hash/)
+    expect(result.error).toMatch(/autre jeu/)
     expect(listLibrary(db)).toHaveLength(0)
+    expect(existsSync(file)).toBe(true) // conservé pour inspection, pas supprimé silencieusement
   })
 
   it('signale une archive corrompue sans planter ni rien installer', async () => {
@@ -137,5 +153,16 @@ describe('installDownload', () => {
   it('source introuvable : erreur claire', async () => {
     const file = downloadedFile('Test.nes', '123456789')
     expect(await installDownload(db, 999, file, paths)).toEqual({ ok: false, error: 'source introuvable' })
+  })
+
+  it('renvoie une erreur (jamais une exception non attrapée) si le fichier téléchargé a disparu entre-temps', async () => {
+    const gameId = addGame('cbf43926')
+    const sourceId = addSource(gameId)
+    const file = join(dir, 'dl', 'disparu.nes') // jamais écrit : lève ENOENT à la lecture
+
+    const result = await installDownload(db, sourceId, file, paths) // ne doit jamais rejeter
+    expect(result.ok).toBe(false)
+    expect(result.error).toBeTruthy()
+    expect(listLibrary(db)).toHaveLength(0)
   })
 })

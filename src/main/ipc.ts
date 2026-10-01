@@ -21,6 +21,7 @@ import { addSourceList } from './sources/import'
 import { listSourceLists, refreshSourceList, removeSourceList, sourcesForGame } from './sources/manage'
 import { cancelDownload, downloadSource } from './downloads/engine'
 import { installDownload } from './downloads/install'
+import { cacheSize, clearCache } from './cache'
 import { ROM_EXTENSIONS } from '@shared/library'
 import { resolveLanguage } from '@shared/settings'
 import { EMULATORS, emulatorById, type EmulatorState } from '@shared/emulators'
@@ -220,7 +221,16 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
       const cacheDir = join(paths.cache, 'game-downloads')
       const r = await downloadSource(db, sourceId, cacheDir, (p) => broadcast('download:progress', p))
       if (!r.ok || !r.file) return { ok: false, error: r.error }
-      return await installDownload(db, sourceId, r.file, paths)
+      const result = await installDownload(db, sourceId, r.file, paths)
+      // Échec de vérification/installation (hash sur un autre jeu, disque plein…) : pas la peine de laisser le
+      // fichier traîner dans le cache, une reprise HTTP Range ne s'appuie que sur le `.part` d'un téléchargement
+      // encore en cours, jamais sur un fichier déjà renommé à son nom final (voir downloads/engine.ts).
+      if (!result.ok) await rm(r.file, { force: true }).catch(() => undefined)
+      return result
+    } catch (e) {
+      // Jamais d'échec silencieux côté UI : une exception inattendue ici devient une erreur normale plutôt que de
+      // rejeter l'appel IPC (le renderer n'a pas de filet de rattrapage sur `invoke`, voir downloads.ts côté renderer).
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
     } finally { downloading.delete(sourceId) }
   })
   handle('downloads:cancel', (sourceId) => { cancelDownload(sourceId) })
@@ -288,6 +298,8 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('game:stopAndWait', (entryId) => stopGameAndWait(entryId))
   handle('game:running', () => listLibrary(db).map((e) => e.id).filter(isRunning))
   handle('providers:status', () => providerStatus(db, PROVIDERS, loadSettings(db)))
+  handle('cache:clear', () => clearCache(paths, { busySourceIds: downloading, emulatorInstalling: installing.size > 0, gameRunning: runningCount() > 0 }))
+  handle('cache:size', () => cacheSize(paths))
 
   ipcMain.on('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize())
   ipcMain.on('win:maximize', (e) => {

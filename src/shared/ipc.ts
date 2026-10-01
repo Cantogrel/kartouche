@@ -7,6 +7,7 @@ import type { EmulatorProgress, EmulatorState, GameSession, LatestVersion, Launc
 import type { CatalogGame, CatalogPage, CatalogQuery, GameDetails, ProviderStatus, SyncProgress, SyncResult } from './catalog'
 import type { GameSource, SourceListImportResult, SourceListRefreshResult, SourceListSummary } from './sourceList'
 import type { DownloadProgress } from './downloads'
+import type { ClearCacheResult } from './cache'
 
 export interface AppPaths {
   dataDir: string
@@ -147,6 +148,11 @@ export interface IpcChannels {
   'update:lastChangelog': { req: void; res: UpdateChangelog }
   /** Comme `update:lastChangelog`, mais seulement si ce changelog n'a pas déjà été montré pour la version en cours ; le marque montré. */
   'update:pendingChangelog': { req: void; res: UpdateChangelog }
+  /** Vide le cache réutilisable (téléchargements en attente/échoués, archives d'installation d'émulateurs, scripts
+   * temporaires) ; conserve les fiches/images du catalogue (coûteuses à regénérer sous quota API). */
+  'cache:clear': { req: void; res: ClearCacheResult }
+  /** Taille actuelle de ce même cache réutilisable (hors fiches/images du catalogue). */
+  'cache:size': { req: void; res: number }
 }
 
 export interface UpdateState {
