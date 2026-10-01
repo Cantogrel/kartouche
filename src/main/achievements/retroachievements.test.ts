@@ -26,6 +26,11 @@ describe('normalizeTitle', () => {
     expect(normalizeTitle('Pokémon Rouge (France) [!]')).toBe('pokemonrouge')
     expect(normalizeTitle('Sonic & Knuckles')).toBe(normalizeTitle('Sonic and Knuckles'))
   })
+
+  it('ignore le suffixe "_apfix" des collections archive.org de ROMs anti-piratage', () => {
+    expect(normalizeTitle('100 Classic Books (USA)_apfix')).toBe(normalizeTitle('100 Classic Books (USA)'))
+    expect(normalizeTitle('Imagine - Resort Owner (USA)_apfix.nds')).toBe(normalizeTitle('Imagine - Resort Owner (USA)'))
+  })
 })
 
 describe('liste des jeux', () => {

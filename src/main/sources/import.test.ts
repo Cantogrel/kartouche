@@ -52,6 +52,34 @@ describe('addSourceList', () => {
   })
 })
 
+describe('addSourceList — régions dupliquées (markDuplicates)', () => {
+  it('rapproche toujours sur la variante représentative (dup=0) affichée par défaut, jamais une région masquée', async () => {
+    // Asie insérée en premier (id le plus bas) : avant le filtre dup=0, le matcher collait sur la première ligne
+    // trouvée pour un titre normalisé, souvent cette variante cachée plutôt que la représentative (Europe) affichée.
+    const row = (title: string, region: string) =>
+      ({ title, region, year: null, genre: null, developer: null, crc: null, sha1: null, size: null, variant: false })
+    replaceConsole(db, 'psp', [
+      row('God of War - Chains of Olympus (Asia) (En,Zh)', 'Asia'),
+      row('God of War - Chains of Olympus (Europe) (En,Fr,De,Es,It)', 'Europe'),
+      row('God of War - Chains of Olympus (USA)', 'USA')
+    ], null)
+    const europeId = (db.prepare("SELECT id, dup FROM catalog_games WHERE title = 'God of War - Chains of Olympus (Europe) (En,Fr,De,Es,It)'").get() as { id: number; dup: number }).id
+
+    const list = {
+      schemaVersion: 1, name: 'PSN',
+      entries: [
+        { title: 'God of War - Chains of Olympus (Asia) (En,Zh) (PSN)', console: 'psp', uris: ['https://x/a.zip'] },
+        { title: 'God of War - Chains of Olympus (Europe) (En,Fr,De,Es,It) (PSN)', console: 'psp', uris: ['https://x/e.zip'] },
+        { title: 'God of War - Chains of Olympus (USA) (PSN)', console: 'psp', uris: ['https://x/u.zip'] }
+      ]
+    }
+    const result = await addSourceList(db, 'https://x/psn.json', fakeFetch(list))
+    expect(result.matchedCount).toBe(3)
+    const gameIds = (db.prepare('SELECT DISTINCT game_id FROM sources WHERE list_id = ?').all(result.listId) as { game_id: number }[]).map((r) => r.game_id)
+    expect(gameIds).toEqual([europeId]) // les 3 régions se rapprochent toutes de LA MÊME entrée, la représentative
+  })
+})
+
 describe('addSourceList (fichier local, defaultFetch réel)', () => {
   let dir: string
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rv-sources-')) })

@@ -22,6 +22,8 @@ const defaultFetch: Fetcher = async (url) => {
  */
 export function normalizeTitle(title: string): string {
   let s = title.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  // Suffixe "_apfix" : convention des collections archive.org de ROMs patchées anti-piratage (ex. nds_apfix), hors nommage No-Intro.
+  s = s.replace(/_apfix(\.\w+)?$/i, '')
   s = s.replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/^\s*~[^~]*~\s*/, '')
   // « Titre, The » (ou A / An) devant la suite éventuelle : « Legend of Zelda, The: Link » → « the legend of zelda: link ».
   s = s.replace(/^(.*?),\s*(the|a|an)\b(.*)$/, '$2 $1$3')

@@ -25,7 +25,13 @@ export class CatalogMatcher {
     let norm = this.byConsole.get(console)
     if (!norm) {
       norm = new Map()
-      const rows = this.db.prepare('SELECT id, title FROM catalog_games WHERE console = ?').all(console) as { id: number; title: string }[]
+      // dup = 0 seulement : les régions/révisions d'un même jeu sont regroupées sous UNE entrée représentative dans le
+      // catalogue (voir markDuplicates/catalogStore.ts) ; une entrée dup = 1 n'est jamais affichée par défaut
+      // (where() exige dup = 0). Matcher contre une entrée dup = 1 attachait la source à un jeu invisible dans le
+      // catalogue — l'utilisateur voyait « non reconnu » sur le jeu qu'il regarde vraiment, même reconnu ailleurs
+      // sous une autre région (ex. God of War - Chains of Olympus/PSP : rapproché sur la variante Asie cachée,
+      // jamais sur la représentative Europe affichée).
+      const rows = this.db.prepare('SELECT id, title FROM catalog_games WHERE console = ? AND dup = 0').all(console) as { id: number; title: string }[]
       for (const r of rows) { const n = normalizeTitle(r.title); if (n && !norm.has(n)) norm.set(n, r.id) }
       this.byConsole.set(console, norm)
     }
