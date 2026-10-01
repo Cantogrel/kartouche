@@ -42,6 +42,7 @@
   "inLibrary": "In library",
   "linkRom": "Link a ROM",
   "download.button": "Download",
+  "download.downloading": "Downloading…",
   "download.cancel": "Cancel",
   "addGame": "Add a game",
   "library.empty": "Your library is empty",
@@ -86,7 +87,12 @@
   "settings.appearance": "Appearance",
   "settings.apiKeys": "Achievements",
   "settings.sources": "Sources",
-  "sources.hint": "Download lists you add yourself. RomVault does not supply, scrape or aggregate any of them.",
+  "sources.hint": "Add your own personal source lists here. RomVault does not provide, host, or reference any list or downloadable content: choosing, adding, and the legality of each source are entirely your responsibility.",
+  "sources.formatInfo": "Expected format",
+  "sources.formatTitle": "Source list format (JSON)",
+  "sources.formatIntro": "A source list is a JSON document following the \"romvault.sourcelist/v1\" format: a name, and a list of entries, each tied to a console and one or more download links.",
+  "sources.formatFields": "Optional fields: \"homepage\" and \"generatedAt\" for the document; \"sizeBytes\", \"hash\" and \"note\" for an entry. \"hash\" (crc32/sha1) is only a quick sanity filter before a large download — the file's real integrity is checked afterwards against the catalog.",
+  "sources.formatExampleLabel": "Example (placeholder values):",
   "sources.urlPlaceholder": "List URL (JSON)",
   "sources.browse": "Browse…",
   "sources.dropHint": "Or drag and drop a .json file here.",
@@ -117,6 +123,7 @@
   "catalog.empty": "The catalog is empty. It downloads from Libretro databases (internet required).",
   "catalog.more": "Show more",
   "catalog.variants": "Include betas, demos and prototypes",
+  "catalog.sourceTagTitle": "Downloadable from \"{name}\"",
   "game.regionLabel": "Region",
   "game.source": "Details from {p}",
   "game.refreshDetails": "Refresh details",
@@ -401,5 +408,6 @@
   "footer.installing": "Installing {name}",
   "footer.importing": "Importing… {n}/{total}",
   "footer.importing0": "Importing…",
-  "footer.importingFile": "Importing: {name}… {n}/{total}"
+  "footer.importingFile": "Importing: {name}… {n}/{total}",
+  "footer.downloading": "Downloading {name}"
 }

@@ -168,7 +168,20 @@ export function queryCatalog(db: DatabaseSync, q: CatalogQuery): CatalogPage {
       return { id, count }
     })
     .filter((p) => p.count > 0)
+  attachSourceLists(db, games)
   return { total, games, consoles, genres, publishers }
+}
+
+/** Associe à chaque jeu de la page les noms des listes de sources ayant une entrée reconnue pour lui (requête groupée, pas de jointure dans la page paginée pour éviter la duplication de lignes). */
+function attachSourceLists(db: DatabaseSync, games: CatalogGame[]): void {
+  if (games.length === 0) return
+  const placeholders = games.map(() => '?').join(',')
+  const rows = db.prepare(`SELECT s.game_id AS gameId, sl.name AS name FROM sources s JOIN source_lists sl ON sl.id = s.list_id
+    WHERE s.matched = 1 AND s.game_id IN (${placeholders}) GROUP BY s.game_id, sl.name ORDER BY sl.name`)
+    .all(...games.map((g) => g.id)) as { gameId: number; name: string }[]
+  const byGame = new Map<number, string[]>()
+  for (const r of rows) { const arr = byGame.get(r.gameId); if (arr) arr.push(r.name); else byGame.set(r.gameId, [r.name]) }
+  for (const g of games) g.sourceLists = byGame.get(g.id) ?? []
 }
 
 export function getGame(db: DatabaseSync, id: number): CatalogGame | null {

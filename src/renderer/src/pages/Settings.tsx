@@ -4,6 +4,7 @@ import type { UpdateChangelog } from '@shared/ipc'
 import type { SourceListSummary } from '@shared/sourceList'
 import { t } from '@/i18n'
 import { Button } from '@/ui'
+import { Modal } from '@/ui/CollectionDialogs'
 import { useApp } from '@/store/app'
 import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
@@ -223,11 +224,43 @@ function DangerSection() {
   )
 }
 
+/** Exemple du format `romvault.sourcelist/v1`, valeurs volontairement fictives — voir src/shared/sourceList.ts. */
+const SOURCE_FORMAT_EXAMPLE = `{
+  "schemaVersion": 1,
+  "name": "My personal list",
+  "homepage": "https://example.com",
+  "generatedAt": "2026-01-01T00:00:00Z",
+  "entries": [
+    {
+      "title": "Sample Game (Demo)",
+      "console": "snes",
+      "uris": ["https://example.com/files/sample-game-demo.zip"],
+      "sizeBytes": 524288,
+      "hash": { "crc32": "00000000", "sha1": "0000000000000000000000000000000000000000" },
+      "note": "Personal dump"
+    }
+  ]
+}`
+
+/** Popup d'aide au format JSON attendu, ouverte depuis le bouton ⓘ à côté de l'intro de la section. */
+function SourceFormatDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title={t('sources.formatTitle')} onClose={onClose}>
+      <p className="muted">{t('sources.formatIntro')}</p>
+      <p className="muted">{t('sources.formatFields')}</p>
+      <p className="muted">{t('sources.formatExampleLabel')}</p>
+      <pre className="modal-list source-format-example">{SOURCE_FORMAT_EXAMPLE}</pre>
+      <div className="row modal-actions"><Button variant="primary" onClick={onClose}>{t('dialog.close')}</Button></div>
+    </Modal>
+  )
+}
+
 /**
  * Listes de sources apportées par l'utilisateur (v0.2.0). RomVault n'en fournit, n'en scrape ni
  * n'en agrège aucune : chaque liste vient d'une URL ou d'un fichier JSON local que l'utilisateur choisit lui-même.
  */
 function SourcesSection() {
+  const [showFormatInfo, setShowFormatInfo] = useState(false)
   const [lists, setLists] = useState<SourceListSummary[]>([])
   const [url, setUrl] = useState('')
   const [addError, setAddError] = useState<string | null>(null)
@@ -277,7 +310,11 @@ function SourcesSection() {
 
   return (
     <>
-      <p className="muted">{t('sources.hint')}</p>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <p className="muted">{t('sources.hint')}</p>
+        <Button variant="icon" title={t('sources.formatInfo')} aria-label={t('sources.formatInfo')} onClick={() => setShowFormatInfo(true)}>ⓘ</Button>
+      </div>
+      {showFormatInfo && <SourceFormatDialog onClose={() => setShowFormatInfo(false)} />}
       <div className={`field dropzone${over ? ' over' : ''}`} onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={(e) => { if (e.currentTarget === e.target) setOver(false) }} onDrop={(e) => void onDrop(e)}>
         <div className="row">
           <input style={{ flex: 1 }} placeholder={t('sources.urlPlaceholder')} value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void add()} />
