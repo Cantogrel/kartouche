@@ -2,9 +2,9 @@ import type { DatabaseSync } from 'node:sqlite'
 import { copyFile, mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, dirname, extname, join, resolve } from 'node:path'
-import { ROM_EXTENSIONS, type ImportItem, type ImportResult, type LibraryProgress } from '@shared/library'
+import { ROM_EXTENSIONS, type ImportItem, type ImportResult, type LibraryProgress, type MatchKind } from '@shared/library'
 import { extractZipEntries, hashAndCopyFile, hashFile, readZip, readZipEntryText } from './hash'
-import { identify } from './identify'
+import { identify, type Identified } from './identify'
 import { switchContentFromFilename } from './switchContent'
 
 export interface ImportOptions {
@@ -12,6 +12,13 @@ export interface ImportOptions {
   copy: boolean
   deleteSource: boolean
   romsDir: string
+  /**
+   * Rattachement déjà connu avec certitude (téléchargement vérifié par downloads/install.ts contre le hash déclaré
+   * d'une liste de sources) : remplace identify() au lieu de deviner par hash catalogue/nom — utile pour une ROM
+   * volontairement modifiée (patch, traduction) dont le hash ne correspondra jamais au DAT officiel. Ne s'applique
+   * qu'au seul fichier importé par cet appel (jamais utilisé avec plusieurs chemins).
+   */
+  expected?: { gameId: number; console: string; title: string; match: MatchKind }
 }
 
 const extOf = (p: string): string => extname(p).slice(1).toLowerCase()
@@ -170,7 +177,9 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
         continue
       }
       const titleId = content?.kind === 'base' ? content.titleId : null
-      const id = identify(db, prep)
+      const id: Identified = opt.expected
+        ? { gameId: opt.expected.gameId, console: opt.expected.console, title: opt.expected.title, match: opt.expected.match, candidates: [opt.expected.console] }
+        : identify(db, prep)
       const cons = id.console ?? (id.candidates.length === 1 ? id.candidates[0] : null)
       if (!cons) { items.push({ file, status: 'ambiguous', error: id.candidates.join(', ') }); continue }
       const title = id.title ?? prep.name
