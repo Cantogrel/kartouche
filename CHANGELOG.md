@@ -3,6 +3,21 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.2.3
+
+- Archives .7z et .rar : un téléchargement ou un import dans ce format est maintenant extrait automatiquement (plus
+  besoin de 7-Zip ni de WinRAR), y compris les volumes .part1.rar / .7z.001. Un jeu à plusieurs fichiers (.cue +
+  pistes, PS Vita) est reconditionné en .zip ; plusieurs ROM différentes, une archive corrompue, protégée par mot
+  de passe ou à volume manquant sont refusées avec un message explicite. Les .zip fonctionnent comme avant.
+- Sources : une entrée peut maintenant être un lien magnet: ou une URL .torrent (client BitTorrent intégré, aucun
+  tracker ni lien fourni par RomVault, pas de partage après coup) ; l'état « Recherche de pairs… » s'affiche.
+- Émulateurs : configuration automatique étendue (Cemu, Dolphin, DuckStation, PCSX2, PPSSPP, RPCS3, melonDS,
+  Azahar, Eden, Vita3K, RetroArch) et identification des jeux (numéro de série, Title ID) y compris dans les
+  images CHD, pour retrouver les sauvegardes de chaque jeu.
+- Sauvegardes : copies automatiques par jeu d'après son identifiant ; un jeu non identifié est signalé comme
+  partageant le dossier de sauvegardes de l'émulateur.
+- Paramètres regroupés par sections (Application, Importation, Données, Sauvegardes, Manette, Comptes).
+
 ## 0.2.2
 
 - Téléchargement : un jeu dont le fichier ne correspond ni au catalogue officiel ni à l'empreinte déclarée par la
