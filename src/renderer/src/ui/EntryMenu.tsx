@@ -1,3 +1,4 @@
+import { confirmDialog, alertDialog } from '@/ui/AskDialog'
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { create } from 'zustand'
 import { t } from '@/i18n'
@@ -45,7 +46,7 @@ const collectionAction = (entry: LibraryEntry): Action =>
 /** Même action que `action.deleteFile` dans le menu complet, mais relabellée « Désinstaller » : une liste de
  * sources permet de retélécharger ce jeu, donc ce n'est pas un aller simple comme pour une ROM importée à la main. */
 const uninstallAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>): Action =>
-  ({ key: 'uninstall', label: t('action.uninstall'), danger: true, run: async () => { if (window.confirm(t('confirm.uninstall', { title: entry.title }))) await lib.removeEntry(entry.id, 'file') } })
+  ({ key: 'uninstall', label: t('action.uninstall'), danger: true, run: async () => { if (await confirmDialog(t('confirm.uninstall', { title: entry.title }))) await lib.removeEntry(entry.id, 'file') } })
 
 /**
  * Menu rapide (clic droit sur une tuile ou dans la liste latérale) : seulement les actions les plus courantes, pas
@@ -76,19 +77,19 @@ function quickActionsFor(entry: LibraryEntry): Action[] {
 function fullActionsFor(entry: LibraryEntry, back: () => void): Action[] {
   const lib = useLibrary.getState()
   const hasFile = !entry.missing
-  const ask = (key: string): boolean => window.confirm(t(`confirm.${key}`, { title: entry.title }))
+  const ask = (key: string): Promise<boolean> => confirmDialog(t(`confirm.${key}`, { title: entry.title }))
   const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), sep('sep1')]
   if (!hasFile) list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
   if (hasFile) {
     list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })
     list.push(entry.hasSources
       ? uninstallAction(entry, lib)
-      : { key: 'file', label: t('action.deleteFile'), danger: true, run: async () => { if (ask('file')) await lib.removeEntry(entry.id, 'file') } })
+      : { key: 'file', label: t('action.deleteFile'), danger: true, run: async () => { if (await ask('file')) await lib.removeEntry(entry.id, 'file') } })
   }
   list.push(sep('sep2'))
   list.push({ key: 'save', label: t('action.deleteSave'), danger: true, run: () => deleteSaves(entry, ask) })
-  list.push({ key: 'entry', label: t('action.removeEntry'), run: async () => { if (ask('entry')) { await lib.removeEntry(entry.id, 'entry'); leaveIfOpen(entry.id, back) } } })
-  list.push({ key: 'all', label: t('action.deleteAll'), danger: true, run: async () => { if (ask('all')) { await lib.removeEntry(entry.id, 'all'); leaveIfOpen(entry.id, back) } } })
+  list.push({ key: 'entry', label: t('action.removeEntry'), run: async () => { if (await ask('entry')) { await lib.removeEntry(entry.id, 'entry'); leaveIfOpen(entry.id, back) } } })
+  list.push({ key: 'all', label: t('action.deleteAll'), danger: true, run: async () => { if (await ask('all')) { await lib.removeEntry(entry.id, 'all'); leaveIfOpen(entry.id, back) } } })
   return list
 }
 
@@ -96,14 +97,14 @@ function fullActionsFor(entry: LibraryEntry, back: () => void): Action[] {
  * Supprime les sauvegardes du jeu. Propres au jeu (RetroArch, melonDS) : on supprime après confirmation. Mélangées avec celles des autres jeux
  * (tous les autres émulateurs) : rien n'est supprimé, on l'explique et on propose d'ouvrir le dossier.
  */
-async function deleteSaves(entry: LibraryEntry, ask: (key: string) => boolean): Promise<void> {
+async function deleteSaves(entry: LibraryEntry, ask: (key: string) => Promise<boolean>): Promise<void> {
   const info = await window.api.invoke('saves:info', entry.id)
   if (info && info.scope === 'emulator') {
-    if (window.confirm(t('action.saveShared', { name: emulatorForConsole(entry.console)?.name ?? info.emulator }))) await window.api.invoke('saves:open', entry.id)
+    if (await confirmDialog(t('action.saveShared', { name: emulatorForConsole(entry.console)?.name ?? info.emulator }))) await window.api.invoke('saves:open', entry.id)
     return
   }
-  if (!info || info.files === 0) { window.alert(t('action.noSave')); return }
-  if (ask('save')) { await useLibrary.getState().removeEntry(entry.id, 'save'); window.alert(t('action.saveDeleted', { title: entry.title })) }
+  if (!info || info.files === 0) { await alertDialog(t('action.noSave')); return }
+  if (await ask('save')) { await useLibrary.getState().removeEntry(entry.id, 'save'); await alertDialog(t('action.saveDeleted', { title: entry.title })) }
 }
 
 /** Si la fiche du jeu retiré est affichée, on revient à la page précédente. */

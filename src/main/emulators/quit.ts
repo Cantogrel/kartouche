@@ -40,6 +40,32 @@ for ($i = 0; $i -lt 4; $i++) {
 Write-Output ($found -join ',')
 `
 
+// Valide les boîtes de dialogue d'un programme (bouton « Oui » / « OK » invoqué par UI Automation) : l'installation d'un firmware RPCS3 demande « Install firmware? »
+// puis affiche « Successfully installed », deux clics que l'utilisateur ne doit pas avoir à faire. S'arrête avec RomVault.
+const CONFIRM_SCRIPT = `param([int]$ParentPid, [string]$Proc, [string]$Names, [string]$Seen = '')
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+$wanted = $Names -split ','
+$root = [System.Windows.Automation.AutomationElement]::RootElement
+while ($true) {
+  if (-not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { exit }
+  $ids = @((Get-Process -Name $Proc -ErrorAction SilentlyContinue).Id)
+  if ($ids.Count -gt 0) {
+    foreach ($w in $root.FindAll('Children', [System.Windows.Automation.Condition]::TrueCondition)) {
+      if ($ids -notcontains $w.Current.ProcessId) { continue }
+      if ($Seen) {
+        foreach ($t in $w.FindAll('Descendants', (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)))) {
+          if ($t.Current.Name.StartsWith($Seen)) { Write-Output 'SEEN' }
+        }
+      }
+      foreach ($b in $w.FindAll('Descendants', (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))) {
+        if ($wanted -contains $b.Current.Name) { try { $b.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); Write-Output ('CLICK ' + $b.Current.Name) } catch {} }
+      }
+    }
+  }
+  Start-Sleep -Milliseconds 400
+}
+`
+
 async function scriptFile(cacheDir: string, name: string, content: string): Promise<string> {
   await mkdir(cacheDir, { recursive: true })
   const file = join(cacheDir, name)
@@ -71,11 +97,23 @@ export async function watchQuitChord(cacheDir: string, onChord: () => void): Pro
   return () => { child.kill() }
 }
 
-/** Ferme un programme proprement (fenêtres fermées, l'émulateur sauvegarde et quitte), puis de force s'il ne répond pas en 5 s. */
-export function closeGracefully(pid: number): void {
+/**
+ * Valide en continu les boîtes de dialogue (boutons `names`) des processus nommés `proc` ; renvoie la fonction d'arrêt. `seen` : texte de début d'un message dont
+ * l'apparition est signalée par `onSeen` (sans le valider).
+ */
+export async function autoConfirmDialogs(cacheDir: string, proc: string, names: string[], seen?: { text: string; onSeen: () => void }): Promise<() => void> {
+  const file = await scriptFile(cacheDir, 'auto-confirm.ps1', CONFIRM_SCRIPT)
+  const child = spawn('powershell.exe', [...PS_ARGS, file, '-ParentPid', String(process.pid), '-Proc', proc, '-Names', names.join(','), ...(seen ? ['-Seen', seen.text] : [])], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
+  child.stdout.on('data', (d) => { if (seen && String(d).includes('SEEN')) seen.onSeen() })
+  child.on('error', () => {})
+  return () => { child.kill() }
+}
+
+/** Ferme un programme proprement (fenêtres fermées, l'émulateur sauvegarde et quitte), puis de force s'il ne répond pas dans `graceMs` (5 s par défaut). */
+export function closeGracefully(pid: number, graceMs = 5000): void {
   execFile('taskkill', ['/PID', String(pid), '/T'], { windowsHide: true }, () => {})
   setTimeout(() => {
     try { process.kill(pid, 0) } catch { return }
     execFile('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, () => {})
-  }, 5000).unref()
+  }, graceMs).unref()
 }

@@ -12,6 +12,7 @@ import { readZip } from '../library/hash'
 import { getRow } from '../emulators/emulatorStore'
 import { extract } from '../emulators/installer'
 import { setTomlKeys } from '../emulators/configure'
+import { autoConfirmDialogs } from '../emulators/quit'
 
 export { setTomlKeys }
 
@@ -193,17 +194,32 @@ const readHead = async (path: string, n: number): Promise<Buffer> => {
   } finally { await fh.close() }
 }
 
-/** Lance l'émulateur avec un argument d'installation et attend la fin (ou que `done` soit vrai : certains restent ouverts ensuite). */
-async function runInstall(exe: string, args: string[], cwd: string, done: () => Promise<boolean>): Promise<void> {
+/**
+ * Lance l'émulateur avec un argument d'installation et attend la fin (ou que `done` soit vrai : certains restent ouverts ensuite).
+ * `confirm` : RPCS3 demande « Install firmware? » (validé tout seul), puis affiche « Successfully installed » : on le coupe dès que ce message apparaît, SANS le valider,
+ * car son « OK » lance la précompilation des modules et un démarrage de l'interface PS3 (fenêtres inutiles pendant l'installation).
+ */
+async function runInstall(exe: string, args: string[], cwd: string, done: () => Promise<boolean>, confirm?: { cacheDir: string; seen: string }): Promise<void> {
   const child = spawn(exe, args, { cwd, stdio: 'ignore', windowsHide: true })
   let exited = false
+  let seen = false
   child.on('error', () => { exited = true })
   child.on('exit', () => { exited = true })
-  const deadline = Date.now() + 15 * 60 * 1000
-  while (!exited && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 1000))
-    if (await done()) break
-  }
+  const stopConfirm = confirm
+    ? await autoConfirmDialogs(confirm.cacheDir, basename(exe, '.exe'), ['Yes', 'Oui'], { text: confirm.seen, onSeen: () => { seen = true } }).catch(() => () => {})
+    : () => {}
+  try {
+    const deadline = Date.now() + 15 * 60 * 1000
+    let after = 0
+    while (!exited && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 1000))
+      if (seen) break
+      if (await done()) {
+        // Sans message final repéré, on laisse 30 s de marge avant de couper.
+        if (!confirm || ++after >= 30) break
+      }
+    }
+  } finally { stopConfirm() }
   if (!exited) { child.kill(); await new Promise((r) => setTimeout(r, 500)) }
 }
 
@@ -292,7 +308,7 @@ export async function importBiosFile(ctx: Ctx, emulator: string, path: string): 
     // PS3 / Vita : le firmware .PUP (en-tête « SCEUF ») est installé par l'émulateur lui-même, en ligne de commande.
     if ((await readHead(path, 5)).toString('latin1') !== 'SCEUF') return { path, ok: false, slot: slot.id, error: 'unknown' }
     const args = slot.id === 'ps3' ? ['--installfw', path] : ['--firmware', path]
-    await runInstall(row.exe, args, row.dir, async () => (await biosStatus(ctx)).some((s) => s.id === slot.id && s.state === 'ok'))
+    await runInstall(row.exe, args, row.dir, async () => (await biosStatus(ctx)).some((s) => s.id === slot.id && s.state === 'ok'), slot.id === 'ps3' ? { cacheDir: ctx.paths.cache, seen: 'Successfully installed' } : undefined)
     const installed = (await biosStatus(ctx)).some((s) => s.id === slot.id && s.state === 'ok')
     return installed ? result() : { path, ok: false, slot: slot.id, error: 'failed', detail: 'install' }
   } catch (e) {

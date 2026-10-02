@@ -67,16 +67,19 @@ const SGDB = 'https://www.steamgriddb.com/api/v2'
 const IMG_LIMIT = 4000
 
 /**
- * Appels réseau limités à 4 en parallèle : une page de catalogue déclenche des dizaines de résolutions d'images.
+ * Appels réseau limités à `MAX_PARALLEL` en parallèle : une page de catalogue déclenche des dizaines de résolutions d'images.
+ * Les tâches en attente sont servies dernière arrivée d'abord : en faisant défiler, ce sont les tuiles à l'écran maintenant (les plus récemment
+ * demandées) qui passent avant celles déjà dépassées, au lieu d'attendre derrière tout ce qui a été demandé plus haut.
  * `signal` (celui de la requête `rvimg://`) permet d'abandonner tôt une tâche dont la tuile a déjà disparu (filtres
  * changés très vite) : en attente, elle ne consomme jamais un des 4 emplacements ; déjà lancée, `fetchImage` coupe
  * la requête réseau en cours au lieu de tourner jusqu'à son terme (jusqu'à 30 s) et de retarder les suivantes.
  */
+export const MAX_PARALLEL = 8
 const queue: { resolve: () => void }[] = []
 let running = 0
 export async function limited<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-  if (running >= 4) {
+  if (running >= MAX_PARALLEL) {
     await new Promise<void>((resolve, reject) => {
       const waiter = { resolve: () => { signal?.removeEventListener('abort', onAbort); resolve() } }
       const onAbort = (): void => {
@@ -90,7 +93,7 @@ export async function limited<T>(fn: () => Promise<T>, signal?: AbortSignal): Pr
   }
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
   running++
-  try { return await fn() } finally { running--; queue.shift()?.resolve() }
+  try { return await fn() } finally { running--; queue.pop()?.resolve() }
 }
 
 async function sgdbApi<T>(db: DatabaseSync, path: string, key: string, signal?: AbortSignal): Promise<T | null> {

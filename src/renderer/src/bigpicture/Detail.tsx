@@ -9,6 +9,7 @@ import { emulatorForConsole } from '@shared/emulators'
 import { consoleById } from '@shared/consoles'
 import { canonicalGenre, genreLabel } from '@shared/genres'
 import { formatSize } from '@shared/format'
+import { isTorrentSource } from '@shared/uriKind'
 import type { CatalogGame, GameDetails } from '@shared/catalog'
 import type { LibraryEntry } from '@shared/library'
 import type { GameSource } from '@shared/sourceList'
@@ -41,6 +42,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   const startDownload = useDownloads((s) => s.start)
   const cancelDownload = useDownloads((s) => s.cancel)
   const downloading = job?.phase === 'downloading'
+  const dlError = useDownloads((s) => (sourceId !== undefined ? s.errors[sourceId] : undefined))
 
   useEffect(() => {
     if (gameId === null) return
@@ -81,8 +83,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
     setSourceId(id)
     setError(null)
     const r = await startDownload(id, title)
-    if (!r.ok) setError(r.error ?? null)
-    else await useLibrary.getState().refresh()
+    if (r.ok) await useLibrary.getState().refresh()
   }
   const clickDownload = (): void => {
     if (sources.length > 1) setPickingSource(true)
@@ -101,7 +102,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
           {genres.length > 0 && <div className="tags">{genres.map((g) => <Tag key={g}>{g}</Tag>)}</div>}
           {/* Pas de data-nav : texte informatif seulement, déjà défilable au stick droit (cf. scrollWithRightStick) sans jamais recevoir le focus. */}
           {details?.summary && <div className="bp-summary" data-scroll>{details.summary}</div>}
-          {error && <div className="bp-error">{error}</div>}
+          {(error || dlError) && <div className="bp-error">{error ?? `${t('download.failedHeader')} ${dlError}`}</div>}
           <div className="bp-actions">
             {playable && (running
               ? <button data-nav className="bp-btn primary" onClick={() => void window.api.invoke('game:stop', owned.id)}>■ {t('play.stop')}</button>
@@ -109,7 +110,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
             {!owned && gameId !== null && <button data-nav className="bp-btn primary" onClick={() => void useLibrary.getState().add(gameId)}>+ {t('addToLibrary')}</button>}
             {downloadable && (downloading
               ? <button data-nav className="bp-btn" onClick={() => sourceId !== undefined && cancelDownload(sourceId)}>
-                  {job && job.total > 0 ? `${t('download.cancel')} (${Math.round((job.done / job.total) * 100)}%)` : t('download.downloading')}
+                  {job && job.total > 0 ? `${t('download.cancel')} (${Math.round((job.done / job.total) * 100)}%)` : job?.message === 'connecting' ? t('download.connecting') : t('download.downloading')}
                 </button>
               : <button data-nav className="bp-btn primary" onClick={clickDownload}>⬇ {t('download.button')}</button>)}
             {owned && <button data-nav className="bp-btn" onClick={() => void useLibrary.getState().setFlag(owned.id, { favorite: !owned.favorite })}>{owned.favorite ? '♥' : '♡'} {t(owned.favorite ? 'fav.remove' : 'fav.add')}</button>}
@@ -134,7 +135,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
             <p>{t('download.choose')}</p>
             {sources.map((s) => (
               <button key={s.id} data-nav className="bp-btn" onClick={() => { setPickingSource(false); void startDl(s.id) }}>
-                {s.title}{s.sizeBytes ? ` · ${formatSize(s.sizeBytes)}` : ''}
+                {s.title}{s.sizeBytes ? ` · ${formatSize(s.sizeBytes)}` : ''}{isTorrentSource(s.uris) && <span className="tag tag-p2p">{t('download.torrentTag')}</span>}
               </button>
             ))}
             <button data-nav className="bp-btn" onClick={() => setPickingSource(false)}>{t('dialog.cancel')}</button>

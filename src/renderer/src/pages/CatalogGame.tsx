@@ -5,6 +5,7 @@ import { t } from '@/i18n'
 import { consoleById } from '@shared/consoles'
 import { canonicalGenre, genreLabel } from '@shared/genres'
 import { formatSize } from '@shared/format'
+import { isTorrentSource } from '@shared/uriKind'
 import { useSettings } from '@/store/settings'
 import type { CatalogGame, GameDetails } from '@shared/catalog'
 import type { LibraryEntry } from '@shared/library'
@@ -59,6 +60,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
         </div>
       </Cover>
       <div className="detail">
+        <DownloadFailureNotice sources={sources} />
         {owned && !owned.missing && <QuickExitNotice entryId={owned.id} />}
         <div className="panel">
           {year && <div><strong>{t('game.released', { d: String(year) })}</strong></div>}
@@ -82,7 +84,6 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
  */
 function DownloadButton({ sources, gameName }: { sources: GameSource[]; gameName: string }) {
   const [selected, setSelected] = useState(sources[0]?.id)
-  const [error, setError] = useState<string | null>(null)
   const job = useDownloads((s) => (selected !== undefined ? s.jobs[selected] : undefined))
   const startDownload = useDownloads((s) => s.start)
   const cancelDownload = useDownloads((s) => s.cancel)
@@ -90,10 +91,8 @@ function DownloadButton({ sources, gameName }: { sources: GameSource[]; gameName
 
   const start = async (): Promise<void> => {
     if (selected === undefined || busy) return
-    setError(null)
     const r = await startDownload(selected, gameName)
-    if (!r.ok) setError(r.error ?? null)
-    else await useLibrary.getState().refresh()
+    if (r.ok) await useLibrary.getState().refresh()
   }
   const cancel = (): void => { if (selected !== undefined) cancelDownload(selected) }
   const percent = job && job.total > 0 ? Math.round((job.done / job.total) * 100) : null
@@ -107,19 +106,50 @@ function DownloadButton({ sources, gameName }: { sources: GameSource[]; gameName
         <select value={selected} disabled={busy} onChange={(e) => setSelected(Number(e.target.value))}>
           {sources.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.title}{!sameList ? ` · ${s.listName}` : ''}{s.sizeBytes ? ` · ${formatSize(s.sizeBytes)}` : ''}
+              {s.title}{!sameList ? ` · ${s.listName}` : ''}{s.sizeBytes ? ` · ${formatSize(s.sizeBytes)}` : ''}{isTorrentSource(s.uris) ? ` · ${t('download.torrentTag')}` : ''}
             </option>
           ))}
         </select>
       )}
+      {isTorrentSource(sources.find((s) => s.id === selected)?.uris ?? []) && <Tag className="tag-p2p">{t('download.torrentTag')}</Tag>}
       {busy
         // Juste après le clic, avant la première mesure réelle (comme « Lancement… » sur le bouton Jouer) : pas encore annulable.
         ? (percent !== null
             ? <Button onClick={cancel}>{t('download.cancel')} ({percent} %)</Button>
-            : <Button disabled>{t('download.downloading')}</Button>)
+            : job?.message === 'connecting'
+              // Torrent : recherche de pairs/métadonnées (jusqu'à 2 min), annulable contrairement au court instant avant la 1re mesure HTTP.
+              ? <Button onClick={cancel}>{t('download.connecting')}</Button>
+              : <Button disabled>{t('download.downloading')}</Button>)
         : <Button variant="primary" onClick={() => void start()}>{t('download.button')}</Button>}
-      {error && <span className="muted">{error}</span>}
     </div>
+  )
+}
+
+/** Échec de téléchargement : même vitrine que l'échec d'un lancement (QuickExitNotice) — panneau en tête de page, message, copie, fermeture. */
+function DownloadFailureNotice({ sources }: { sources: GameSource[] }) {
+  const errors = useDownloads((s) => s.errors)
+  const dismiss = useDownloads((s) => s.dismissError)
+  const [copied, setCopied] = useState(false)
+  const failed = sources.filter((s) => errors[s.id] !== undefined)
+  if (!failed.length) return null
+  const copy = async (text: string): Promise<void> => {
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* presse-papier indisponible */ }
+  }
+  return (
+    <>
+      {failed.map((s) => (
+        <div key={s.id} className="panel quick-exit">
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>{t('download.failedHeader')}</div>
+            <Button variant="icon" title={t('play.dismiss')} aria-label={t('play.dismiss')} onClick={() => dismiss(s.id)}>✕</Button>
+          </div>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+            <strong>{errors[s.id]}</strong>
+            <Button onClick={() => void copy(errors[s.id])}>{copied ? t('play.copied') : t('play.copyLog')}</Button>
+          </div>
+        </div>
+      ))}
+    </>
   )
 }
 

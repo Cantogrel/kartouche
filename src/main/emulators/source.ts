@@ -25,12 +25,61 @@ export function pickRelease(releases: ApiRelease[], asset: string, prerelease: b
   return null
 }
 
+async function getText(url: string): Promise<string> {
+  const res = await fetch(url, { headers: { 'user-agent': 'RomVault' }, signal: AbortSignal.timeout(20000) })
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`)
+  return res.text()
+}
+
+/** Tags (les plus récents d'abord) et dates d'un flux atom de releases GitHub. */
+export function parseReleasesAtom(xml: string): { tag: string; date: string }[] {
+  const out: { tag: string; date: string }[] = []
+  for (const entry of xml.split('<entry>').slice(1)) {
+    const tag = /href="[^"]*\/releases\/tag\/([^"]+)"/.exec(entry)?.[1]
+    const date = /<updated>([^<]+)<\/updated>/.exec(entry)?.[1]
+    if (tag && date) out.push({ tag: decodeURIComponent(tag), date })
+  }
+  return out
+}
+
+/** Noms de fichiers d'une page « expanded_assets » de release GitHub : [nom, url]. */
+export function parseExpandedAssets(html: string, repo: string, tag: string): [string, string][] {
+  const prefix = `/${repo}/releases/download/${encodeURIComponent(tag)}/`
+  const out: [string, string][] = []
+  for (const m of html.matchAll(/href="([^"]+)"/g)) {
+    const h = m[1].replace(/&amp;/g, '&')
+    const i = h.indexOf(prefix)
+    if (i === 0 || (i < 0 && h.startsWith(`/${repo}/releases/download/${tag}/`))) out.push([decodeURIComponent(h.split('/').pop() ?? ''), `https://github.com${h}`])
+  }
+  return out
+}
+
+/**
+ * Repli quand l'API GitHub refuse (403 : quota de 60 requêtes/heure par adresse IP, vite épuisé — partagé avec tout ce qui
+ * tourne derrière la même box). Le flux atom et les pages d'assets ne sont pas soumis à ce quota ; le flux ne distingue pas
+ * les préversions, d'où l'usage en secours seulement.
+ */
+async function githubFallback(repo: string, asset: string): Promise<Release | null> {
+  const re = new RegExp(asset)
+  const tags = parseReleasesAtom(await getText(`https://github.com/${repo}/releases.atom`)).slice(0, 8)
+  for (const { tag, date } of tags) {
+    const a = parseExpandedAssets(await getText(`https://github.com/${repo}/releases/expanded_assets/${encodeURIComponent(tag)}`), repo, tag).find(([name]) => re.test(name))
+    if (a) return { version: /^v?\d/.test(tag) ? tag : date.slice(0, 10), url: a[1], name: a[0] }
+  }
+  return null
+}
+
 /** Dernière version de l'émulateur pour Windows x64. */
 export async function latestRelease(def: EmulatorDef): Promise<Release> {
   const s = def.source
   let rel: Release | null = null
   if (s.kind === 'github') {
-    rel = pickRelease(await getJson<ApiRelease[]>(`https://api.github.com/repos/${s.repo}/releases?per_page=10`), s.asset, s.prerelease ?? false)
+    try {
+      rel = pickRelease(await getJson<ApiRelease[]>(`https://api.github.com/repos/${s.repo}/releases?per_page=10`), s.asset, s.prerelease ?? false)
+    } catch (e) {
+      if (!/HTTP (403|429)/.test(String(e))) throw e
+      rel = await githubFallback(s.repo, s.asset)
+    }
   } else if (s.kind === 'forgejo') {
     rel = pickRelease(await getJson<ApiRelease[]>(s.api), s.asset, false)
   } else if (s.kind === 'rpcs3') {

@@ -94,7 +94,9 @@ export const MIGRATIONS: readonly string[] = [
     size_bytes INTEGER, crc TEXT, sha1 TEXT, uris TEXT NOT NULL, note TEXT, matched INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX sources_list ON sources (list_id);
-  CREATE INDEX sources_game ON sources (game_id)`
+  CREATE INDEX sources_game ON sources (game_id)`,
+  // v14 : identifiant du jeu qui sert à retrouver ses sauvegardes (numéro de série, Title ID…), lu dans le jeu ou appris du journal de l'émulateur
+  `ALTER TABLE library ADD COLUMN game_key TEXT`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

@@ -20,6 +20,8 @@ export interface BiosSlot {
   md5?: Readonly<Record<string, string>>
   /** Taille minimale (firmware : gros fichiers dont on ne calcule pas de somme). */
   minSize?: number
+  /** Reconnu à l'import (ex. depuis un message d'erreur de jeu) mais jamais listé dans le panneau BIOS. */
+  hidden?: boolean
   /** Téléchargeable depuis la source officielle du constructeur (jamais depuis un autre site). */
   auto?: boolean
 }
@@ -47,7 +49,7 @@ export const BIOS_SLOTS: readonly BiosSlot[] = [
   // Azahar embarque ses propres clés AES depuis fin 2024 (choix assumé publiquement par ses développeurs : ce ne sont que
   // des nombres non protégeables par le droit d'auteur, cf. azahar-emu.org/blog/game-loading-changes) : un aes_keys.txt
   // n'est plus nécessaire pour l'écrasante majorité des jeux, seulement un repli pour un build ancien ou un cas limite.
-  { id: '3ds-keys', emulator: 'azahar', kind: 'keys', required: false },
+  { id: '3ds-keys', emulator: 'azahar', kind: 'keys', required: false, hidden: true },
   { id: 'nds7', emulator: 'melonds', kind: 'bios', required: false, names: ['bios7.bin'], sizes: [16384], md5: { df692a80a5b1bc90728bc3dfc76cd948: 'ARM7' } },
   { id: 'nds9', emulator: 'melonds', kind: 'bios', required: false, names: ['bios9.bin'], sizes: [4096], md5: { a392174eb3e572fed6447e956bde4b25: 'ARM9' } },
   { id: 'ndsfw', emulator: 'melonds', kind: 'bios', required: false, names: ['firmware.bin'], sizes: [131072, 262144, 524288] }

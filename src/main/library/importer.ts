@@ -3,6 +3,7 @@ import { copyFile, mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/pr
 import { existsSync } from 'node:fs'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { ROM_EXTENSIONS, type ImportItem, type ImportResult, type LibraryProgress, type MatchKind } from '@shared/library'
+import { archiveVolume, cleanupWorkDir, newWorkDir, unpackArchive } from './archive'
 import { extractZipEntries, hashAndCopyFile, hashFile, readZip, readZipEntryText } from './hash'
 import { identify, type Identified } from './identify'
 import { switchContentFromFilename } from './switchContent'
@@ -19,10 +20,16 @@ export interface ImportOptions {
    * qu'au seul fichier importé par cet appel (jamais utilisé avec plusieurs chemins).
    */
   expected?: { gameId: number; console: string; title: string; match: MatchKind }
+  /**
+   * Le fichier importé est un temporaire appartenant à l'appelant (ROM extraite d'une archive .7z/.rar par
+   * downloads/install.ts) : déplacé à sa place finale au lieu d'être copié, jamais supprimé ici — l'appelant nettoie.
+   * Ne s'applique qu'au seul fichier importé par cet appel.
+   */
+  owned?: boolean
 }
 
 const extOf = (p: string): string => extname(p).slice(1).toLowerCase()
-const isRom = (p: string): boolean => extOf(p) in ROM_EXTENSIONS || extOf(p) === 'zip'
+const isRom = (p: string): boolean => extOf(p) in ROM_EXTENSIONS || extOf(p) === 'zip' || archiveVolume(p) !== null
 const stemOf = (p: string): string => basename(p, extname(p))
 
 async function walk(dir: string, out: string[]): Promise<void> {
@@ -131,6 +138,15 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
     extras.set(f, refs)
     refs.forEach((r) => consumed.add(resolve(r).toLowerCase()))
   }
+  // Volumes d'archive (game.part2.rar, game.7z.002…) : jamais importés seuls — ils voyagent avec le premier volume.
+  for (const f of files) {
+    const v = archiveVolume(f)
+    if (!v || v.isFirst) continue
+    consumed.add(resolve(f).toLowerCase())
+    if (!files.some((x) => resolve(x).toLowerCase() === resolve(v.first).toLowerCase())) {
+      items.push({ file: f, status: 'error', error: existsSync(v.first) ? `volume d’archive : importer le premier volume (${basename(v.first)})` : `archive en plusieurs volumes : premier volume manquant (${basename(v.first)})` })
+    }
+  }
   const queue = files.filter((f) => !consumed.has(resolve(f).toLowerCase()))
 
   const sameRom = db.prepare('SELECT id, path FROM library WHERE path = ? OR (console = ? AND crc = ? AND size = ?)')
@@ -142,14 +158,34 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
   const tmpDir = join(opt.romsDir, '.import-tmp')
   let done = 0
   let lastReport = 0
-  for (const file of queue) {
+  for (const entry of queue) {
+    // Archive .7z/.rar : extraite d'abord dans un dossier temporaire (voir archive.ts) ; ce qui en sort (la ROM, ou un .zip
+    // reconstitué pour un jeu à plusieurs fichiers) suit ensuite exactement le même chemin qu'un fichier importé tel quel.
+    let file = entry
+    let workDir: string | null = null
+    let volumes: string[] = []
+    let owned = opt.owned === true
+    if (archiveVolume(entry)) {
+      onProgress({ done, total: queue.length, current: basename(entry), bytesDone: 0 })
+      workDir = newWorkDir(opt.romsDir, String(done))
+      const unpacked = await unpackArchive(entry, workDir).catch((e: Error) => e.message)
+      if (typeof unpacked === 'string') {
+        items.push({ file: entry, status: 'error', error: unpacked })
+        await cleanupWorkDir(workDir)
+        done++
+        continue
+      }
+      file = unpacked.file
+      volumes = unpacked.volumes
+      owned = true
+    }
     const ext = extOf(file)
     const refs = extras.get(file) ?? []
     const inRoms = resolve(file).toLowerCase().startsWith(resolve(opt.romsDir).toLowerCase())
     // Chemin rapide : fichier seul (pas de zip ni de .cue multi-pistes) copié vers le dossier de ROMs. On lit la source
     // une seule fois (empreinte + copie simultanées, voir `hashAndCopyFile`) au lieu de deux (empreinte puis copie) :
     // ~1,5x moins d'E/S sur une ROM de plusieurs Go (Switch, PS2…), et le renommage final est instantané (même volume).
-    const fuse = ext !== 'zip' && ext !== 'cue' && opt.copy && !inRoms
+    const fuse = ext !== 'zip' && ext !== 'cue' && opt.copy && !inRoms && !owned
     const bytesTotal = ext === 'zip' ? undefined : (await stat(file).catch(() => null))?.size
     const reportBytes = (bytesDone: number): void => {
       const now = Date.now()
@@ -169,11 +205,11 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
       } else {
         prep = await prepare(file, refs, reportBytes)
       }
-      if (typeof prep === 'string') { items.push({ file, status: 'error', error: prep }); continue }
+      if (typeof prep === 'string') { items.push({ file: entry, status: 'error', error: prep }); continue }
       // Mise à jour/DLC Switch (Title ID entre crochets/parenthèses, ou mot-clé à défaut) : jamais importé, voir la note ci-dessus.
       const content = (ROM_EXTENSIONS[ext] ?? []).includes('switch') ? switchContentFromFilename(prep.name) : null
       if (content && content.kind !== 'base') {
-        items.push({ file, status: 'error', error: SWITCH_CONTENT_MESSAGE[content.kind] })
+        items.push({ file: entry, status: 'error', error: SWITCH_CONTENT_MESSAGE[content.kind] })
         continue
       }
       const titleId = content?.kind === 'base' ? content.titleId : null
@@ -181,10 +217,10 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
         ? { gameId: opt.expected.gameId, console: opt.expected.console, title: opt.expected.title, match: opt.expected.match, candidates: [opt.expected.console] }
         : identify(db, prep)
       const cons = id.console ?? (id.candidates.length === 1 ? id.candidates[0] : null)
-      if (!cons) { items.push({ file, status: 'ambiguous', error: id.candidates.join(', ') }); continue }
+      if (!cons) { items.push({ file: entry, status: 'ambiguous', error: id.candidates.join(', ') }); continue }
       const title = id.title ?? prep.name
       const same = sameRom.all(file, cons, prep.crc ?? '', prep.size) as { id: number; path: string }[]
-      if (same.some((r) => existsSync(r.path))) { items.push({ file, status: 'duplicate', console: cons, title, match: id.match }); continue }
+      if (same.some((r) => existsSync(r.path))) { items.push({ file: entry, status: 'duplicate', console: cons, title, match: id.match }); continue }
       // Entrée du même jeu dont le fichier a disparu (ou jamais existé : jeu ajouté depuis le catalogue) : la ROM s'y rattache.
       const target = same[0] ?? (id.gameId !== null ? (byGame.all(id.gameId, cons) as { id: number; path: string }[]).find((r) => !existsSync(r.path)) : undefined)
 
@@ -206,6 +242,16 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
         await rename(tempPath, dest)
         tempPath = null
         if (opt.deleteSource) await rm(file, { force: true })
+      } else if (owned) {
+        // Temporaire extrait d'une archive : déplacé à sa place (même volume que le dossier de ROMs, donc instantané).
+        const dir = join(opt.romsDir, cons)
+        await mkdir(dir, { recursive: true })
+        dest = join(dir, freeName(dir, basename(file)))
+        try { await rename(file, dest) } catch {
+          await copyFile(file, dest)
+          if ((await stat(dest)).size !== (await stat(file)).size) { await rm(dest, { force: true }); throw new Error('copie incomplète') }
+          await rm(file, { force: true })
+        }
       } else if (opt.copy && !inRoms) {
         const dir = join(opt.romsDir, cons)
         await mkdir(dir, { recursive: true })
@@ -219,11 +265,13 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
       }
       if (target) relink.run(dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, titleId, target.id)
       else insert.run(id.gameId, cons, title, dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, titleId, Date.now())
-      items.push({ file, status: 'added', console: cons, title, match: id.match })
+      if (opt.deleteSource) for (const v of volumes) await rm(v, { force: true }).catch(() => undefined)
+      items.push({ file: entry, status: 'added', console: cons, title, match: id.match })
     } catch (e) {
-      items.push({ file, status: 'error', error: (e as Error).message })
+      items.push({ file: entry, status: 'error', error: (e as Error).message })
     } finally {
       if (tempPath) await rm(tempPath, { force: true }).catch(() => undefined)
+      if (workDir) await cleanupWorkDir(workDir)
     }
     done++
   }

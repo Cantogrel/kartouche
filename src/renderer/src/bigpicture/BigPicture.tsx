@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { t } from '@/i18n'
 import { Badge, Cover, artStyle } from '@/ui'
 import { useLibrary } from '@/store/library'
@@ -48,6 +48,16 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   const [opened, setOpened] = useState<Opened | null>(null)
   const [page, setPage] = useState<CatalogPage | null>(null)
   const [limit, setLimit] = useState(PAGE)
+  const grid = useRef<HTMLDivElement>(null)
+  // « Charger plus » : le bouton glisse sous les nouvelles tuiles et garde le focus, hors champ — la vue ne suit pas et la
+  // direction suivante repart du bas de la liste. On rend le focus à la première tuile ajoutée (index dans la grille).
+  const focusAfterMore = useRef<number | null>(null)
+  useEffect(() => {
+    const from = focusAfterMore.current
+    if (from === null || !page || page.games.length <= from) return
+    focusAfterMore.current = null
+    focusEl(grid.current?.querySelectorAll<HTMLElement>('[data-nav]:not(.bp-more)')[from])
+  }, [page])
 
   useEffect(() => { void useLibrary.getState().refresh(); window.api.window.fullscreen(true); return () => window.api.window.fullscreen(false) }, [])
   const go = (s: Section): void => { setSection(s); setConsoleTab('all'); setQuery(''); setLimit(PAGE) }
@@ -175,9 +185,9 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
         {section === 'collections' && (colKeys.length === 0 ? <p className="empty">{collections.length === 0 ? t('bp.noCollections') : t('bp.emptyCollection')}</p> : <div className="bp-grid">{libTiles(colShown, 'k')}</div>)}
 
         {section === 'catalog' && (
-          <div className="bp-grid">
+          <div className="bp-grid" ref={grid}>
             {(page?.games ?? []).map((g) => <Tile key={g.id} id={`g${g.id}`} gameId={g.id} entryId={entries.find((e) => e.gameId === g.id)?.id} title={g.name} cons={g.console} dim={!entries.some((e) => e.gameId === g.id)} onOpen={() => setOpened({ gameId: g.id })} />)}
-            {page && page.total > page.games.length && <button data-nav className="bp-tile bp-more" onClick={() => setLimit(limit + PAGE)}>{t('catalog.more')}</button>}
+            {page && page.total > page.games.length && <button data-nav className="bp-tile bp-more" onClick={() => { focusAfterMore.current = page.games.length; setLimit(limit + PAGE) }}>{t('catalog.more')}</button>}
           </div>
         )}
 

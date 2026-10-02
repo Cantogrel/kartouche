@@ -14,9 +14,11 @@
     "dist:dir": "electron-vite build && electron-builder --win --dir --publish never"
   },
   "dependencies": {
+    "7z-wasm": "^1.2.0",
     "electron-updater": "^6.8.9",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "webtorrent": "^3.0.21",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

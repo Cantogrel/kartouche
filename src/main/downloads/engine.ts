@@ -1,10 +1,12 @@
 import { createWriteStream, existsSync, statSync } from 'node:fs'
 import { mkdir, rename, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { DatabaseSync } from 'node:sqlite'
 import type { DownloadProgress } from '@shared/downloads'
+import { uriKind } from '@shared/uriKind'
+import { downloadTorrent, fetchTorrentFile } from './torrent'
 
 export type Report = (p: DownloadProgress) => void
 export type HttpFetch = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<Response>
@@ -50,13 +52,26 @@ async function fetchOne(uri: string, part: string, sourceId: number, signal: Abo
   report({ sourceId, phase: 'downloading', done, total })
 }
 
+/** Source BitTorrent (magnet ou URL .torrent) : le fichier choisi est déplacé à plat dans `dir`, le dossier de travail du client supprimé. */
+async function fetchTorrent(uri: string, kind: 'magnet' | 'torrent', work: string, dir: string, row: { title: string; size_bytes: number | null }, sourceId: number, signal: AbortSignal, report: Report, httpFetch: HttpFetch): Promise<string> {
+  const input = kind === 'magnet' ? uri : await fetchTorrentFile(uri, signal, httpFetch)
+  const got = await downloadTorrent({
+    input, workDir: work, title: row.title, sizeBytes: row.size_bytes, signal,
+    onProgress: (done, total) => report({ sourceId, phase: 'downloading', done, total, message: total ? undefined : 'connecting' })
+  })
+  const dest = join(dir, basename(got))
+  await rename(got, dest)
+  await rm(work, { recursive: true, force: true })
+  return dest
+}
+
 /**
  * Télécharge la première URI utilisable d'une source vers `<cacheDir>/<sourceId>/<fichier>`. Un fichier `.part`
- * partiel survit à un échec réseau (repris au prochain appel) mais est retiré sur une annulation explicite.
+ * (ou dossier de travail BitTorrent) partiel survit à un échec réseau (repris au prochain appel) mais est retiré sur une annulation explicite.
  * Ne fait ni extraction ni vérification ni installation bibliothèque : uniquement le téléchargement (voir P05).
  */
 export async function downloadSource(db: DatabaseSync, sourceId: number, cacheDir: string, report: Report, httpFetch: HttpFetch = fetch): Promise<{ ok: boolean; file?: string; error?: string }> {
-  const row = db.prepare('SELECT uris FROM sources WHERE id = ?').get(sourceId) as { uris: string } | undefined
+  const row = db.prepare('SELECT uris, title, size_bytes FROM sources WHERE id = ?').get(sourceId) as { uris: string; title: string; size_bytes: number | null } | undefined
   if (!row) return { ok: false, error: 'source introuvable' }
   const uris = JSON.parse(row.uris) as string[]
   if (!uris.length) return { ok: false, error: 'aucun lien pour cette source' }
@@ -66,15 +81,23 @@ export async function downloadSource(db: DatabaseSync, sourceId: number, cacheDi
   let currentPart: string | null = null
   try {
     let lastError = ''
-    for (const uri of uris) {
+    for (const [i, uri] of uris.entries()) {
       const dir = join(cacheDir, String(sourceId))
       await mkdir(dir, { recursive: true })
-      const dest = join(dir, filenameFromUri(uri))
-      const part = `${dest}.part`
-      currentPart = part
+      const kind = uriKind(uri)
       try {
-        await fetchOne(uri, part, sourceId, controller.signal, report, httpFetch)
-        await rename(part, dest)
+        let dest: string
+        if (kind === 'http') {
+          dest = join(dir, filenameFromUri(uri))
+          const part = `${dest}.part`
+          currentPart = part
+          await fetchOne(uri, part, sourceId, controller.signal, report, httpFetch)
+          await rename(part, dest)
+        } else {
+          const work = join(dir, `torrent-${i}`)
+          currentPart = work
+          dest = await fetchTorrent(uri, kind, work, dir, row, sourceId, controller.signal, report, httpFetch)
+        }
         report({ sourceId, phase: 'done', done: 1, total: 1 })
         return { ok: true, file: dest }
       } catch (e) {
@@ -83,7 +106,7 @@ export async function downloadSource(db: DatabaseSync, sourceId: number, cacheDi
       }
     }
     if (controller.signal.aborted) {
-      if (currentPart) await rm(currentPart, { force: true }).catch(() => {})
+      if (currentPart) await rm(currentPart, { recursive: true, force: true }).catch(() => {})
       report({ sourceId, phase: 'canceled', done: 0, total: 0 })
       return { ok: false, error: 'annulé' }
     }

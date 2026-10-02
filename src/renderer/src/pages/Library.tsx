@@ -1,3 +1,4 @@
+import { confirmDialog } from '@/ui/AskDialog'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Button, Pill } from '@/ui'
 import { EntryCard } from '@/ui/EntryCard'
@@ -81,7 +82,7 @@ export function Library() {
         <div className="row">
           {current && <>
             <Button onClick={() => openDialog({ kind: 'editor', collectionId: current.id })}>{t('collection.edit')}</Button>
-            <Button onClick={() => { if (window.confirm(t('collection.confirmDelete', { name: current.name }))) void deleteCollection(current.id) }}>{t('collection.delete')}</Button>
+            <Button onClick={async () => { if (await confirmDialog(t('collection.confirmDelete', { name: current.name }))) void deleteCollection(current.id) }}>{t('collection.delete')}</Button>
             <Button variant="primary" onClick={() => openDialog({ kind: 'editor', collectionId: current.id })}>{t('collection.addGames')}</Button>
           </>}
           {!current && hasScanFolders && <Button disabled={busy} onClick={() => void scan()}>{t('library.scan')}</Button>}

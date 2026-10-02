@@ -55,7 +55,7 @@ export const EMULATORS: readonly EmulatorDef[] = [
 ]
 
 /** Émulateurs sans mapping manette automatique (profils par GUID/indices, pas génériques) : à configurer soi-même dans l'émulateur (affiché comme avertissement dans l'UI). */
-export const MANUAL_PAD_EMULATORS: readonly string[] = ['melonds', 'azahar', 'rpcs3']
+export const MANUAL_PAD_EMULATORS: readonly string[] = []
 
 /** Constructeur de l'émulateur (celui de sa première console). */
 export const emulatorMaker = (def: EmulatorDef): string | undefined => consoleById(def.consoles[0])?.maker

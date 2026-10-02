@@ -2,11 +2,14 @@ import type { DatabaseSync } from 'node:sqlite'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { cp, mkdir, open, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import { emulatorForConsole } from '@shared/emulators'
 import { MAX_BACKUPS, type BackupInfo, type SaveInfo } from '@shared/saves'
 import { getRow } from '../emulators/emulatorStore'
 import { patchCfg } from '../emulators/configure'
+import { identifyGame } from './identify'
+import { pcsx2CardNames } from '../emulators/pcsx2Cards'
+import { ps1CardSerials } from '../emulators/duckstation'
 
 /**
  * Dossiers où chaque émulateur range ses sauvegardes et ses états, relatifs à son dossier d'installation (mode portable).
@@ -37,7 +40,8 @@ export interface SaveTarget {
   dirs: string[]
 }
 
-export interface EntryRef { id: number; console: string; path: string }
+/** `titleId` / `vitaTitleId` : colonnes `title_id` et `vita_title_id` de la bibliothèque (Switch, 3DS ; Vita). */
+export interface EntryRef { id: number; console: string; path: string; titleId?: string | null; vitaTitleId?: string | null; gameKey?: string | null }
 
 /** Dossier de RetroArch pour ses sauvegardes et états : hors de l'installation, donc conservé à la désinstallation. */
 export const retroarchSavesRoot = (savesRoot: string): string => join(savesRoot, 'retroarch')
@@ -87,6 +91,98 @@ async function dolphinGameItems(dir: string, id6: string): Promise<string[]> {
   return items
 }
 
+/** État des sauvegardes de jeux de Cemu (dossier `usr/save/<haut>/<bas>` → date de modification la plus récente) : sert à reconnaître celui qu'une partie a touché. */
+export async function snapshotCemuSaves(mlc: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  const base = join(mlc, 'usr', 'save')
+  for (const hi of await readdir(base).catch(() => [] as string[])) {
+    // Seuls les titres de jeu (00050000 : disque et eShop, 00050002 : démo) ont une sauvegarde de jeu ; « system » (comptes, journal de jeu) et 00050010 (applications système,
+    // vérifié : le menu de la Wii U y écrit dès le démarrage de Cemu) n'appartiennent à aucun jeu.
+    if (!/^0005000[02]$/i.test(hi)) continue
+    for (const lo of await readdir(join(base, hi)).catch(() => [] as string[])) {
+      if (!/^[0-9a-f]{8}$/i.test(lo)) continue
+      out.set(`${hi}${lo}`.toUpperCase(), (await newest(base, [join(hi, lo)])).modified ?? 0)
+    }
+  }
+  return out
+}
+
+/**
+ * Title ID d'un jeu Wii U dont le fichier ne le livre pas (archive, clé de disque inconnue), d'après la partie qui vient de se terminer : le seul dossier de
+ * sauvegarde créé ou modifié depuis `before`. Plusieurs candidats (ou aucun) : on n'en retient aucun plutôt que de risquer de mélanger deux jeux.
+ */
+export async function learnCemuKey(db: DatabaseSync, entryId: number, mlc: string, before: Map<string, number>): Promise<string | null> {
+  const after = await snapshotCemuSaves(mlc)
+  const touched = [...after].filter(([id, t]) => t > (before.get(id) ?? -1)).map(([id]) => id)
+  if (touched.length !== 1) return null
+  db.prepare('UPDATE library SET game_key = ? WHERE id = ?').run(touched[0], entryId)
+  return touched[0]
+}
+
+/** Entrées de `dir` (fichiers ou dossiers) dont le nom commence par `prefix`, en chemins relatifs à la racine (`rel`). */
+const startingWith = async (rel: string, root: string, prefix: string): Promise<string[]> =>
+  (await readdir(join(root, rel)).catch(() => [] as string[])).filter((n) => n.startsWith(prefix)).map((n) => join(rel, n))
+
+/** Dossier `mlc01` de Cemu : celui de `settings.xml` (<mlc_path>) s'il y en a un, sinon à côté de l'exécutable (mode portable de RomVault). */
+export async function cemuMlcDir(dir: string): Promise<string> {
+  const xml = await readFile(join(dir, 'settings.xml'), 'utf8').catch(() => '')
+  const custom = /<mlc_path>\s*([^<]*?)\s*<\/mlc_path>/.exec(xml)?.[1]
+  return custom && isAbsolute(custom) ? custom : join(dir, 'mlc01')
+}
+
+/**
+ * Sauvegardes d'un jeu précis, d'après son identifiant et la façon dont l'émulateur les nomme (relevé dans son code source officiel) :
+ * - DuckStation : `savestates/<SERIE>_<n>.sav` (System::GetGameSaveStatePath), `memcards/<SERIE>_<n>.mcd` (carte « PerGame », voir applyDuckstationGame) ;
+ * - PCSX2 : états `sstates/<SERIE> (<CRC>).<n>.p2s` (VMManager.cpp), cartes mémoire dédiées `memcards/RomVault-<SERIE>[-2]` (voir pcsx2Cards.ts) ;
+ * - Cemu : dossier `usr/save/<TitleID haut>/<TitleID bas>` du `mlc01` (nn_save.cpp) ; la mise à jour et les DLC d'un jeu partagent ce Title ID de base, et
+ *   `usr/save/system` (comptes, journal de jeu) n'appartient à aucun jeu ;
+ * - Azahar : `user/states/<TitleID 16 hex>.<n>.cst` (savestate.cpp), `user/sdmc/Nintendo 3DS/<32 zéros>/<32 zéros>/title/<haut>/<bas>/data` (archive_source_sd_savedata.cpp) ;
+ * - Eden : `user/nand/user/save/0000000000000000/<utilisateur>/<TitleID 16 hex>` (savedata_factory.cpp) ;
+ * - RPCS3 : dossiers `dev_hdd0/home/<utilisateur>/savedata/<TITLE_ID>…` (cellSaveData.cpp filtre sur ce préfixe) ; pas de sauvegarde d'état ;
+ * - PPSSPP : `memstick/PSP/SAVEDATA/<DISC_ID>…` (préfixe imposé aux jeux), `memstick/PSP/PPSSPP_STATE/<DISC_ID>_<version>_<n>.ppst` (SaveState.cpp) ;
+ * - Vita3K : `ux0/user/00/savedata/<TitleID>` (io.cpp).
+ */
+async function gameScopedItems(id: string, root: string, key: string, entry: EntryRef): Promise<string[]> {
+  if (id === 'duckstation') {
+    // États : `<SERIE>_<n>.sav`. Cartes : par défaut DuckStation en donne une à chaque jeu, nommée d'après son titre (« PerGameTitle ») — on la reconnaît à ses sauvegardes
+    // (nom « B » + région + numéro de série) ; les cartes partagées (`shared_card_<n>.mcd`) mêlent tous les jeux et ne sont à aucun.
+    const cards: string[] = await startingWith('memcards', root, `${key}_`)
+    for (const n of await readdir(join(root, 'memcards')).catch(() => [] as string[])) {
+      const rel = join('memcards', n)
+      if (!/\.mcd$/i.test(n) || /^shared_card_/i.test(n) || cards.includes(rel)) continue
+      if (ps1CardSerials(await readFile(join(root, rel)).catch(() => Buffer.alloc(0))).includes(key)) cards.push(rel)
+    }
+    return [...await startingWith('savestates', root, `${key}_`), ...cards]
+  }
+  if (id === 'pcsx2') {
+    const own = [...pcsx2CardNames(key), ...pcsx2CardNames(`g${entry.id}`)].filter((n) => existsSync(join(root, 'memcards', n))).map((n) => join('memcards', n))
+    return [...await startingWith('sstates', root, `${key} (`), ...own]
+  }
+  if (id === 'ppsspp') return [...await startingWith(join('memstick', 'PSP', 'SAVEDATA'), root, key), ...await startingWith(join('memstick', 'PSP', 'PPSSPP_STATE'), root, `${key}_`)]
+  if (id === 'rpcs3') {
+    const homes = join('dev_hdd0', 'home')
+    const out: string[] = []
+    for (const u of await readdir(join(root, homes)).catch(() => [] as string[])) out.push(...await startingWith(join(homes, u, 'savedata'), root, key))
+    return out
+  }
+  if (id === 'azahar') {
+    const tid = key.toUpperCase()
+    if (!/^[0-9A-F]{16}$/.test(tid)) return []
+    const zeros = '0'.repeat(32)
+    const data = join('user', 'sdmc', 'Nintendo 3DS', zeros, zeros, 'title', tid.slice(0, 8).toLowerCase(), tid.slice(8).toLowerCase(), 'data')
+    return [...await startingWith(join('user', 'states'), root, `${tid}.`), ...(existsSync(join(root, data)) ? [data] : [])]
+  }
+  if (id === 'eden') {
+    const tid = key.toUpperCase()
+    if (!/^[0-9A-F]{16}$/.test(tid)) return []
+    const base = join('user', 'nand', 'user', 'save', '0000000000000000')
+    return (await readdir(join(root, base)).catch(() => [] as string[])).map((u) => join(base, u, tid)).filter((p) => existsSync(join(root, p)))
+  }
+  if (id === 'vita3k') return startingWith(join('ux0', 'user', '00', 'savedata'), root, key)
+  if (id === 'dolphin') return dolphinGameItems(root, key)
+  return []
+}
+
 /** Où sont les sauvegardes de ce jeu ; null si son émulateur n'est pas connu ou pas installé. */
 export async function resolveTarget(db: DatabaseSync, savesRoot: string, entry: EntryRef): Promise<SaveTarget | null> {
   const def = emulatorForConsole(entry.console)
@@ -103,12 +199,19 @@ export async function resolveTarget(db: DatabaseSync, savesRoot: string, entry: 
     return { emulator: def.id, scope: 'game', key: `g${entry.id}`, root, items: await byBase(root, base, '', /^\.(sav|ml\d)$/i), dirs: [root] }
   }
   const row = getRow(db, def.id)
-  if (def.id === 'dolphin' && row) {
-    const id = await readDiscId(entry.path)
-    if (id) return { emulator: def.id, scope: 'game', key: `g${entry.id}`, root: row.dir, items: await dolphinGameItems(row.dir, id), dirs: [join(row.dir, 'User')] }
-  }
   const rels = EMULATOR_SAVE_DIRS[def.id]
   if (!row || !rels) return null
+  // Un jeu identifiable a ses propres sauvegardes. Seul un jeu dont l'identifiant est introuvable (format illisible, jamais lancé) retombe sur la portée émulateur.
+  const key = await identifyGame(db, entry, { cemuDir: def.id === 'cemu' ? row.dir : undefined })
+  if (key) {
+    if (def.id === 'cemu') {
+      const tid = key.toUpperCase()
+      const own = /^[0-9A-F]{16}$/.test(tid) ? join('usr', 'save', tid.slice(0, 8).toLowerCase(), tid.slice(8).toLowerCase()) : null
+      const mlc = await cemuMlcDir(row.dir)
+      return { emulator: def.id, scope: 'game', key: `g${entry.id}`, root: mlc, items: own && existsSync(join(mlc, own)) ? [own] : [], dirs: [join(mlc, 'usr', 'save')] }
+    }
+    return { emulator: def.id, scope: 'game', key: `g${entry.id}`, root: row.dir, items: await gameScopedItems(def.id, row.dir, key, entry), dirs: rels.map((r) => join(row.dir, r)) }
+  }
   const items = rels.filter((r) => existsSync(join(row.dir, r)))
   return { emulator: def.id, scope: 'emulator', key: 'all', root: row.dir, items, dirs: items.map((r) => join(row.dir, r)) }
 }

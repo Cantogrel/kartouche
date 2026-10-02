@@ -54,7 +54,7 @@ Navigation complète au clavier (`Tab`, `Entrée`/`Espace`, `Échap` pour fermer
 | Cemu | Wii U |
 | Eden | Switch |
 
-Non gérés pour l'instant : archives 7z/rar, zip64 et zip multi-fichiers pour l'import.
+Archives : `.zip` (lecteur intégré), `.7z` et `.rar` (extraites automatiquement, y compris les volumes `.partN.rar` / `.7z.001`, sans 7-Zip ni WinRAR à installer). Une archive avec une seule ROM est extraite ; un jeu à plusieurs fichiers (`.cue` + pistes, paquet PS Vita) est reconditionné en `.zip` ; plusieurs ROM différentes ou une archive protégée par mot de passe sont refusées avec un message explicite. Non géré : zip64.
 
 ## Développement
 
@@ -81,3 +81,5 @@ npm run dist         # installateur dans release/
 ## Licence et crédits
 
 Les métadonnées viennent des DAT Libretro, d'IGDB, de TheGamesDB, de SteamGridDB et de Wikipédia ; les succès de RetroAchievements. RomVault s'inspire de l'ergonomie de Hydra Launcher sans en reprendre d'assets.
+
+Extraction `.7z`/`.rar` : [7z-wasm](https://github.com/use-strict/7z-wasm) (7-Zip compilé en WebAssembly, LGPL-2.1 ou ultérieure avec la restriction unRAR — le moteur sert uniquement à extraire, jamais à créer d'archives RAR). Livré comme fichiers séparés et remplaçables (`resources/app.asar.unpacked/node_modules/7z-wasm/`, avec `License.txt` et `unRarLicense.txt`).

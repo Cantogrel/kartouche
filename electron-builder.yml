@@ -9,6 +9,9 @@ files:
   - build/icon.png
   - package.json
 asar: true
+# 7-Zip (WebAssembly, LGPL-2.1+ avec restriction unRAR) : fichiers réels et remplaçables, hors de l'asar — voir src/main/library/archive.ts.
+asarUnpack:
+  - node_modules/7z-wasm/**
 win:
   icon: build/icon.ico
   target:

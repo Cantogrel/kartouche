@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { displayTitle, type CatalogGame } from '@shared/catalog'
-import { cachedImage, cancelImage, getImage, limited, sgdbId, sniff } from './images'
+import { cachedImage, cancelImage, getImage, limited, MAX_PARALLEL, sgdbId, sniff } from './images'
 import { fetchSwitchCatalog } from './switch'
 import { syncCatalog } from './sync'
 import { DEFAULT_SETTINGS } from '@shared/settings'
@@ -44,12 +44,12 @@ describe('cachedImage', () => {
 
 describe('limited', () => {
   // Bug vécu : en Big Picture, changer vite de filtre abandonne des tuiles (donc leur `<img>`) en rafale ; une tâche
-  // en attente derrière les 4 emplacements ne doit jamais s'exécuter ni en occuper un si elle est déjà obsolète,
+  // en attente derrière les emplacements ne doit jamais s'exécuter ni en occuper un si elle est déjà obsolète,
   // sinon les vraies requêtes suivantes (ex. retour à la Bibliothèque) restent bloquées derrière du travail perdu.
   it("libère une tâche en attente sans l'exécuter si elle est abandonnée avant son tour", async () => {
     const release: (() => void)[] = []
     const hold = (): Promise<void> => new Promise((r) => release.push(r))
-    const busy = [0, 1, 2, 3].map(() => limited(() => hold()))
+    const busy = Array.from({ length: MAX_PARALLEL }, () => limited(() => hold()))
     const ac = new AbortController()
     let ran = false
     const waiting = limited(() => { ran = true; return Promise.resolve() }, ac.signal).catch((e: unknown) => e)
@@ -59,6 +59,18 @@ describe('limited', () => {
     expect(ran).toBe(false)
     release.forEach((r) => r())
     await Promise.all(busy)
+  })
+  it('sert en premier la tâche la plus récemment demandée (celle de la tuile affichée)', async () => {
+    const release: (() => void)[] = []
+    const busy = Array.from({ length: MAX_PARALLEL }, () => limited(() => new Promise<void>((r) => release.push(r))))
+    const order: string[] = []
+    const old = limited(async () => { order.push('old') })
+    const fresh = limited(async () => { order.push('fresh') })
+    release[0]()
+    await Promise.all([old, fresh].slice(1))
+    release.slice(1).forEach((r) => r())
+    await Promise.all([...busy, old, fresh])
+    expect(order).toEqual(['fresh', 'old'])
   })
   it('rejette tout de suite une tâche déjà abandonnée, même avec un emplacement libre', async () => {
     const ac = new AbortController()

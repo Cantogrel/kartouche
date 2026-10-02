@@ -1,3 +1,4 @@
+import { confirmDialog } from '@/ui/AskDialog'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, ProgressBar } from '@/ui'
 import { t, getLang } from '@/i18n'
@@ -30,7 +31,7 @@ export function FlagButtons({ entry }: { entry: LibraryEntry }) {
 export function UninstallButton({ entry }: { entry: LibraryEntry }) {
   const removeEntry = useLibrary((s) => s.removeEntry)
   return (
-    <Button onClick={() => { if (window.confirm(t('confirm.uninstall', { title: entry.title }))) void removeEntry(entry.id, 'file') }}>
+    <Button onClick={async () => { if (await confirmDialog(t('confirm.uninstall', { title: entry.title }))) void removeEntry(entry.id, 'file') }}>
       {t('action.uninstall')}
     </Button>
   )
@@ -68,13 +69,13 @@ export function SavesPanel({ entry }: { entry: LibraryEntry }) {
       </div>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h4>{t('saves.copies')}</h4>
-        {info.backups.length > 1 && <Button onClick={() => { if (window.confirm(t('saves.confirmDeleteAll', { n: info.backups.length }))) void run(() => window.api.invoke('saves:deleteAllBackups', entry.id)) }}>{t('saves.deleteAll')}</Button>}
+        {info.backups.length > 1 && <Button onClick={async () => { if (await confirmDialog(t('saves.confirmDeleteAll', { n: info.backups.length }))) void run(() => window.api.invoke('saves:deleteAllBackups', entry.id)) }}>{t('saves.deleteAll')}</Button>}
       </div>
       {info.backups.length === 0 ? <p className="muted">{t('saves.noCopies')}</p> : info.backups.map((b) => (
         <div key={b.name} className="row copy-row">
           <span style={{ flex: 1 }}>{fmtDate(b.at)} <span className="muted">· {fmtSize(b.size)}</span></span>
-          <Button disabled={running} onClick={() => { if (window.confirm(t('saves.confirmRestore', { d: fmtDate(b.at) }))) void run(async () => { await window.api.invoke('saves:restore', { entryId: entry.id, name: b.name }) }, t('saves.restored')) }}>{t('saves.restore')}</Button>
-          <Button onClick={() => { if (window.confirm(t('saves.confirmDelete', { d: fmtDate(b.at) }))) void run(() => window.api.invoke('saves:deleteBackup', { entryId: entry.id, name: b.name })) }}>{t('saves.delete')}</Button>
+          <Button disabled={running} onClick={async () => { if (await confirmDialog(t('saves.confirmRestore', { d: fmtDate(b.at) }))) void run(async () => { await window.api.invoke('saves:restore', { entryId: entry.id, name: b.name }) }, t('saves.restored')) }}>{t('saves.restore')}</Button>
+          <Button onClick={async () => { if (await confirmDialog(t('saves.confirmDelete', { d: fmtDate(b.at) }))) void run(() => window.api.invoke('saves:deleteBackup', { entryId: entry.id, name: b.name })) }}>{t('saves.delete')}</Button>
         </div>
       ))}
     </div>

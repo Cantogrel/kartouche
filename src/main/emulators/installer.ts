@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { spawn } from 'node:child_process'
 import { createWriteStream, existsSync } from 'node:fs'
-import { cp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -10,6 +10,9 @@ import type { AppPaths } from '@shared/ipc'
 import { coreUrl, latestRelease } from './source'
 import { deleteEmulator, getRow, saveEmulator } from './emulatorStore'
 import { configureEmulator, type ConfigContext } from './configure'
+import { installResolutionPacks, maxRenderHeight } from './cemu'
+import { detectGpu } from './gpu'
+import { hasQuarterResolutions } from './eden'
 
 type Report = (p: EmulatorProgress) => void
 
@@ -132,7 +135,12 @@ export async function installEmulator(db: DatabaseSync, def: EmulatorDef, paths:
     const exe = await findExe(dest, def.exe)
     if (!exe) throw new Error(`${def.exe[0]} introuvable après l'installation`)
     await configure(def, dest, paths)
-    if (fresh) await configureEmulator(id, dest, { ...ctx, biosDir: join(paths.bios, id) })
+    const gpu = fresh && (id === 'cemu' || id === 'dolphin' || id === 'retroarch' || id === 'eden' || id === 'melonds' || id === 'azahar' || id === 'duckstation' || id === 'pcsx2' || id === 'rpcs3' || id === 'ppsspp' || id === 'vita3k') ? await detectGpu() : undefined
+    // Eden : l'énumération des niveaux de résolution a changé entre versions ; on lit celle du binaire installé.
+    const edenNewResolutions = fresh && id === 'eden' ? hasQuarterResolutions(await readFile(exe)) : undefined
+    if (fresh) await configureEmulator(id, dest, { ...ctx, biosDir: join(paths.bios, id), gpu, edenNewResolutions })
+    // Résolution de Cemu = graphic packs officiels, par jeu : facultatif, Cemu reste utilisable en 720p natif si le téléchargement échoue.
+    if (gpu && id === 'cemu') await installResolutionPacks(dest, maxRenderHeight(gpu, ctx.displayHeight), { download: (u, f) => download(u, f, () => {}), extract, cache }).catch(() => {})
     if (id === 'retroarch') await installCores(def, dest, cache, report)
     saveEmulator(db, { id, version: rel.version, dir: dest, exe, custom: false })
     report({ id, phase: 'done', done: 1, total: 1 })

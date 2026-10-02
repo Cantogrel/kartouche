@@ -15,7 +15,7 @@ import { cancelImage } from './catalog/images'
 import { importPaths } from './library/importer'
 import { addCatalogGame, clearLibrary, deleteAllRomFiles, entryPath, importSbi, listContent, listLibrary, refreshMissing, relinkUnmatched, removeEntry } from './library/libraryStore'
 import { createCollection, deleteCollection, listCollections, renameCollection, setFlags, setMembers, setMembership } from './library/collections'
-import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget } from './saves/saves'
+import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget, type EntryRef } from './saves/saves'
 import { getAchievements } from './achievements/retroachievements'
 import { addSourceList } from './sources/import'
 import { listSourceLists, refreshSourceList, removeSourceList, sourcesForGame } from './sources/manage'
@@ -29,6 +29,7 @@ import { installEmulator, uninstallEmulator } from './emulators/installer'
 import { latestRelease } from './emulators/source'
 import { getRow, listEmulators, saveEmulator } from './emulators/emulatorStore'
 import { biosStatus, importBiosFile, removeBios } from './bios/bios'
+import { BIOS_SLOTS } from '@shared/bios'
 import { autoInstallFirmware } from './bios/official'
 import { isRunning, launchGame, openEmulator, runningCount, stopAllGames, stopGame, stopGameAndWait } from './emulators/launcher'
 import { dirname, join } from 'node:path'
@@ -149,7 +150,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     const opts = {
       properties: (kind === 'folder' ? ['openDirectory'] : ['openFile', 'multiSelections']) as ('openDirectory' | 'openFile' | 'multiSelections')[],
       defaultPath: app.getPath('downloads'),
-      filters: kind === 'folder' ? [] : [{ name: 'ROMs', extensions: [...Object.keys(ROM_EXTENSIONS), 'zip'] }, { name: 'All files', extensions: ['*'] }]
+      filters: kind === 'folder' ? [] : [{ name: 'ROMs', extensions: [...Object.keys(ROM_EXTENSIONS), 'zip', '7z', 'rar'] }, { name: 'All files', extensions: ['*'] }]
     }
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return res.canceled ? [] : res.filePaths
@@ -177,8 +178,8 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('collections:delete', (id) => deleteCollection(db, id))
   handle('collections:set', (req) => setMembership(db, req.collectionId, req.entryId, req.member))
   handle('collections:setMembers', (req) => setMembers(db, req.collectionId, req.entryIds))
-  const saveRef = (id: number): { id: number; console: string; path: string } | null =>
-    (db.prepare('SELECT id, console, path FROM library WHERE id = ?').get(id) as { id: number; console: string; path: string } | undefined) ?? null
+  const saveRef = (id: number): EntryRef | null =>
+    (db.prepare('SELECT id, console, path, title_id AS titleId, vita_title_id AS vitaTitleId FROM library WHERE id = ?').get(id) as EntryRef | undefined) ?? null
   handle('saves:info', async (id) => { const e = saveRef(id); return e ? saveInfo(db, paths.saves, e) : null })
   handle('saves:backup', async (id) => { const e = saveRef(id); return e ? backupSaves(db, paths.saves, e) : null })
   handle('saves:restore', async (req) => { const e = saveRef(req.entryId); return e && !isRunning(e.id) ? restoreSaves(db, paths.saves, e, req.name) : false })
@@ -245,6 +246,10 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
       const d = screen.getPrimaryDisplay()
       const ctx = { lang: resolveLanguage(loadSettings(db).language, app.getLocale()), displayHeight: Math.round(d.size.height * d.scaleFactor) }
       await installEmulator(db, def, paths, (p) => broadcast('emulators:progress', p), ctx)
+      // RPCS3 / Vita3K : le firmware officiel de Sony se télécharge et s'installe seul à la suite de l'émulateur, sans aucune boîte à valider ; un échec (réseau…) n'invalide
+      // pas l'installation : le panneau BIOS propose toujours le bouton d'installation automatique.
+      const fw = BIOS_SLOTS.find((s) => s.emulator === id && s.auto)
+      if (fw && !(await biosStatus({ db, paths })).some((s) => s.id === fw.id && s.state === 'ok')) await autoInstallFirmware({ db, paths }, id, (p) => broadcast('emulators:progress', p)).catch(() => {})
       return { ok: true }
     } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) } } finally { installing.delete(id) }
   })

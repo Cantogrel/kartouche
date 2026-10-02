@@ -2,7 +2,7 @@ import { createReadStream, createWriteStream } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
-import { crc32, createInflateRaw, inflateRawSync } from 'node:zlib'
+import { constants, crc32, createInflateRaw, inflateRawSync } from 'node:zlib'
 
 export interface FileHash { crc: string; sha1: string; size: number }
 
@@ -134,6 +134,23 @@ async function extractEntryTo(path: string, e: ZipEntry, destPath: string): Prom
  * Extrait plusieurs entrées d'un zip (ex. une feuille .cue et ses pistes) vers des chemins de destination choisis par l'appelant.
  * Tout ou rien : renvoie false (sans lever) si l'archive, une entrée ou sa méthode de compression posent problème.
  */
+/** Les `bytes` premiers octets d'une entrée d'archive, sans extraire le fichier (assez pour un en-tête de jeu) ; null si illisible. */
+export async function readZipEntryHead(path: string, name: string, bytes: number): Promise<Buffer | null> {
+  const entries = await centralDirectory(path)
+  const e = entries?.find((x) => x.name === name)
+  if (!e || (e.method !== 0 && e.method !== 8)) return null
+  try {
+    const dataOffset = await localDataOffset(path, e.localOffset)
+    const fh = await open(path, 'r')
+    try {
+      // Déflate peut se lire tronqué : on prend assez d'octets compressés (jamais plus que le fichier) et on garde ce qui est sorti.
+      const want = Math.min(e.compSize, e.method === 8 ? bytes * 2 + 4096 : bytes)
+      const comp = Buffer.alloc(want)
+      await fh.read(comp, 0, want, dataOffset)
+      return (e.method === 8 ? inflateRawSync(comp, { finishFlush: constants.Z_SYNC_FLUSH }) : comp).subarray(0, bytes)
+    } finally { await fh.close() }
+  } catch { return null }
+}
 export async function extractZipEntries(path: string, mapping: readonly { entry: string; dest: string }[]): Promise<boolean> {
   const entries = await centralDirectory(path)
   if (!entries) return false

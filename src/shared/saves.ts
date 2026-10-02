@@ -6,7 +6,7 @@ export interface BackupInfo {
 }
 
 /**
- * Données de sauvegarde d'un jeu. `scope` : `game` = fichiers propres au jeu (RetroArch, melonDS) ;
+ * Données de sauvegarde d'un jeu. `scope` : `game` = fichiers propres au jeu (la plupart des émulateurs) ;
  * `emulator` = l'émulateur range toutes ses sauvegardes ensemble (cartes mémoire, états…), la copie couvre donc tous ses jeux.
  */
 export interface SaveInfo {

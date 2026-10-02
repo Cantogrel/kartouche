@@ -1,3 +1,4 @@
+import { confirmDialog } from '@/ui/AskDialog'
 import { useEffect } from 'react'
 import { Button, ProgressBar, Section, Tag } from '@/ui'
 import { t } from '@/i18n'
@@ -41,7 +42,7 @@ export function Emulators() {
                 <div style={{ marginTop: 12 }}>
                   <ProgressBar value={p.phase === 'download' && p.total ? (p.done / p.total) * 100 : p.phase === 'cores' && p.total ? (p.done / p.total) * 100 : 100} />
                   <div className="muted">
-                    {p.phase === 'download' ? t('emu.downloading', { done: mb(p.done), total: p.total ? mb(p.total) : '?' }) : p.phase === 'extract' ? t('emu.extracting') : p.phase === 'cores' ? t('emu.cores', { name: p.message ?? '' }) : t('emu.resolving')}
+                    {p.phase === 'download' ? t('emu.downloading', { done: mb(p.done), total: p.total ? mb(p.total) : '?' }) : p.phase === 'extract' ? t('emu.extracting') : p.phase === 'cores' ? t('emu.cores', { name: p.message ?? '' }) : p.phase === 'firmware' ? t('bios.installing') : t('emu.resolving')}
                   </div>
                 </div>
               )}
@@ -58,7 +59,7 @@ export function Emulators() {
                       <Button onClick={() => void window.api.invoke('emulators:open', { id: def.id, what: 'dir' })}>{t('emu.folder')}</Button>
                       {biosSlotsFor(def.id).some((x) => x.kind === 'bios') && <Button onClick={() => void window.api.invoke('emulators:open', { id: def.id, what: 'bios' })}>{t('emu.biosFolder')}</Button>}
                       {(update || s.missing) && !s.custom && <Button variant="primary" onClick={() => void install(def.id)}>{t(s.missing ? 'emu.reinstall' : 'emu.update')}</Button>}
-                      <Button onClick={() => { if (window.confirm(t(s.custom ? 'emu.confirmForget' : 'emu.confirmRemove', { name: def.name }))) void uninstall(def.id) }}>{t(s.custom ? 'emu.forget' : 'emu.remove')}</Button>
+                      <Button onClick={async () => { if (await confirmDialog(t(s.custom ? 'emu.confirmForget' : 'emu.confirmRemove', { name: def.name }))) void uninstall(def.id) }}>{t(s.custom ? 'emu.forget' : 'emu.remove')}</Button>
                     </>
                   )}
                   {!s?.installed && !p && (

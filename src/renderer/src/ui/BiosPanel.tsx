@@ -1,3 +1,4 @@
+import { confirmDialog } from '@/ui/AskDialog'
 import { useCallback, useEffect, useState, type DragEvent } from 'react'
 import { Button } from '@/ui'
 import { t } from '@/i18n'
@@ -25,7 +26,7 @@ export function BiosPanel({ emulator, onChange }: { emulator: string; onChange?:
   const copyDetail = (id: string, detail: string): void => {
     void navigator.clipboard.writeText(detail).then(() => { setCopiedId(id); setTimeout(() => setCopiedId(null), 1500) }).catch(() => {})
   }
-  const slots = biosSlotsFor(emulator)
+  const slots = biosSlotsFor(emulator).filter((s) => !s.hidden)
   const auto = slots.find((s) => s.auto)
   const autoStatus = auto && status.find((x) => x.id === auto.id)
   const load = useCallback(async () => setStatus(await window.api.invoke('bios:status')), [])
@@ -51,7 +52,7 @@ export function BiosPanel({ emulator, onChange }: { emulator: string; onChange?:
     } finally { off(); setProg(null); setBusy(false); await load(); onChange?.() }
   }
   const remove = async (id: string): Promise<void> => {
-    if (busy || !window.confirm(t('bios.confirmRemove', { slot: t(`bios.slot.${id}`) }))) return
+    if (busy || !await confirmDialog(t('bios.confirmRemove', { slot: t(`bios.slot.${id}`) }))) return
     setBusy(true)
     setMessages([])
     try { await window.api.invoke('bios:remove', id) } finally { setBusy(false); await load(); onChange?.() }

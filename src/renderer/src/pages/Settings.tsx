@@ -1,3 +1,4 @@
+import { confirmDialog } from '@/ui/AskDialog'
 import { useEffect, useState, type DragEvent } from 'react'
 import type { ProviderStatus } from '@shared/catalog'
 import type { UpdateChangelog } from '@shared/ipc'
@@ -14,7 +15,7 @@ import { useEmulators } from '@/store/emulators'
 import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSetting } from '@shared/settings'
 import { formatSize } from '@shared/format'
 
-const SECTIONS = ['general', 'import', 'emulation', 'controller', 'appearance', 'apiKeys', 'sources', 'about', 'danger'] as const
+const SECTIONS = ['general', 'appearance', 'emulation', 'sources', 'about', 'danger'] as const
 type Section = (typeof SECTIONS)[number]
 
 const isSection = (s: string | undefined): s is Section => (SECTIONS as readonly string[]).includes(s ?? '')
@@ -75,6 +76,37 @@ export function Settings() {
 
         {section === 'general' && (
           <>
+            <h3>{t('settings.groupApp')}</h3>
+            <label className="field">
+              {t('settings.language')}
+              <select value={settings.language} onChange={(e) => update({ language: e.target.value as LanguageSetting })}>
+                <option value="auto">{t('settings.langAuto')}</option>
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+              </select>
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={settings.startInBigPicture} onChange={(e) => update({ startInBigPicture: e.target.checked })} /> {t('settings.startBigPicture')}
+            </label>
+            <p className="muted">{t('settings.startBigPictureHint')}</p>
+
+            <h3>{t('settings.groupImport')}</h3>
+            <label className="check">
+              <input type="checkbox" checked={settings.importCopy} onChange={(e) => update({ importCopy: e.target.checked })} /> {t('settings.importCopy')}
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={settings.importDeleteSource} onChange={(e) => update({ importDeleteSource: e.target.checked })} /> {t('settings.importDeleteSource')}
+            </label>
+            <div className="field" style={{ marginTop: 16 }}>
+              {t('settings.scanFolders')}
+              <p className="muted">{t('settings.scanHint')}</p>
+              {settings.scanFolders.map((f) => (
+                <div key={f} className="row"><span style={{ flex: 1, wordBreak: 'break-all' }}>{f}</span><Button onClick={() => void update({ scanFolders: settings.scanFolders.filter((x) => x !== f) })}>✕</Button></div>
+              ))}
+              <div><Button onClick={async () => { const p = await window.api.invoke('library:pick', 'folder'); if (p.length) await update({ scanFolders: [...settings.scanFolders, ...p] }) }}>+ {t('settings.addFolder')}</Button></div>
+            </div>
+
+            <h3>{t('settings.groupData')}</h3>
             <div className="field">
               {t('settings.dataFolder')}
               <div className="row">
@@ -91,55 +123,27 @@ export function Settings() {
             </div>
             <div className="field">
               {t('settings.clearCache')}
-              <p className="muted">{t('settings.clearCacheHint')}</p>
               {cacheBytes !== null && <p className="muted">{t('settings.cacheSize', { size: formatSize(cacheBytes) })}</p>}
               <div className="row">
                 <Button disabled={clearingCache} onClick={() => void clearCache()}>{t('settings.clearCache')}</Button>
                 {cacheMsg && <span className="muted">{cacheMsg}</span>}
               </div>
+              <p className="muted">{t('settings.clearCacheHint')}</p>
             </div>
-            <label className="field">
-              {t('settings.language')}
-              <select value={settings.language} onChange={(e) => update({ language: e.target.value as LanguageSetting })}>
-                <option value="auto">{t('settings.langAuto')}</option>
-                <option value="en">English</option>
-                <option value="fr">Français</option>
-              </select>
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={settings.startInBigPicture} onChange={(e) => update({ startInBigPicture: e.target.checked })} /> {t('settings.startBigPicture')}
-            </label>
-            <p className="muted">{t('settings.startBigPictureHint')}</p>
-          </>
-        )}
-
-        {section === 'import' && (
-          <>
-            <label className="check">
-              <input type="checkbox" checked={settings.importCopy} onChange={(e) => update({ importCopy: e.target.checked })} /> {t('settings.importCopy')}
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={settings.importDeleteSource} onChange={(e) => update({ importDeleteSource: e.target.checked })} /> {t('settings.importDeleteSource')}
-            </label>
-            <h3>{t('settings.scanFolders')}</h3>
-            <p className="muted">{t('settings.scanHint')}</p>
-            {settings.scanFolders.map((f) => (
-              <div key={f} className="row"><span style={{ flex: 1, wordBreak: 'break-all' }}>{f}</span><Button onClick={() => void update({ scanFolders: settings.scanFolders.filter((x) => x !== f) })}>✕</Button></div>
-            ))}
-            <div><Button onClick={async () => { const p = await window.api.invoke('library:pick', 'folder'); if (p.length) await update({ scanFolders: [...settings.scanFolders, ...p] }) }}>+ {t('settings.addFolder')}</Button></div>
           </>
         )}
 
         {section === 'emulation' && (
           <>
+            <h3>{t('settings.groupSaves')}</h3>
             <label className="check">
               <input type="checkbox" checked={settings.autoBackupSaves} onChange={(e) => update({ autoBackupSaves: e.target.checked })} /> {t('settings.autoBackup')}
             </label>
             <p className="muted">{t('settings.autoBackupHint')}</p>
+            <h3>{t('settings.groupController')}</h3>
+            <ControllerSection />
           </>
         )}
-
-        {section === 'controller' && <ControllerSection />}
 
         {section === 'appearance' && (
           <>
@@ -172,8 +176,10 @@ export function Settings() {
           </>
         )}
 
-        {section === 'apiKeys' && (
+        {section === 'sources' && (
           <>
+            <SourcesSection />
+            <h3>{t('settings.groupAccounts')}</h3>
             <p className="muted">{t('settings.raHint')}</p>
             <label className="field">{t('settings.raUser')}
               <input defaultValue={settings.raUsername} onBlur={(e) => update({ raUsername: e.target.value })} autoComplete="off" />
@@ -183,8 +189,6 @@ export function Settings() {
             </label>
           </>
         )}
-
-        {section === 'sources' && <SourcesSection />}
 
         {section === 'about' && info && (
           <>
@@ -220,7 +224,7 @@ function DangerSection() {
   const withFile = entries.filter((e) => !e.missing).length
 
   const run = async (confirmText: string, job: () => Promise<void>): Promise<void> => {
-    if (!window.confirm(confirmText)) return
+    if (!await confirmDialog(confirmText)) return
     setBusy(true)
     try { await job() } finally { setBusy(false) }
   }
@@ -335,7 +339,7 @@ function SourcesSection() {
   }
 
   const remove = async (list: SourceListSummary): Promise<void> => {
-    if (!window.confirm(t('sources.removeConfirm', { n: list.entryCount }))) return
+    if (!await confirmDialog(t('sources.removeConfirm', { n: list.entryCount }))) return
     setBusyId(list.id)
     try { await window.api.invoke('sourceLists:remove', list.id) } finally { setBusyId(null); await refresh() }
   }
@@ -344,7 +348,7 @@ function SourcesSection() {
     <>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <p className="muted">{t('sources.hint')}</p>
-        <Button variant="icon" title={t('sources.formatInfo')} aria-label={t('sources.formatInfo')} onClick={() => setShowFormatInfo(true)}>ⓘ</Button>
+        <span className="bios-info" role="button" tabIndex={0} title={t('sources.formatInfo')} aria-label={t('sources.formatInfo')} onClick={() => setShowFormatInfo(true)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowFormatInfo(true) } }}>i</span>
       </div>
       {showFormatInfo && <SourceFormatDialog onClose={() => setShowFormatInfo(false)} />}
       <div className={`field dropzone${over ? ' over' : ''}`} onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={(e) => { if (e.currentTarget === e.target) setOver(false) }} onDrop={(e) => void onDrop(e)}>

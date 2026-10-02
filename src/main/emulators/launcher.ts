@@ -2,19 +2,28 @@ import type { DatabaseSync } from 'node:sqlite'
 import { app } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, open, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { buildArgs, emulatorById, emulatorForConsole, type EmulatorDef, type GameSession, type LaunchResult, type QuickExit } from '@shared/emulators'
 import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
 import { closeGracefully, connectedXInputSlots, watchQuitChord } from './quit'
-import { applyDolphinFastDiscExclusion, applyDolphinPad, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
+import { applyCemuControls } from './cemu'
+import { applyDolphinFastDiscExclusion, applyDolphinPad, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyEdenPad, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
 import { loadSettings } from '../db/settingsStore'
-import { backupSaves, prepareRetroarch, readDiscId } from '../saves/saves'
+import { backupSaves, cemuMlcDir, learnCemuKey, prepareRetroarch, readDiscId, snapshotCemuSaves } from '../saves/saves'
+import { identifyGame } from '../saves/identify'
+import { pcsx2SerialFromLog, preparePcsx2Cards } from './pcsx2Cards'
 import { extractZipEntries, readZip } from '../library/hash'
+import { ndsGameCode } from './melonds'
+import { ncsdTitleId } from './azahar'
+import { readPs1Serial } from './duckstation'
+import { readPspDiscId } from './ppsspp'
+import { readPs2Game } from './pcsx2'
+import { detectSonyPad, readPs3Serial } from './rpcs3'
 
-const running = new Map<number, { pid: number; stopped: boolean }>()
+const running = new Map<number, { pid: number; stopped: boolean; graceMs?: number }>()
 
 /** En dessous, une fermeture sans intervention de l'utilisateur est probablement un échec (BIOS refusé, fichier manquant…) plutôt qu'une vraie partie. */
 const QUICK_EXIT_MS = 10_000
@@ -29,8 +38,8 @@ const CAPTURE_MAX = 8000
 const KNOWN_LOG_FILES: Record<string, (dir: string) => string> = {
   duckstation: (dir) => join(dir, 'duckstation.log'),
   rpcs3: (dir) => join(dir, 'log', 'RPCS3.log'),
-  // Cemu n'est pas installé en mode portable par RomVault (pas d'entrée `portable` dans EMULATORS) : il journalise dans son dossier utilisateur Windows.
-  cemu: () => join(homedir(), 'AppData', 'Roaming', 'Cemu', 'log.txt'),
+  // settings.xml posé à côté de l'exe (voir cemu.ts) met Cemu en mode portable : son journal est dans son dossier ; sinon, dans le dossier utilisateur Windows.
+  cemu: (dir) => (existsSync(join(dir, 'settings.xml')) ? join(dir, 'log.txt') : join(homedir(), 'AppData', 'Roaming', 'Cemu', 'log.txt')),
   azahar: (dir) => join(dir, 'user', 'log', 'azahar_log.txt')
 }
 
@@ -173,12 +182,26 @@ async function retryDolphinWithoutFastDiscSpeed(entryId: number, row: { exe: str
   return fixed ? retry : first
 }
 
+/** Code de jeu d'une ROM .nds brute (en-tête lu sur 16 octets) ; null pour un autre format. */
+async function readNdsCode(path: string): Promise<string | null> {
+  if (!/\.nds$/i.test(path)) return null
+  const fh = await open(path, 'r')
+  try { const b = Buffer.alloc(16); await fh.read(b, 0, 16, 0); return ndsGameCode(b) } finally { await fh.close() }
+}
+
+/** Title ID d'une ROM 3DS NCSD (.3ds, .cci) : en-tête lu sur 272 octets ; null pour un autre format (.cia, .cxi…). */
+async function readNcsdTitleId(path: string): Promise<string | null> {
+  if (!/\.(3ds|cci)$/i.test(path)) return null
+  const fh = await open(path, 'r')
+  try { const b = Buffer.alloc(0x110); await fh.read(b, 0, b.length, 0); return ncsdTitleId(b) } finally { await fh.close() }
+}
+
 export const isRunning = (entryId: number): boolean => running.has(entryId)
 
 /** Ferme le jeu proprement. */
 export function stopGame(entryId: number): void {
   const r = running.get(entryId)
-  if (r && r.pid > 0) { r.stopped = true; closeGracefully(r.pid) }
+  if (r && r.pid > 0) { r.stopped = true; closeGracefully(r.pid, r.graceMs) }
 }
 export const stopAllGames = (): void => { for (const id of running.keys()) stopGame(id) }
 export const runningCount = (): number => running.size
@@ -206,8 +229,8 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
   // partie tourne déjà si on en relance une autre depuis un autre écran. Le renderer propose de fermer l'autre jeu
   // (cf. `stopGameAndWait`) plutôt que de bloquer sans recours.
   if (running.size > 0) return { ok: false, error: 'otherRunning' }
-  const entry = db.prepare('SELECT console, path, missing, cia_installed, vita_title_id FROM library WHERE id = ?').get(entryId) as
-    { console: string; path: string; missing: number; cia_installed: number; vita_title_id: string | null } | undefined
+  const entry = db.prepare('SELECT console, title, title_id, path, missing, cia_installed, vita_title_id FROM library WHERE id = ?').get(entryId) as
+    { console: string; title: string; title_id: string | null; path: string; missing: number; cia_installed: number; vita_title_id: string | null } | undefined
   if (!entry || entry.missing === 1 || !existsSync(entry.path)) return { ok: false, error: 'noFile' }
   const def = emulatorForConsole(entry.console)
   if (!def) return { ok: false, error: 'noEmulator' }
@@ -230,22 +253,61 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
   }
   const args = buildArgs(def, romPath, entry.console, vitaTitleId)
   if (!args) return { ok: false, error: 'unsupported', detail: def.id }
+  // Identifiant du jeu (numéro de série, Title ID…) lu dans le jeu : il rattache ses sauvegardes à lui seul (voir saves.ts) ; mémorisé pour les lancements suivants.
+  let gameKey = await identifyGame(db, { id: entryId, console: entry.console, path: entry.path, titleId: entry.title_id, vitaTitleId }, { resolve: async () => romPath, cemuDir: def.id === 'cemu' ? row.dir : undefined }).catch(() => null)
+  const cemuBefore = def.id === 'cemu' && !gameKey ? await snapshotCemuSaves(await cemuMlcDir(row.dir)) : null
   // Réservé pendant la préparation (détection de la manette) pour qu'un double clic ne lance pas deux fois le jeu.
   running.set(entryId, { pid: 0, stopped: false })
   try {
     // Dolphin invalide toute liaison qui cite un périphérique absent : la manette branchée est écrite à chaque lancement.
     if (def.id === 'dolphin') {
       const slots = await connectedXInputSlots(cacheDir)
-      await applyDolphinPad(row.dir, slots.length ? slots[0] : null).catch(() => {})
+      const gameId = await readDiscId(romPath)
+      await applyDolphinPad(row.dir, slots.length ? slots[0] : null, { console: entry.console, gameId }).catch(() => {})
       // FastDiscSpeed est activé globalement (voir configureDolphin) ; quelques jeux (liste d'exclusion) en ont besoin
       // désactivé pour démarrer correctement — réglage propre à ce jeu, réappliqué à chaque lancement.
-      const gameId = await readDiscId(romPath)
       if (gameId) await applyDolphinFastDiscExclusion(row.dir, gameId).catch(() => {})
     }
+    // Azahar : profil manette si une manette XInput est branchée, sinon clavier ; réglages propres au jeu seulement si une exception est connue (Title ID).
+    if (def.id === 'azahar') {
+      await applyAzaharPad(row.dir, (await connectedXInputSlots(cacheDir)).length > 0).catch(() => {})
+      await applyAzaharGameConfig(row.dir, (await readNcsdTitleId(romPath).catch(() => null)) ?? entry.title_id).catch(() => {})
+    }
+    // melonDS : disposition d'écrans propre au jeu (code de jeu de la ROM) si une exception est connue, sinon retour à la disposition d'origine.
+    if (def.id === 'melonds') await applyMelondsGame(row.dir, await readNdsCode(romPath).catch(() => null)).catch(() => {})
+    // Eden : manette XInput si branchée, sinon clavier ; configuration propre au jeu seulement si une exception est connue (Title ID).
+    if (def.id === 'eden') {
+      await applyEdenPad(row.dir, (await connectedXInputSlots(cacheDir)).length > 0).catch(() => {})
+      await applyEdenGameConfig(row.dir, entry.title_id).catch(() => {})
+    }
+    // PPSSPP : réglages propres au jeu (DISC_ID lu sur l'ISO) seulement si une exception est connue ; manettes et clavier : défauts natifs de PPSSPP, rien à écrire.
+    if (def.id === 'ppsspp') await applyPpssppGame(row.dir, await readPspDiscId(romPath).catch(() => null)).catch(() => {})
+    // PCSX2 : réglages propres au jeu (série + CRC de l'exécutable lus sur le disque) seulement si une exception est connue ; les autres jeux n'en reçoivent jamais.
+    // Cartes mémoire dédiées au jeu (une par slot) : sans elles, tous les jeux écrivent dans les deux mêmes cartes partagées (voir pcsx2Cards.ts).
+    if (def.id === 'pcsx2') {
+      const game = await readPs2Game(romPath).catch(() => null)
+      await applyPcsx2Game(row.dir, game).catch(() => {})
+      const cards = await preparePcsx2Cards(row.dir, game, gameKey, entryId).catch(() => null)
+      if (cards?.args.length) args.splice(args.indexOf('--') < 0 ? 0 : args.indexOf('--'), 0, ...cards.args)
+    }
+    // RPCS3 : sans profil de manette il n'en utilise aucune. Manette XInput (à son emplacement réel), sinon manette Sony native, sinon clavier ; réglages propres au jeu seulement si
+    // une exception est connue (numéro de série lu sur le disque).
+    if (def.id === 'rpcs3') {
+      const slots = await connectedXInputSlots(cacheDir)
+      const pad = slots.length ? { kind: 'xinput' as const, slot: slots[0] } : await detectSonyPad().then((kind) => (kind ? { kind } : null)).catch(() => null)
+      await applyRpcs3Pad(row.dir, pad).catch(() => {})
+      await applyRpcs3Game(row.dir, await readPs3Serial(romPath).catch(() => null)).catch(() => {})
+    }
+    // Cemu : Pro Controller par défaut, profil GamePad pour les jeux qui l'exigent (profil de l'utilisateur jamais touché).
+    if (def.id === 'cemu') await applyCemuControls(row.dir, entry.title, basename(entry.path)).catch(() => {})
     // RetroArch range ses sauvegardes et états dans le dossier de données de RomVault (par jeu, hors de l'installation).
     if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot).catch(() => {})
     // DuckStation n'écrit rien sur la sortie standard : sans ça, un jeu qui se ferme tout seul ne laisse aucune trace exploitable.
-    if (def.id === 'duckstation') await ensureDuckstationLogging(row.dir).catch(() => {})
+    if (def.id === 'duckstation') {
+      await ensureDuckstationLogging(row.dir).catch(() => {})
+      // Réglages propres au jeu (numéro de série lu sur le disque) seulement si une exception est connue ; les autres jeux n'en reçoivent jamais.
+      await applyDuckstationGame(row.dir, await readPs1Serial(romPath).catch(() => null)).catch(() => {})
+    }
     // La langue de la console 3DS vit dans un fichier binaire du NAND émulé créé au premier jeu lancé (jamais à l'installation,
     // voir azaharCfgPath) : on la corrige dès que ce fichier existe, à chaque lancement (le tout premier reste en anglais).
     if (def.id === 'azahar') {
@@ -259,7 +321,8 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     }
     const started = Date.now()
     const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: ['ignore', 'pipe', 'pipe'] })
-    running.set(entryId, { pid: child.pid ?? 0, stopped: false })
+    // Vita3K : fermer la fenêtre du jeu ne fait que revenir à sa bibliothèque, le process ne sort jamais seul ; on le force après 2 s au lieu de 5.
+    running.set(entryId, { pid: child.pid ?? 0, stopped: false, graceMs: def.id === 'vita3k' ? 2000 : undefined })
     // Capturé au cas où l'émulateur écrit sur la sortie standard (RetroArch, par ex.) ; sert de diagnostic si le jeu se ferme vite.
     let captured = ''
     const onOutput = (chunk: Buffer): void => { captured = (captured + chunk.toString('utf8')).slice(-CAPTURE_MAX) }
@@ -287,8 +350,14 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
         quickExit = { elapsedMs: attempt.elapsedMs, log: attempt.captured.trim() || (await readLaunchLog(def, row.dir)) }
       }
       notify({ entryId, running: false, playMinutes: total?.play_minutes, quickExit })
+      // Identifiant appris de l'émulateur quand le jeu ne permet pas de le lire : Cemu (Title ID, d'après le dossier de sauvegarde créé pendant la partie), PCSX2 (journal).
+      if (!gameKey && def.id === 'cemu' && cemuBefore) gameKey = await learnCemuKey(db, entryId, await cemuMlcDir(row.dir), cemuBefore).catch(() => null)
+      if (!gameKey && def.id === 'pcsx2') {
+        gameKey = await pcsx2SerialFromLog(row.dir).catch(() => null)
+        if (gameKey) db.prepare('UPDATE library SET game_key = ? WHERE id = ?').run(gameKey, entryId)
+      }
       // Copie de sécurité des sauvegardes de ce jeu, seulement si elles ont changé depuis la dernière.
-      if (loadSettings(db).autoBackupSaves) void backupSaves(db, savesRoot, { id: entryId, console: entry.console, path: entry.path }, true).catch(() => {})
+      if (loadSettings(db).autoBackupSaves) void backupSaves(db, savesRoot, { id: entryId, console: entry.console, path: entry.path, gameKey }, true).catch(() => {})
     }
     child.on('error', () => void finish())
     child.on('exit', () => void finish())

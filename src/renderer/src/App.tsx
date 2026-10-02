@@ -13,6 +13,7 @@ import { EntryMenu, onEntryContext } from '@/ui/EntryMenu'
 import { StatusBar } from '@/ui/StatusBar'
 import { Dialogs } from '@/ui/CollectionDialogs'
 import { ChangelogDialog } from '@/ui/ChangelogDialog'
+import { AskHost } from '@/ui/AskDialog'
 import { Library } from '@/pages/Library'
 import { SearchBox } from '@/ui'
 import { Catalog } from '@/pages/Catalog'
@@ -111,6 +112,7 @@ export default function App() {
       <EntryMenu />
       <Dialogs />
       <ChangelogDialog />
+      <AskHost />
       <StatusBar />
     </div>
   )

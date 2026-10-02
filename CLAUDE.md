@@ -10,6 +10,7 @@ Electron 44 + React 19 + TS via electron-vite (vite 7 épinglé), Zustand, SQLit
 
 ## Conventions
 - RomVault n'agrège ni ne scrape aucune source de téléchargement de jeux : chaque utilisateur ajoute ses propres listes (URL JSON, format `romvault.sourcelist/v1`, Paramètres → Sources) sous sa responsabilité — voir `src/main/sources/`. BIOS/firmware : import guidé par l'utilisateur, seule exception le firmware PS3/Vita téléchargé au clic depuis les serveurs officiels Sony (`src/main/bios/official.ts`).
+- Une `uri` de source peut être HTTP(S), `magnet:` ou une URL `.torrent` : `src/main/downloads/torrent.ts` (client WebTorrent embarqué, MIT, aucun tracker/magnet fourni par RomVault, pas de semis après coup). Torrent multi-fichiers : fichier choisi par `sizeBytes` puis `title`, erreur si ambigu.
 - Clés API et données utilisateur hors dépôt (jamais commitées).
 - Graphify : sortie dans `E:\Super IA\Graphify\RomVault\graphify-out\`.
 - Studio OS : projet `romvault` (id fc05e6bd-f646-421c-bb90-37b18330ee1a).
