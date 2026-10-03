@@ -8,6 +8,7 @@ import { readPs2Game } from '../emulators/pcsx2'
 import { readPspDiscId } from '../emulators/ppsspp'
 import { readPs3Serial } from '../emulators/rpcs3'
 import { readZip, readZipEntryHead } from '../library/hash'
+import { readWuaTitles } from '../library/content/wua'
 import { switchContentFromFilename } from '../library/switchContent'
 
 /**
@@ -140,8 +141,8 @@ export async function readWiiUTitleId(path: string, cemuDir?: string): Promise<s
     } finally { await img.close() }
   }
   if (ext === '.wua') {
-    // Archive de titres : un dossier « <TitleID>_v<version> » par titre (jeu, mise à jour, DLC) ; le jeu est celui de type 00050000.
-    const ids = [...new Set((await readZip(path).catch(() => null) ?? []).map((e) => /^([0-9a-fA-F]{16})_v\d+\//.exec(e.name)?.[1]?.toUpperCase()).filter((x): x is string => !!x))]
+    // Archive de titres (format ZArchive, PAS un zip) : un dossier « <TitleID>_v<version> » par titre (jeu, mise à jour, DLC) ; le jeu est celui de type 00050000.
+    const ids = ((await readWuaTitles(path).catch(() => null)) ?? []).map((t) => t.titleId)
     return ids.find((i) => i.startsWith('00050000')) ?? null
   }
   // Dossier dumpé : le .rpx est dans code/, le meta.xml dans meta/ (ou à côté si on pointe le dossier du jeu).

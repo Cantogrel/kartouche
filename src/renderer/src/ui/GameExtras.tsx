@@ -5,7 +5,7 @@ import { t, getLang } from '@/i18n'
 import { useLibrary } from '@/store/library'
 import { useEmulators } from '@/store/emulators'
 import { emulatorForConsole } from '@shared/emulators'
-import type { LibraryContentItem, LibraryEntry } from '@shared/library'
+import { CONTENT_CONSOLES, type LibraryContentItem, type LibraryEntry } from '@shared/library'
 import type { AchievementsResult } from '@shared/achievements'
 import type { SaveInfo } from '@shared/saves'
 
@@ -83,28 +83,86 @@ export function SavesPanel({ entry }: { entry: LibraryEntry }) {
 }
 
 /**
- * Mises à jour/DLC Switch détectés par Title ID et rattachés à ce jeu (voir `switchContent.ts`, migration v11).
- * Eden (comme Yuzu) n'a pas de commande pour les installer : ça passe par son menu « File > Install Files to NAND… »,
- * donc on se contente d'ouvrir l'émulateur et de rappeler la manip plutôt que de prétendre l'automatiser.
+ * Mises à jour et DLC rattachés à ce jeu (voir `library/content/`) : jamais des jeux à part, et rien à installer à la main — RomVault les rend visibles de
+ * l'émulateur tout seul. L'état dit où ils en sont (installé, en attente d'un lancement ou d'une clé, pas encore pris en charge).
  */
+function ContentState({ c }: { c: LibraryContentItem }) {
+  const key = c.state === 'installed' ? 'content.state.installed' : c.state === 'failed' ? 'content.state.failed' : `content.state.${c.reason ?? 'onLaunch'}`
+  return <span className={c.state === 'installed' ? 'muted' : undefined} style={c.state === 'installed' ? undefined : { color: '#d29922' }} title={c.detail ?? undefined}>{t(key)}</span>
+}
+
 export function ContentPanel({ entry }: { entry: LibraryEntry }) {
   const [items, setItems] = useState<LibraryContentItem[] | null>(null)
-  useEffect(() => { void window.api.invoke('library:content', entry.id).then(setItems) }, [entry.id])
-  if (entry.console !== 'switch' || !items || items.length === 0) return null
-  const def = emulatorForConsole(entry.console)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [over, setOver] = useState(false)
+  const [report, setReport] = useState<{ lines: string[]; ok: boolean } | null>(null)
+  const load = useCallback(async (): Promise<void> => { setItems(await window.api.invoke('library:content', entry.id)) }, [entry.id])
+  // Rechargé aussi quand le jeu passe « sans fichier » (désinstallation du jeu : ses contenus partent avec lui) ou revient (réimport).
+  useEffect(() => { void load() }, [load, entry.path, entry.missing])
+  const supported = CONTENT_CONSOLES.includes(entry.console) && !entry.missing
+  if (!items || (items.length === 0 && !supported)) return null
+
+  const importFiles = async (paths: string[]): Promise<void> => {
+    if (!paths.length || busy) return
+    setBusy(t('content.importing')); setReport(null)
+    const off = window.api.on('library:progress', (p) => setBusy(`${t('content.importing')} ${p.current}`.trim()))
+    try {
+      const res = await window.api.invoke('library:importContent', { entryId: entry.id, paths })
+      const added = res.items.filter((i) => i.status === 'attached').length
+      const dup = res.items.filter((i) => i.status === 'duplicate').length
+      const refused = res.items.filter((i) => i.status !== 'attached' && i.status !== 'duplicate')
+      const lines = [
+        ...(added ? [t('content.imported', { n: added })] : []),
+        ...(dup ? [t('content.duplicate', { n: dup })] : []),
+        ...refused.map((i) => t('content.refused', { file: i.file.split(/[\\/]/).pop() ?? i.file, e: i.error ?? t('content.notContent') }))
+      ]
+      setReport({ lines, ok: refused.length === 0 })
+      await load()
+    } finally { off(); setBusy(null) }
+  }
+  const pick = async (kind: 'content' | 'folder'): Promise<void> => { await importFiles(await window.api.invoke('library:pick', kind)) }
+  const remove = async (c: LibraryContentItem): Promise<void> => {
+    if (busy || !(await confirmDialog(t('content.confirmUninstall', { name: c.label })))) return
+    setBusy(t('content.uninstalling')); setReport(null)
+    try {
+      const r = await window.api.invoke('library:removeContent', c.id)
+      if (!r.ok) setReport({ lines: [t('content.uninstallFailed', { name: c.label, e: r.error ?? '' })], ok: false })
+      else if (r.leftover) setReport({ lines: [t('content.leftover', { name: emulatorForConsole(entry.console)?.name ?? r.leftover })], ok: false })
+      await load()
+    } finally { setBusy(null) }
+  }
+  const onDrop = (e: React.DragEvent): void => {
+    e.preventDefault(); e.stopPropagation(); setOver(false)
+    void importFiles([...e.dataTransfer.files].map((f) => window.api.pathOf(f)).filter(Boolean))
+  }
   return (
-    <div className="panel">
+    <div className={`panel${over ? ' dropzone over' : ''}`} onDragOver={supported ? (e) => { e.preventDefault(); e.stopPropagation(); setOver(true) } : undefined}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setOver(false) }} onDrop={supported ? onDrop : undefined}>
       <h3>{t('content.title')}</h3>
-      <p className="muted">{t('content.installHint', { name: def?.name ?? 'Eden' })}</p>
-      {items.map((c) => (
-        <div key={c.id} className="row copy-row">
-          <span style={{ flex: 1 }}>{c.label} <span className="muted">· {t(`content.${c.kind}`)} · {fmtSize(c.size)}</span></span>
-        </div>
-      ))}
-      <div className="row">
-        <Button onClick={() => void window.api.invoke('emulators:open', { id: def?.id ?? 'eden', what: 'app' })}>{t('content.openEmulator', { name: def?.name ?? 'Eden' })}</Button>
-        <Button onClick={() => void window.api.invoke('library:revealContent', entry.id)}>{t('content.reveal')}</Button>
+      {items.length === 0 && <p className="muted">{t('content.none')}</p>}
+      {(['update', 'dlc'] as const).map((kind) => {
+        const list = items.filter((c) => c.kind === kind)
+        return list.length === 0 ? null : (
+          <div key={kind}>
+            <div className="muted" style={{ margin: '8px 0 4px' }}>{t(kind === 'update' ? 'content.updates' : 'content.dlcs')}</div>
+            {list.map((c) => (
+              <div key={c.id} className="row copy-row">
+                <span style={{ flex: 1 }}>{c.label}{c.version && <span className="muted"> · v{c.version}</span>} <span className="muted">· {fmtSize(c.size)}</span></span>
+                <ContentState c={c} />
+                <Button disabled={busy !== null} onClick={() => void remove(c)}>{t('content.uninstall')}</Button>
+              </div>
+            ))}
+          </div>
+        )
+      })}
+      <div className="row" style={{ marginTop: 8 }}>
+        {supported && <Button disabled={busy !== null} onClick={() => void pick('content')}>{t('content.import')}</Button>}
+        {supported && entry.console === 'wiiu' && <Button disabled={busy !== null} onClick={() => void pick('folder')}>{t('content.importFolder')}</Button>}
+        {items.length > 0 && <Button onClick={() => void window.api.invoke('library:revealContent', entry.id)}>{t('content.reveal')}</Button>}
+        {busy && <span className="muted">{busy}</span>}
       </div>
+      {supported && !busy && <p className="muted">{t('content.dropHint')}</p>}
+      {report && report.lines.map((l, k) => <p key={k} className={report.ok ? 'muted' : undefined} style={report.ok ? undefined : { color: '#d29922' }}>{l}</p>)}
     </div>
   )
 }

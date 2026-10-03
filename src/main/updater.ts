@@ -87,9 +87,10 @@ export function pendingChangelog(db: DatabaseSync): UpdateChangelog {
 }
 
 const RECHECK_MS = 6 * 3600 * 1000
+const RETRY_MS = 10_000
 
 /** Les mises à jour n'existent que dans l'app installée : en développement, tout est inerte. */
-export function initUpdater(db: DatabaseSync): void {
+export function initUpdater(db: DatabaseSync, win: BrowserWindow): void {
   ensureLocalChangelog(db)
   if (!app.isPackaged) return
   autoUpdater.autoDownload = false
@@ -100,7 +101,13 @@ export function initUpdater(db: DatabaseSync): void {
   autoUpdater.on('download-progress', (p) => set({ status: 'downloading', percent: Math.round(p.percent) }))
   autoUpdater.on('update-downloaded', (i) => { put(db, 'changelog:data', { version: i.version, notes: notesText(i.releaseNotes) }); set({ status: 'ready', version: i.version, percent: 100 }) })
   autoUpdater.on('error', (e) => set({ status: 'error', error: String(e?.message ?? e).split('\n')[0] }))
-  setTimeout(() => void checkForUpdate(), 10_000)
+  // Première vérification quand la fenêtre est affichée (le démarrage n'est plus concurrencé par le réseau) ; si elle
+  // échoue (réseau pas encore prêt, GitHub indisponible...), une seule nouvelle tentative 10 s plus tard.
+  const startupCheck = async (retry: boolean): Promise<void> => {
+    await checkForUpdate()
+    if (retry && state.status === 'error') setTimeout(() => void startupCheck(false), RETRY_MS)
+  }
+  win.once('ready-to-show', () => void startupCheck(true))
   // Une seule vérification au lancement ne suffit pas pour une app laissée ouverte plusieurs jours : sans ça, une
   // sortie de release entre deux redémarrages ne serait jamais détectée tant que rien ne redéclenche la recherche.
   setInterval(() => { if (state.status === 'idle' || state.status === 'none' || state.status === 'error') void checkForUpdate() }, RECHECK_MS)

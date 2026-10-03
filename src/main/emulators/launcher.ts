@@ -8,8 +8,10 @@ import { basename, dirname, join } from 'node:path'
 import { buildArgs, emulatorById, emulatorForConsole, type EmulatorDef, type GameSession, type LaunchResult, type QuickExit } from '@shared/emulators'
 import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
-import { closeGracefully, connectedXInputSlots, watchQuitChord } from './quit'
+import { anyGamepadConnected, closeGracefully, connectedXInputPads, connectedXInputSlots, watchQuitChord } from './quit'
+import { emulatorEnv } from './sdlEnv'
 import { applyCemuControls } from './cemu'
+import { isVWiiWrapper, readWuaFiles } from '../library/content/wua'
 import { applyDolphinFastDiscExclusion, applyDolphinPad, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyEdenPad, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
 import { loadSettings } from '../db/settingsStore'
 import { backupSaves, cemuMlcDir, learnCemuKey, prepareRetroarch, readDiscId, snapshotCemuSaves } from '../saves/saves'
@@ -22,6 +24,8 @@ import { readPs1Serial } from './duckstation'
 import { readPspDiscId } from './ppsspp'
 import { readPs2Game } from './pcsx2'
 import { detectSonyPad, readPs3Serial } from './rpcs3'
+import { installCia } from './content/azahar'
+import { installPendingContent } from './content'
 
 const running = new Map<number, { pid: number; stopped: boolean; graceMs?: number }>()
 
@@ -74,37 +78,6 @@ export async function resolveZippedRom(path: string, cacheDir: string): Promise<
   const dest = join(cacheDir, 'extracted-rom', basename(entries[0].name))
   await mkdir(dirname(dest), { recursive: true })
   return (await extractZipEntries(path, [{ entry: entries[0].name, dest }]).catch(() => false)) ? dest : null
-}
-
-const CIA_INSTALL_TIMEOUT_MS = 120_000
-
-/**
- * Un .cia doit être installé une fois dans le « NAND » virtuel d'Azahar avant de pouvoir être lancé (sinon : « il faut
- * d'abord l'installer »). Azahar sait le faire en ligne de commande (`-i`), mais affiche ensuite une boîte de dialogue
- * bloquante que personne ne clique jamais dans ce flux : le résultat est déjà écrit dans le journal d'Azahar avant cet
- * affichage (`Installed … successfully.`, ou une ligne d'erreur), donc on le lit là plutôt que d'attendre un clic qui
- * ne viendra pas, puis on ferme la fenêtre nous-mêmes.
- */
-async function installCia(exe: string, dir: string, ciaPath: string): Promise<boolean> {
-  const log = join(dir, 'user', 'log', 'azahar_log.txt')
-  // Azahar tronque/réécrit son propre journal à chaque démarrage (l'ancien est renommé en .old.txt) : comparer des
-  // tailles d'octets se fait piéger dès que le nouveau contenu retombe à une taille proche de l'ancien (quasi
-  // systématique ici, le message ne changeant que par ses horodatages). On compare le texte entier à la place : les
-  // horodatages diffèrent toujours d'un lancement à l'autre, donc une égalité stricte veut dire « rien de nouveau ».
-  const before = await readFile(log, 'utf8').catch(() => '')
-  const child = spawn(exe, ['-i', ciaPath], { cwd: dir, stdio: 'ignore', windowsHide: true })
-  const deadline = Date.now() + CIA_INSTALL_TIMEOUT_MS
-  let outcome: boolean | null = null
-  while (outcome === null && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 500))
-    const text = await readFile(log, 'utf8').catch(() => '')
-    if (text === before) continue
-    if (/Service\.AM .*Installed .*successfully\./.test(text)) outcome = true
-    else if (/Service\.AM .*(aborted with error code|is encrypted! Aborting)/.test(text)) outcome = false
-  }
-  // child.kill() n'a aucun effet sur cette boîte de dialogue Qt bloquante (constaté : le processus reste vivant) ; taskkill /F la ferme.
-  if (child.pid) execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {})
-  return outcome ?? false
 }
 
 const VITA_INSTALL_TIMEOUT_MS = 300_000
@@ -223,7 +196,7 @@ export async function stopGameAndWait(entryId: number, timeoutMs = 8000): Promis
 }
 
 /** Lance le jeu dans son émulateur, puis cumule le temps de jeu à la fermeture. */
-export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: GameSession) => void, cacheDir: string, savesRoot: string): Promise<LaunchResult> {
+export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: GameSession) => void, cacheDir: string, savesRoot: string, romsDir?: string): Promise<LaunchResult> {
   if (running.has(entryId)) return { ok: false, error: 'running' }
   // Un seul jeu à la fois : deux émulateurs en parallèle se disputent la manette/le focus, et rien n'avertit qu'une
   // partie tourne déjà si on en relance une autre depuis un autre écran. Le renderer propose de fermer l'autre jeu
@@ -244,6 +217,8 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     if (!(await installCia(row.exe, row.dir, romPath))) return { ok: false, error: 'ciaInstallFailed', detail: entry.path }
     db.prepare('UPDATE library SET cia_installed = 1 WHERE id = ?').run(entryId)
   }
+  // Wii U : un titre Wii (vWii) emballé pour Wii U n'est pas exécutable par Cemu (écran noir) : message clair plutôt qu'un lancement qui ne mène nulle part.
+  if (def.id === 'cemu' && /\.wua$/i.test(romPath) && isVWiiWrapper((await readWuaFiles(romPath).catch(() => null)) ?? [])) return { ok: false, error: 'vwiiWrapper', detail: entry.path }
   let vitaTitleId = entry.vita_title_id ?? undefined
   if (def.id === 'vita3k' && !vitaTitleId) {
     const installed = await installVpk(row.exe, row.dir, romPath)
@@ -251,6 +226,8 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     vitaTitleId = installed.titleId
     db.prepare('UPDATE library SET vita_title_id = ? WHERE id = ?').run(vitaTitleId, entryId)
   }
+  // Mises à jour/DLC rattachés à ce jeu : ce qui n'est pas encore visible de l'émulateur l'est avant le lancement (voir emulators/content/). Un échec n'empêche jamais de jouer.
+  if (romsDir) await installPendingContent(db, entryId, romsDir, 'launch').catch(() => undefined)
   const args = buildArgs(def, romPath, entry.console, vitaTitleId)
   if (!args) return { ok: false, error: 'unsupported', detail: def.id }
   // Identifiant du jeu (numéro de série, Title ID…) lu dans le jeu : il rattache ses sauvegardes à lui seul (voir saves.ts) ; mémorisé pour les lancements suivants.
@@ -270,14 +247,14 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     }
     // Azahar : profil manette si une manette XInput est branchée, sinon clavier ; réglages propres au jeu seulement si une exception est connue (Title ID).
     if (def.id === 'azahar') {
-      await applyAzaharPad(row.dir, (await connectedXInputSlots(cacheDir)).length > 0).catch(() => {})
+      await applyAzaharPad(row.dir, await anyGamepadConnected(cacheDir)).catch(() => {})
       await applyAzaharGameConfig(row.dir, (await readNcsdTitleId(romPath).catch(() => null)) ?? entry.title_id).catch(() => {})
     }
     // melonDS : disposition d'écrans propre au jeu (code de jeu de la ROM) si une exception est connue, sinon retour à la disposition d'origine.
     if (def.id === 'melonds') await applyMelondsGame(row.dir, await readNdsCode(romPath).catch(() => null)).catch(() => {})
     // Eden : manette XInput si branchée, sinon clavier ; configuration propre au jeu seulement si une exception est connue (Title ID).
     if (def.id === 'eden') {
-      await applyEdenPad(row.dir, (await connectedXInputSlots(cacheDir)).length > 0).catch(() => {})
+      await applyEdenPad(row.dir, (await connectedXInputPads(cacheDir))[0] ?? null).catch(() => {})
       await applyEdenGameConfig(row.dir, entry.title_id).catch(() => {})
     }
     // PPSSPP : réglages propres au jeu (DISC_ID lu sur l'ISO) seulement si une exception est connue ; manettes et clavier : défauts natifs de PPSSPP, rien à écrire.
@@ -320,7 +297,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       })().catch(() => {})
     }
     const started = Date.now()
-    const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: ['ignore', 'pipe', 'pipe'], env: emulatorEnv(def.id) })
     // Vita3K : fermer la fenêtre du jeu ne fait que revenir à sa bibliothèque, le process ne sort jamais seul ; on le force après 2 s au lieu de 5.
     running.set(entryId, { pid: child.pid ?? 0, stopped: false, graceMs: def.id === 'vita3k' ? 2000 : undefined })
     // Capturé au cas où l'émulateur écrit sur la sortie standard (RetroArch, par ex.) ; sert de diagnostic si le jeu se ferme vite.
@@ -375,7 +352,7 @@ export function openEmulator(db: DatabaseSync, id: string): LaunchResult {
   const row = def && getRow(db, id)
   if (!def || !row || !existsSync(row.exe)) return { ok: false, error: 'notInstalled', detail: id }
   try {
-    spawn(row.exe, [], { cwd: dirname(row.exe), stdio: 'ignore', detached: true }).unref()
+    spawn(row.exe, [], { cwd: dirname(row.exe), stdio: 'ignore', detached: true, env: emulatorEnv(row.id) }).unref()
     return { ok: true }
   } catch (e) {
     return { ok: false, error: 'spawn', detail: e instanceof Error ? e.message : String(e) }

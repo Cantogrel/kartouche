@@ -40,6 +40,28 @@ for ($i = 0; $i -lt 4; $i++) {
 Write-Output ($found -join ',')
 `
 
+// Identité (VID/PID/version) de chaque manette XInput, comme SDL la lit pour construire le GUID de son pilote XInput (XInputGetCapabilitiesEx, ordinal 108 de xinput1_4.dll,
+// non documenté mais utilisé par SDL). Une ligne « emplacement:vid:pid:version » (hexadécimal) par manette branchée ; vid/pid à 0 si l'appel échoue.
+const PADS_SCRIPT = `Add-Type @"
+using System; using System.Runtime.InteropServices;
+public class XC {
+  [StructLayout(LayoutKind.Sequential)] public struct GP { public ushort Buttons; public byte LT, RT; public short LX, LY, RX, RY; }
+  [StructLayout(LayoutKind.Sequential)] public struct ST { public uint Packet; public GP Pad; }
+  [StructLayout(LayoutKind.Sequential)] public struct CAPS { public byte Type, SubType; public ushort Flags; public ushort Buttons; public byte LT, RT; public short LX, LY, RX, RY; public ushort VL, VR; public ushort Vid, Pid, Ver, U1, U2; }
+  [DllImport("xinput1_4.dll", EntryPoint="#108")] public static extern int Ex(int one, int idx, int flags, out CAPS c);
+  [DllImport("xinput1_4.dll")] public static extern int XInputGetState(int i, out ST s);
+}
+"@
+for ($i = 0; $i -lt 4; $i++) {
+  $s = New-Object XC+ST
+  if ([XC]::XInputGetState($i, [ref]$s) -ne 0) { continue }
+  $c = New-Object XC+CAPS
+  $ok = $false
+  try { $ok = ([XC]::Ex(1, $i, 0, [ref]$c) -eq 0) } catch {}
+  if ($ok) { Write-Output ('{0}:{1:x}:{2:x}:{3:x}' -f $i, $c.Vid, $c.Pid, $c.Ver) } else { Write-Output ('{0}:0:0:0' -f $i) }
+}
+`
+
 // Valide les boîtes de dialogue d'un programme (bouton « Oui » / « OK » invoqué par UI Automation) : l'installation d'un firmware RPCS3 demande « Install firmware? »
 // puis affiche « Successfully installed », deux clics que l'utilisateur ne doit pas avoir à faire. S'arrête avec RomVault.
 const CONFIRM_SCRIPT = `param([int]$ParentPid, [string]$Proc, [string]$Names, [string]$Seen = '')
@@ -86,6 +108,40 @@ export async function connectedXInputSlots(cacheDir: string): Promise<number[]> 
       })
     })
   } catch { return [] }
+}
+
+export interface XInputPad { slot: number; vid: number; pid: number; ver: number }
+
+/** Manettes XInput branchées avec leur identité (0 si illisible) ; vide si aucune ou si la détection échoue. */
+export async function connectedXInputPads(cacheDir: string): Promise<XInputPad[]> {
+  try {
+    const file = await scriptFile(cacheDir, 'xinput-pads.ps1', PADS_SCRIPT)
+    return await new Promise<XInputPad[]>((resolve) => {
+      execFile('powershell.exe', [...PS_ARGS, file], { windowsHide: true, timeout: 8000 }, (err, stdout) => {
+        if (err) return resolve([])
+        const pads: XInputPad[] = []
+        for (const line of String(stdout).split(/\r?\n/)) {
+          const m = /^([0-3]):([0-9a-f]{1,4}):([0-9a-f]{1,4}):([0-9a-f]{1,4})\s*$/i.exec(line.trim())
+          if (m) pads.push({ slot: Number(m[1]), vid: parseInt(m[2], 16), pid: parseInt(m[3], 16), ver: parseInt(m[4], 16) })
+        }
+        resolve(pads)
+      })
+    })
+  } catch { return [] }
+}
+
+// Manettes non XInput (HID brut) : interface « game controller » des manettes HID standard, plus les manettes Sony (DualShock 4, DualSense) et Nintendo (Pro Controller, Joy-Con) par leurs PID.
+const HID_PADS_SCRIPT = "$ids = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -match 'game controller|contr.leur de jeu|gamepad|joystick' -or $_.InstanceId -match 'VID_054C&PID_(05C4|09CC|0BA0|0CE6|0DF2)|VID_057E&PID_(2006|2007|2009|200E)' }; if ($ids) { Write-Output 'PAD' }"
+
+/**
+ * Une manette quelconque est-elle branchée ? XInput (Xbox et compatibles) ou HID brut (DualShock/DualSense, Switch Pro, manettes génériques). Sert aux émulateurs qui lisent les manettes par
+ * leur mapping SDL standard (Azahar) : n'importe laquelle y répond, il suffit de savoir qu'il y en a une. Faux si rien n'est détecté ou si la détection échoue.
+ */
+export async function anyGamepadConnected(cacheDir: string): Promise<boolean> {
+  if ((await connectedXInputSlots(cacheDir)).length > 0) return true
+  return new Promise<boolean>((resolve) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', HID_PADS_SCRIPT], { windowsHide: true, timeout: 8000 }, (err, stdout) => resolve(!err && String(stdout).includes('PAD')))
+  })
 }
 
 /** Surveille la manette pendant une partie ; `onChord` est appelé quand Retour + Start sont maintenus. Renvoie la fonction d'arrêt. */

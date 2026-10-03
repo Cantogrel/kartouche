@@ -13,12 +13,15 @@ import { syncPopularity } from './catalog/popularity'
 import { localizeDetails } from './catalog/l10n'
 import { cancelImage } from './catalog/images'
 import { importPaths } from './library/importer'
+import { uninstallContent } from './emulators/content'
 import { addCatalogGame, clearLibrary, deleteAllRomFiles, entryPath, importSbi, listContent, listLibrary, refreshMissing, relinkUnmatched, removeEntry } from './library/libraryStore'
 import { createCollection, deleteCollection, listCollections, renameCollection, setFlags, setMembers, setMembership } from './library/collections'
 import { backupSaves, deleteAllBackups, deleteBackup, restoreSaves, saveInfo, saveOpenTarget, type EntryRef } from './saves/saves'
 import { getAchievements } from './achievements/retroachievements'
-import { addSourceList } from './sources/import'
-import { listSourceLists, refreshSourceList, removeSourceList, sourcesForGame } from './sources/manage'
+import { addSourceList, rematchSources } from './sources/import'
+import { listSourceLists, refreshAllSourceLists, refreshSourceList, removeAllSourceLists, removeSourceList, sourcesForGame } from './sources/manage'
+import { sourcesDir } from './sources/localCopy'
+import { defaultFetch } from './sources/import'
 import { cancelDownload, downloadSource } from './downloads/engine'
 import { installDownload } from './downloads/install'
 import { cacheSize, clearCache } from './cache'
@@ -61,6 +64,7 @@ export async function autoSyncCatalogOnUpdate(db: DatabaseSync): Promise<void> {
   try {
     await syncCatalog(db, undefined, (p) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', p)), undefined, loadSettings(db))
     relinkUnmatched(db)
+    rematchSources(db)
   } finally {
     syncing = false
     db.prepare("INSERT INTO settings (key, value) VALUES ('catalog:syncedVersion', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(version)
@@ -96,6 +100,8 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     db.close()
     const dbFile = join(paths.dataDir, 'romvault.db')
     for (const suffix of ['', '-wal', '-shm']) await rm(dbFile + suffix, { force: true })
+    // Les copies locales des listes de sources n'ont plus de liste à laquelle se rattacher.
+    await rm(sourcesDir(paths.dataDir), { recursive: true, force: true })
     app.relaunch(); app.exit(0)
   })
 
@@ -114,6 +120,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     try {
       const result = await syncCatalog(db, ids, (p) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('catalog:progress', p)), undefined, loadSettings(db))
       relinkUnmatched(db)
+      rematchSources(db)
       return result
     } finally { syncing = false }
   })
@@ -137,7 +144,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('library:list', () => listLibrary(db))
   handle('library:import', (req) => {
     const s = loadSettings(db)
-    return importPaths(db, req.paths, { copy: s.importCopy, deleteSource: req.deleteSource ?? s.importDeleteSource, romsDir: paths.roms }, sendLibProgress)
+    return importPaths(db, req.paths, { copy: s.importCopy, deleteSource: req.deleteSource ?? s.importDeleteSource, romsDir: paths.roms, logDir: paths.logs }, sendLibProgress)
   })
   handle('library:pick', async (kind) => {
     const win = BrowserWindow.getFocusedWindow()
@@ -150,19 +157,19 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     const opts = {
       properties: (kind === 'folder' ? ['openDirectory'] : ['openFile', 'multiSelections']) as ('openDirectory' | 'openFile' | 'multiSelections')[],
       defaultPath: app.getPath('downloads'),
-      filters: kind === 'folder' ? [] : [{ name: 'ROMs', extensions: [...Object.keys(ROM_EXTENSIONS), 'zip', '7z', 'rar'] }, { name: 'All files', extensions: ['*'] }]
+      filters: kind === 'folder' ? [] : [{ name: kind === 'content' ? 'Updates / DLC' : 'ROMs', extensions: [...Object.keys(ROM_EXTENSIONS), ...(kind === 'content' ? ['pkg'] : []), 'zip', '7z', 'rar'] }, { name: 'All files', extensions: ['*'] }]
     }
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return res.canceled ? [] : res.filePaths
   })
   handle('library:scan', async () => {
-    const r = await importPaths(db, loadSettings(db).scanFolders, { copy: false, deleteSource: false, romsDir: paths.roms }, sendLibProgress)
+    const r = await importPaths(db, loadSettings(db).scanFolders, { copy: false, deleteSource: false, romsDir: paths.roms, logDir: paths.logs }, sendLibProgress)
     refreshMissing(db)
     return r
   })
-  handle('library:remove', (req) => removeEntry(db, req.id, req.action, paths.saves))
+  handle('library:remove', (req) => removeEntry(db, req.id, req.action, paths.saves, paths.roms))
   handle('library:clearAll', () => clearLibrary(db))
-  handle('library:deleteAllFiles', () => deleteAllRomFiles(db))
+  handle('library:deleteAllFiles', () => deleteAllRomFiles(db, paths.roms))
   handle('library:add', (gameId) => addCatalogGame(db, gameId))
   handle('library:pickSbi', async () => {
     const win = BrowserWindow.getFocusedWindow()
@@ -204,11 +211,19 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return res.canceled ? null : (res.filePaths[0] ?? null)
   })
-  handle('sourceLists:add', (url) => addSourceList(db, url))
-  handle('sourceLists:refresh', (id) => refreshSourceList(db, id))
+  const srcDir = sourcesDir(paths.dataDir)
+  handle('sourceLists:add', (url) => addSourceList(db, url, defaultFetch, Date.now(), srcDir))
+  handle('sourceLists:refresh', (id) => refreshSourceList(db, id, defaultFetch, Date.now(), srcDir))
   handle('sourceLists:remove', (id) => removeSourceList(db, id))
+  handle('sourceLists:refreshAll', () => refreshAllSourceLists(db, defaultFetch, Date.now(), srcDir))
+  handle('sourceLists:removeAll', () => removeAllSourceLists(db))
   handle('library:reveal', (id) => { const p = entryPath(db, id); if (p) shell.showItemInFolder(p) })
   handle('library:content', (id) => listContent(db, id))
+  handle('library:removeContent', (id) => uninstallContent(db, id, paths.roms))
+  handle('library:importContent', (req) => {
+    const s = loadSettings(db)
+    return importPaths(db, req.paths, { copy: s.importCopy, deleteSource: s.importDeleteSource, romsDir: paths.roms, logDir: paths.logs, forGame: { id: req.entryId } }, sendLibProgress)
+  })
   handle('library:revealContent', (id) => {
     const row = db.prepare('SELECT path FROM library_content WHERE library_id = ? LIMIT 1').get(id) as { path: string } | undefined
     if (row) shell.showItemInFolder(row.path)
@@ -222,11 +237,13 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
       const cacheDir = join(paths.cache, 'game-downloads')
       const r = await downloadSource(db, sourceId, cacheDir, (p) => broadcast('download:progress', p))
       if (!r.ok || !r.file) return { ok: false, error: r.error }
-      const result = await installDownload(db, sourceId, r.file, paths)
+      const result = await installDownload(db, sourceId, r.file, paths, (r.files ?? []).slice(1))
       // Échec de vérification/installation (hash sur un autre jeu, disque plein…) : pas la peine de laisser le
       // fichier traîner dans le cache, une reprise HTTP Range ne s'appuie que sur le `.part` d'un téléchargement
       // encore en cours, jamais sur un fichier déjà renommé à son nom final (voir downloads/engine.ts).
       if (!result.ok) await rm(r.file, { force: true }).catch(() => undefined)
+      // Torrent à plusieurs fichiers : le dossier de travail (arborescence du torrent, fichiers non importés compris) ne sert plus à rien.
+      if ((r.files?.length ?? 0) > 1) await rm(join(cacheDir, String(sourceId)), { recursive: true, force: true }).catch(() => undefined)
       return result
     } catch (e) {
       // Jamais d'échec silencieux côté UI : une exception inattendue ici devient une erreur normale plutôt que de
@@ -298,7 +315,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     broadcast('game:session', s)
     if (s.running) { if (!globalShortcut.isRegistered(QUIT_KEY)) globalShortcut.register(QUIT_KEY, stopAllGames) }
     else if (runningCount() === 0) globalShortcut.unregister(QUIT_KEY)
-  }, join(paths.cache, 'tools'), paths.saves))
+  }, join(paths.cache, 'tools'), paths.saves, paths.roms))
   handle('game:stop', (entryId) => stopGame(entryId))
   handle('game:stopAndWait', (entryId) => stopGameAndWait(entryId))
   handle('game:running', () => listLibrary(db).map((e) => e.id).filter(isRunning))

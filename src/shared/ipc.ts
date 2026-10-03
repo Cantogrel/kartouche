@@ -5,7 +5,7 @@ import type { BackupInfo, SaveInfo } from './saves'
 import type { BiosImportResult, BiosSlotStatus } from './bios'
 import type { EmulatorProgress, EmulatorState, GameSession, LatestVersion, LaunchResult } from './emulators'
 import type { CatalogGame, CatalogPage, CatalogQuery, GameDetails, ProviderStatus, SyncProgress, SyncResult } from './catalog'
-import type { GameSource, SourceListImportResult, SourceListRefreshResult, SourceListSummary } from './sourceList'
+import type { GameSource, SourceListImportResult, SourceListRefreshAllResult, SourceListRefreshResult, SourceListSummary } from './sourceList'
 import type { DownloadProgress } from './downloads'
 import type { ClearCacheResult } from './cache'
 
@@ -53,7 +53,7 @@ export interface IpcChannels {
   /** Importe des fichiers/dossiers (glisser-déposer : chemins fournis par le renderer). */
   'library:import': { req: ImportRequest; res: ImportResult }
   /** Ouvre le sélecteur de fichiers ou de dossier ; renvoie les chemins choisis (vide si annulé). */
-  'library:pick': { req: 'files' | 'folder'; res: string[] }
+  'library:pick': { req: 'files' | 'folder' | 'content'; res: string[] }
   /** Réimporte (en référence, sans copie) les dossiers surveillés des réglages et met à jour les fichiers manquants. */
   'library:scan': { req: void; res: ImportResult }
   'library:remove': { req: { id: number; action: 'file' | 'entry' | 'save' | 'all' }; res: void }
@@ -69,6 +69,10 @@ export interface IpcChannels {
   'library:content': { req: number; res: LibraryContentItem[] }
   /** Affiche le dossier des mises à jour/DLC rattachés dans l'Explorateur. */
   'library:revealContent': { req: number; res: void }
+  /** Désinstalle UNE mise à jour/DLC : retirée de l'émulateur puis fichiers supprimés. `leftover` : ce qui n'a pas pu être retiré de l'émulateur. */
+  'library:removeContent': { req: number; res: { ok: boolean; error?: string; leftover?: string } }
+  /** Importe des fichiers/dossiers comme mises à jour/DLC DE CE JEU : tout ce qui n'en est pas (ou est d'un autre jeu) est refusé avec la raison. */
+  'library:importContent': { req: { entryId: number; paths: string[] }; res: ImportResult }
   /** Favori et/ou épingle d'un jeu (champ absent = inchangé). */
   'library:flag': { req: { id: number; favorite?: boolean; pinned?: boolean }; res: void }
   /** Ouvre le sélecteur pour un fichier .sbi ; null si annulé. */
@@ -106,6 +110,10 @@ export interface IpcChannels {
   'sourceLists:refresh': { req: number; res: SourceListRefreshResult }
   /** Retire une liste et ses sources (les autres listes ne sont pas touchées). */
   'sourceLists:remove': { req: number; res: void }
+  /** Actualise toutes les listes l'une après l'autre. */
+  'sourceLists:refreshAll': { req: void; res: SourceListRefreshAllResult }
+  /** Supprime toutes les listes (et leurs copies locales) ; les jeux et la bibliothèque ne sont pas touchés. */
+  'sourceLists:removeAll': { req: void; res: void }
   /** Télécharge une source (sourceId) ; attend la fin, la progression arrive par 'download:progress'. Pas d'extraction/installation (P05). */
   'downloads:start': { req: number; res: { ok: boolean; error?: string } }
   /** Annule un téléchargement en cours ; sans effet si aucun n'est en cours pour cette source. */

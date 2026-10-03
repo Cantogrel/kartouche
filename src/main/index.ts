@@ -5,6 +5,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { migrate } from './db/migrations'
 import { buildPaths, ensureDirs, resolveDataDir } from './paths'
 import { autoSyncCatalogOnUpdate, registerIpc } from './ipc'
+import { rematchSources, SOURCE_MATCH_VERSION } from './sources/import'
+import { backfillLocalCopies, sourcesDir } from './sources/localCopy'
 import { getImage, type ImageKind } from './catalog/images'
 import { getGame, rebuildDerived } from './catalog/catalogStore'
 import { loadSettings } from './db/settingsStore'
@@ -78,6 +80,14 @@ if (!app.requestSingleInstanceLock()) {
       rebuildDerived(db)
       db.prepare("INSERT INTO settings (key, value) VALUES ('_derived', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(DERIVED)
     }
+    // Listes de sources ajoutées depuis un fichier avant les copies locales : on en garde une copie tant que le fichier d'origine existe encore.
+    backfillLocalCopies(db, sourcesDir(paths.dataDir))
+    // Rapprochement des sources avec le catalogue : refait une fois quand l'algorithme change (les listes déjà importées en profitent).
+    const sm = db.prepare("SELECT value FROM settings WHERE key = '_sourceMatch'").get() as { value: string } | undefined
+    if (sm?.value !== SOURCE_MATCH_VERSION) {
+      rematchSources(db)
+      db.prepare("INSERT INTO settings (key, value) VALUES ('_sourceMatch', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(SOURCE_MATCH_VERSION)
+    }
     // Les fiches mises en cache avant la correction du choix de jeu IGDB (un mod pouvait remplacer le jeu) sont refaites une fois.
     // v3 : les échecs de recherche d'icône SteamGridDB mémorisés avant l'assouplissement de `sgdbId` (préfixe accepté,
     // pas seulement l'égalité stricte) sont retentés une fois — une bonne partie n'était refusée qu'à cause d'un
@@ -107,7 +117,7 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc({ db, paths, sqliteVersion: v })
     mainWindow = createWindow(db)
     mainWindow.on('closed', () => { mainWindow = null })
-    initUpdater(db)
+    initUpdater(db, mainWindow)
     void autoSyncCatalogOnUpdate(db)
   })
   app.on('window-all-closed', () => app.quit())

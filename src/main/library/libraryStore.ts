@@ -6,6 +6,8 @@ import { basename, dirname, extname, join } from 'node:path'
 import { cueFiles } from './importer'
 import { identify } from './identify'
 import { deleteGameSaves } from '../saves/saves'
+import { contentDir, parkContent } from './content/store'
+import { uninstallContent } from '../emulators/content'
 import type { LibraryContentItem, LibraryEntry, MatchKind, SbiImportResult } from '@shared/library'
 
 interface Row {
@@ -107,7 +109,7 @@ const vita3kUserDir = (): string => join(homedir(), 'AppData', 'Roaming', 'Vita3
  * Suppression, au choix : `file` (ROM supprimée, le jeu reste sans fichier), `entry` (retiré de la bibliothèque, ROM conservée),
  * `save` (sauvegardes seulement) ou `all` (ROM, sauvegardes et entrée).
  */
-export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAction, savesRoot: string): Promise<void> {
+export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAction, savesRoot: string, romsDir?: string): Promise<void> {
   const r = db.prepare('SELECT console, title, path, title_id, vita_title_id FROM library WHERE id = ?').get(id) as
     { console: string; title: string; path: string; title_id: string | null; vita_title_id: string | null } | undefined
   if (!r) return
@@ -118,6 +120,7 @@ export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAc
   }
   if (action === 'file' || action === 'all') {
     await deleteRomFiles(r.path)
+    await uninstallAllContent(db, id, romsDir)
     // Vita3K installe sa propre copie du jeu (ux0/app/<Title ID>), indépendante du .vpk : sans ça, le jeu reste visible
     // dans SA bibliothèque même après suppression ici (constaté en vrai).
     if (r.vita_title_id) {
@@ -127,30 +130,50 @@ export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAc
     }
   }
   if (action === 'all') {
-    // Ses mises à jour/DLC éventuels (voir migration v11) : rangés à côté, sous <console>/.content/<title_id>/.
-    if (r.title_id) await rm(join(dirname(r.path), '.content', r.title_id), { recursive: true, force: true }).catch(() => undefined)
+    // Ses mises à jour/DLC rangés par RomVault (voir library/content/store.ts) : <roms>/<console>/.content/<identifiant du jeu>/. Les contenus laissés où ils
+    // étaient (mode « ne pas copier ») ne sont jamais supprimés.
+    if (r.title_id) {
+      if (romsDir) await rm(contentDir(romsDir, r.console, r.title_id), { recursive: true, force: true }).catch(() => undefined)
+      await rm(join(dirname(r.path), '.content', r.title_id), { recursive: true, force: true }).catch(() => undefined)
+    }
     db.prepare('DELETE FROM library WHERE id = ?').run(id)
-  } else if (action === 'entry') db.prepare('DELETE FROM library WHERE id = ?').run(id)
+  } else if (action === 'entry') {
+    // ROM conservée : ses mises à jour/DLC restent sur le disque et attendent le jeu, rattachés de nouveau s'il est réimporté.
+    parkContent(db, id)
+    db.prepare('DELETE FROM library WHERE id = ?').run(id)
+  }
   // vita_title_id remis à zéro : sans ça, un fichier relié plus tard relancerait par un Title ID dont la copie Vita3K n'existe plus.
   else if (action === 'file') db.prepare('UPDATE library SET missing = 1, vita_title_id = NULL WHERE id = ?').run(id)
 }
 
-/** Vide entièrement la bibliothèque (action « Actions dangereuses » des réglages) ; les fichiers ROM ne sont pas touchés. */
+/**
+ * Désinstalle les mises à jour et DLC d'un jeu (un par un, voir `uninstallContent` : l'émulateur d'abord, puis le rangement de RomVault, puis la ligne). Un contenu
+ * que l'émulateur refuse de retirer (ouvert…) est conservé tel quel, avec son état, pour pouvoir être retiré ensuite ; les suivants ne sont pas bloqués.
+ * Sans dossier de ROM connu, rien n'est supprimé (on ne sait pas distinguer ce que RomVault a rangé).
+ */
+async function uninstallAllContent(db: DatabaseSync, libraryId: number, romsDir: string | undefined): Promise<void> {
+  if (!romsDir) return
+  const ids = db.prepare('SELECT id FROM library_content WHERE library_id = ?').all(libraryId) as { id: number }[]
+  for (const c of ids) await uninstallContent(db, c.id, romsDir).catch(() => undefined)
+}
+
+/** Vide entièrement la bibliothèque (action « Actions dangereuses » des réglages) ; les fichiers ROM ne sont pas touchés, et les contenus rangés attendent leur jeu. */
 export function clearLibrary(db: DatabaseSync): void {
+  for (const g of db.prepare('SELECT id FROM library').all() as { id: number }[]) parkContent(db, g.id)
   db.exec('DELETE FROM library')
 }
 
-/** Supprime le fichier ROM de tous les jeux (action « Actions dangereuses ») ; `refreshMissing` marquera les entrées sans fichier au prochain chargement. */
-export async function deleteAllRomFiles(db: DatabaseSync): Promise<void> {
-  const rows = db.prepare('SELECT path FROM library WHERE missing = 0').all() as { path: string }[]
-  for (const r of rows) await deleteRomFiles(r.path)
+/** Supprime le fichier ROM de tous les jeux (action « Actions dangereuses ») ainsi que leurs mises à jour/DLC ; `refreshMissing` marquera les entrées sans fichier au prochain chargement. */
+export async function deleteAllRomFiles(db: DatabaseSync, romsDir?: string): Promise<void> {
+  const rows = db.prepare('SELECT id, path FROM library WHERE missing = 0').all() as { id: number; path: string }[]
+  for (const r of rows) { await deleteRomFiles(r.path); await uninstallAllContent(db, r.id, romsDir) }
 }
 
-/** Mises à jour/DLC Switch rattachés à un jeu de la bibliothèque (voir migration v11 et `switchContent.ts`). */
+/** Mises à jour/DLC rattachés à un jeu de la bibliothèque (voir `library/content/`). */
 export function listContent(db: DatabaseSync, libraryId: number): LibraryContentItem[] {
-  return (db.prepare('SELECT id, kind, title_id, version, label, size, added_at FROM library_content WHERE library_id = ? ORDER BY kind, label COLLATE NOCASE').all(libraryId) as
-    { id: number; kind: string; title_id: string | null; version: string | null; label: string; size: number; added_at: number }[])
-    .map((r) => ({ id: r.id, kind: r.kind as 'update' | 'dlc', titleId: r.title_id, version: r.version, label: r.label, size: r.size, addedAt: r.added_at }))
+  return (db.prepare('SELECT id, kind, title_id, version, label, size, added_at, state, reason, needs, detail FROM library_content WHERE library_id = ? ORDER BY kind, label COLLATE NOCASE').all(libraryId) as unknown as
+    { id: number; kind: string; title_id: string | null; version: string | null; label: string; size: number; added_at: number; state: string; reason: string | null; needs: string | null; detail: string | null }[])
+    .map((r) => ({ id: r.id, kind: r.kind as 'update' | 'dlc', titleId: r.title_id, version: r.version, label: r.label, size: r.size, addedAt: r.added_at, state: r.state as LibraryContentItem['state'], reason: r.reason, needs: r.needs, detail: r.detail }))
 }
 
 /** Chemin du fichier pour l'afficher dans l'Explorateur ; null si le jeu n'a pas de fichier. */

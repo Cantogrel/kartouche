@@ -341,31 +341,41 @@ const AZAHAR_TOUCH_BUTTONS: Record<string, string | number> = {
 // --- Eden : manette SDL (même GUID XInput générique qu'Azahar, mais format de Param différent — pas de `maptype`,
 // `invert` au lieu de `direction`, pas de deadzone par liaison — vérifié contre le code source réel d'Eden :
 // BuildButtonParamPackageForButton / BuildParamPackageForAnalog, src/input_common/drivers/sdl_driver.cpp). ------------
-const edenButton = (button: number): string => `engine:sdl,port:0,guid:${XINPUT_GUID},button:${button}`
-const edenTrigger = (axis: number): string => `engine:sdl,port:0,guid:${XINPUT_GUID},axis:${axis},threshold:0.5,invert:+`
-const edenStick = (axisX: number, axisY: number): string =>
-  `engine:sdl,port:0,guid:${XINPUT_GUID},axis_x:${axisX},axis_y:${axisY},offset_x:0,offset_y:0,invert_x:+,invert_y:+`
+/**
+ * GUID SDL d'une manette XInput : le pilote XInput de SDL (signature `x`) y met le VID/PID lus par XInputGetCapabilitiesEx. C'est exactement ce qu'Eden écrit
+ * dans son qt-config.ini quand on lui désigne la manette à la main (ex. Xbox One : 045E:02FF → `030000005e040000ff02000000007801`).
+ */
+export function sdlXInputGuid(vid: number, pid: number, ver = 0): string {
+  const le = (n: number): string => (n & 0xff).toString(16).padStart(2, '0') + ((n >> 8) & 0xff).toString(16).padStart(2, '0')
+  return `03000000${le(vid)}0000${le(pid)}0000${le(ver)}7801`
+}
+
+/** Les « boutons » sont ceux de la manette vue comme joystick brut par le pilote XInput de SDL (et non ceux de l'API GameController) : c'est ce qu'Eden écrit lui-même. */
+const edenButton = (guid: string, button: number): string => `engine:sdl,port:0,guid:${guid},button:${button}`
+const edenHat = (guid: string, direction: string): string => `engine:sdl,port:0,guid:${guid},hat:0,direction:${direction}`
+const edenTrigger = (guid: string, axis: number): string => `engine:sdl,port:0,guid:${guid},axis:${axis},threshold:0.5,invert:+`
+const edenStick = (guid: string, axisX: number, axisY: number): string =>
+  `engine:sdl,port:0,guid:${guid},axis_x:${axisX},axis_y:${axisY},offset_x:0,offset_y:0,invert_x:+,invert_y:+`
 
 /**
- * Manette du joueur 1 (1re manette XInput détectée : `port` désambiguïse plusieurs manettes au même GUID générique,
- * ce n'est pas un index XInput). ABXY et croix sur leurs positions physiques, ZL/ZR sur les gâchettes analogiques
- * (comme le fait Eden lui-même pour une manette détectée : NativeButton::ZL/ZR n'ont pas d'équivalent bouton SDL),
- * +/- sur Start/Back. Pas de liaison pour SL/SR (rails Joy-Con détachée, aucun équivalent sur une manette Xbox) ni
- * Home/Capture (le bouton Guide n'est pas remonté par l'API XInput). Chaque clé nécessite sa liaison `\default=false`
- * (`qt()`) : `ReadStringSetting` ignore silencieusement la valeur écrite si ce marqueur est absent ou à `true`
- * (src/frontend_common/config.cpp). Joueur 1 connecté en Pro Controller par défaut, sans réglage à écrire (Config::ReadPlayerValues).
- * Jamais testé avec une vraie manette (aucune sur cette machine de développement).
+ * Manette du joueur 1 pour la manette XInput de GUID `guid` (`port` désambiguïse plusieurs manettes au même GUID). Disposition identique à celle qu'Eden choisit
+ * lui-même pour une manette Xbox : les boutons suivent les POSITIONS d'une console Switch (A = bouton de droite = B de la manette Xbox), la croix est un « hat »,
+ * ZL/ZR les gâchettes analogiques, +/- sur Start/Back. Pas de liaison pour SL/SR, Home ni gyroscope : Eden garde les siens. Chaque clé nécessite sa liaison
+ * `\default=false` (`qt()`) : `ReadStringSetting` ignore silencieusement la valeur écrite si ce marqueur est absent ou à `true` (src/frontend_common/config.cpp).
+ * Joueur 1 connecté en Pro Controller par défaut, sans réglage à écrire (Config::ReadPlayerValues).
  */
-const EDEN_CONTROLLER_PROFILE: Record<string, string> = {
-  player_0_button_a: edenButton(SDL_BUTTON.A), player_0_button_b: edenButton(SDL_BUTTON.B),
-  player_0_button_x: edenButton(SDL_BUTTON.X), player_0_button_y: edenButton(SDL_BUTTON.Y),
-  player_0_button_l: edenButton(SDL_BUTTON.L), player_0_button_r: edenButton(SDL_BUTTON.R),
-  player_0_button_zl: edenTrigger(SDL_AXIS.TriggerLeft), player_0_button_zr: edenTrigger(SDL_AXIS.TriggerRight),
-  player_0_button_plus: edenButton(SDL_BUTTON.Start), player_0_button_minus: edenButton(SDL_BUTTON.Back),
-  player_0_button_lstick: edenButton(SDL_BUTTON.LeftStick), player_0_button_rstick: edenButton(SDL_BUTTON.RightStick),
-  player_0_button_dup: edenButton(SDL_BUTTON.Up), player_0_button_ddown: edenButton(SDL_BUTTON.Down),
-  player_0_button_dleft: edenButton(SDL_BUTTON.Left), player_0_button_dright: edenButton(SDL_BUTTON.Right),
-  player_0_lstick: edenStick(SDL_AXIS.LeftX, SDL_AXIS.LeftY), player_0_rstick: edenStick(SDL_AXIS.RightX, SDL_AXIS.RightY)
+function edenControllerProfile(guid: string): Record<string, string> {
+  return {
+    player_0_button_a: edenButton(guid, 1), player_0_button_b: edenButton(guid, 0),
+    player_0_button_x: edenButton(guid, 3), player_0_button_y: edenButton(guid, 2),
+    player_0_button_l: edenButton(guid, 4), player_0_button_r: edenButton(guid, 5),
+    player_0_button_zl: edenTrigger(guid, 2), player_0_button_zr: edenTrigger(guid, 5),
+    player_0_button_plus: edenButton(guid, 7), player_0_button_minus: edenButton(guid, 6),
+    player_0_button_lstick: edenButton(guid, 8), player_0_button_rstick: edenButton(guid, 9),
+    player_0_button_dup: edenHat(guid, 'up'), player_0_button_ddown: edenHat(guid, 'down'),
+    player_0_button_dleft: edenHat(guid, 'left'), player_0_button_dright: edenHat(guid, 'right'),
+    player_0_lstick: edenStick(guid, 0, 1), player_0_rstick: edenStick(guid, 3, 4)
+  }
 }
 
 /**
@@ -491,32 +501,42 @@ const edenConfig = (dir: string): string => join(dir, 'user', 'config', 'qt-conf
 
 /**
  * Vrai si les touches du joueur 1 sont celles d'Eden (défaut) ou celles écrites par RomVault : on peut alors les changer. Dès que
- * l'utilisateur a configuré une manette dans Eden (autre moteur, autre GUID), elles ne sont plus jamais touchées.
+ * l'utilisateur a configuré une manette à sa façon dans Eden (autre GUID, ou bouton A déplacé), elles ne sont plus jamais touchées.
+ * Les anciennes liaisons de RomVault (GUID XInput générique, jamais reconnu par Eden) comptent comme les siennes.
  */
 export function isUntouchedEdenControls(text: string): boolean {
   if (/^player_0_button_a\\default=true\s*$/m.test(text)) return true
   const a = /^player_0_button_a=(.*)$/m.exec(text)
-  return !a || a[1].includes(XINPUT_GUID)
+  if (!a) return true
+  const v = a[1].trim().replace(/^"(.*)"$/, '$1')
+  return v.includes(XINPUT_GUID) || /^engine:sdl,port:0,guid:[0-9a-f]{28}7801,button:1$/.test(v)
 }
 
+/** Manette XInput branchée : VID/PID/version de son interface HID (XInputGetCapabilitiesEx), tels que SDL les met dans son GUID ; 0 si illisibles. */
+export interface EdenPad { vid: number; pid: number; ver: number }
+
 /**
- * Joueur 1 selon ce qui est branché, à chaque lancement : manette XInput (profil natif d'Eden : SDL, GUID XInput générique) si une est
+ * Joueur 1 selon ce qui est branché, à chaque lancement : la manette XInput (liaisons SDL à son GUID, voir `sdlXInputGuid`) si une est
  * connectée, sinon clavier d'Eden. Un bouton d'Eden n'accepte qu'une seule liaison, d'où ce choix au lancement (comme pour Dolphin).
  * Les liaisons de mouvement (gyroscope) ne sont jamais écrites : Eden garde les siennes, et une manette à gyroscope les expose.
- * Une manette DirectInput/SDL non XInput se configure une fois dans Eden : ce réglage-là n'est plus jamais réécrit.
+ * Eden est lancé avec le pilote XInput de SDL imposé (voir `emulatorEnv` dans sdlEnv.ts), sans quoi le GUID changerait avec le pilote retenu.
+ * Une manette configurée à la main dans Eden n'est plus jamais réécrite.
  */
-export async function applyEdenPad(dir: string, controllerConnected: boolean): Promise<void> {
+export async function applyEdenPad(dir: string, pad: EdenPad | null): Promise<void> {
   const file = edenConfig(dir)
   const text = await readText(file)
   if (!isUntouchedEdenControls(text)) return
-  if (controllerConnected) await writeIni(file, { Controls: qt(EDEN_CONTROLLER_PROFILE) }, '=')
-  else if (text.includes(XINPUT_GUID)) await writeIni(file, { Controls: Object.fromEntries(Object.keys(EDEN_CONTROLLER_PROFILE).map((k) => [`${k}\\default`, true])) }, '=')
+  if (pad) {
+    if (!pad.vid && !pad.pid) return // identifiants illisibles : on ne devine pas un GUID
+    await writeIni(file, { Controls: qt(edenControllerProfile(sdlXInputGuid(pad.vid, pad.pid, pad.ver))) }, '=')
+  } else if (/^player_0_button_a=.*guid:[0-9a-f]{28}7801/m.test(text) || text.includes(XINPUT_GUID)) {
+    await writeIni(file, { Controls: Object.fromEntries(Object.keys(edenControllerProfile('')).map((k) => [`${k}\\default`, true])) }, '=')
+  }
 }
 
 /** Profils de contrôleur réutilisables d'Eden (`config/input/<nom>.ini`, clés sans préfixe de joueur) : chargeables dans ses réglages de manette. Créés une fois. */
 async function writeEdenProfiles(dir: string): Promise<void> {
-  const unprefixed = (o: Record<string, string>): Record<string, string | number | boolean> => qt(Object.fromEntries(Object.entries(o).map(([k, v]) => [k.replace(/^player_0_/, ''), v])))
-  const profiles: [string, Record<string, string | number | boolean>][] = [['RomVault Xbox', unprefixed(EDEN_CONTROLLER_PROFILE)], ['RomVault Clavier', qt(EDEN_KEYBOARD_PROFILE)]]
+  const profiles: [string, Record<string, string | number | boolean>][] = [['RomVault Clavier', qt(EDEN_KEYBOARD_PROFILE)]]
   for (const [name, keys] of profiles) {
     const file = join(dir, 'user', 'config', 'input', `${name}.ini`)
     if (!existsSync(file)) await writeIni(file, { Controls: keys }, '=')

@@ -2,12 +2,13 @@ import type { DatabaseSync } from 'node:sqlite'
 import { readFile } from 'node:fs/promises'
 import type { SourceListDocument, SourceListImportResult } from '@shared/sourceList'
 import { formatValidationErrors, validateSourceList } from './validate'
-import { normalizeTitle } from '../achievements/retroachievements'
+import { CatalogMatcher } from './matcher'
+import { isHttpUrl, removeCopy, saveCopy } from './localCopy'
+
+export { CatalogMatcher }
 
 export type Fetcher = (url: string) => Promise<unknown>
 
-/** Une valeur qui n'est pas une URL http(s) est un chemin de fichier local (glisser-déposer ou sélecteur, voir sourceLists:pick). */
-const isHttpUrl = (s: string): boolean => /^https?:\/\//i.test(s)
 
 export const defaultFetch: Fetcher = async (url) => {
   if (!isHttpUrl(url)) return JSON.parse(await readFile(url, 'utf8'))
@@ -16,37 +17,13 @@ export const defaultFetch: Fetcher = async (url) => {
   return res.json()
 }
 
-/** Rapprochement titre+console → id catalogue, mis en cache par console le temps d'un import (évite une requête par entrée). */
-export class CatalogMatcher {
-  private readonly byConsole = new Map<string, Map<string, number>>()
-  constructor(private readonly db: DatabaseSync) {}
-
-  match(console: string, title: string): number | null {
-    let norm = this.byConsole.get(console)
-    if (!norm) {
-      norm = new Map()
-      // dup = 0 seulement : les régions/révisions d'un même jeu sont regroupées sous UNE entrée représentative dans le
-      // catalogue (voir markDuplicates/catalogStore.ts) ; une entrée dup = 1 n'est jamais affichée par défaut
-      // (where() exige dup = 0). Matcher contre une entrée dup = 1 attachait la source à un jeu invisible dans le
-      // catalogue — l'utilisateur voyait « non reconnu » sur le jeu qu'il regarde vraiment, même reconnu ailleurs
-      // sous une autre région (ex. God of War - Chains of Olympus/PSP : rapproché sur la variante Asie cachée,
-      // jamais sur la représentative Europe affichée).
-      const rows = this.db.prepare('SELECT id, title FROM catalog_games WHERE console = ? AND dup = 0').all(console) as { id: number; title: string }[]
-      for (const r of rows) { const n = normalizeTitle(r.title); if (n && !norm.has(n)) norm.set(n, r.id) }
-      this.byConsole.set(console, norm)
-    }
-    const n = normalizeTitle(title)
-    return n ? (norm.get(n) ?? null) : null
-  }
-}
-
 export function insertEntries(db: DatabaseSync, listId: number, doc: SourceListDocument): number {
   const matcher = new CatalogMatcher(db)
   const ins = db.prepare(`INSERT INTO sources (list_id, game_id, console, title, size_bytes, crc, sha1, uris, note, matched)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
   let matched = 0
   for (const e of doc.entries) {
-    const gameId = matcher.match(e.console, e.title)
+    const gameId = matcher.match({ console: e.console, title: e.title, sizeBytes: e.sizeBytes, crc: e.hash?.crc32, sha1: e.hash?.sha1 })?.gameId ?? null
     if (gameId !== null) matched++
     ins.run(listId, gameId, e.console, e.title, e.sizeBytes ?? null, e.hash?.crc32 ?? null, e.hash?.sha1 ?? null, JSON.stringify(e.uris), e.note ?? null, gameId !== null ? 1 : 0)
   }
@@ -54,7 +31,7 @@ export function insertEntries(db: DatabaseSync, listId: number, doc: SourceListD
 }
 
 /** Ajoute une liste (URL fournie par l'utilisateur), la valide et rapproche ses entrées du catalogue. */
-export async function addSourceList(db: DatabaseSync, url: string, fetcher: Fetcher = defaultFetch, now = Date.now()): Promise<SourceListImportResult> {
+export async function addSourceList(db: DatabaseSync, url: string, fetcher: Fetcher = defaultFetch, now = Date.now(), storeDir?: string): Promise<SourceListImportResult> {
   const existing = db.prepare('SELECT id FROM source_lists WHERE url = ?').get(url)
   if (existing) throw new Error('cette liste a déjà été ajoutée')
 
@@ -62,18 +39,49 @@ export async function addSourceList(db: DatabaseSync, url: string, fetcher: Fetc
   const result = validateSourceList(data)
   if (!result.ok) throw new Error(`liste invalide : ${formatValidationErrors(result.errors)}`)
   const doc = result.document
+  // Un fichier local est copié dans le dossier de données : la liste reste actualisable même si le fichier d'origine disparaît.
+  const localCopy = storeDir && !isHttpUrl(url) ? saveCopy(storeDir, url, data) : null
 
   db.exec('BEGIN')
   try {
-    db.prepare(`INSERT INTO source_lists (name, url, homepage, generated_at, added_at, last_refreshed_at, entry_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .run(doc.name, url, doc.homepage ?? null, doc.generatedAt ? (Date.parse(doc.generatedAt) || null) : null, now, now, doc.entries.length)
+    db.prepare(`INSERT INTO source_lists (name, url, homepage, generated_at, added_at, last_refreshed_at, entry_count, local_copy)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(doc.name, url, doc.homepage ?? null, doc.generatedAt ? (Date.parse(doc.generatedAt) || null) : null, now, now, doc.entries.length, localCopy)
     const listId = (db.prepare('SELECT id FROM source_lists WHERE url = ?').get(url) as { id: number }).id
     const matchedCount = insertEntries(db, listId, doc)
     db.exec('COMMIT')
     return { listId, name: doc.name, entryCount: doc.entries.length, matchedCount }
   } catch (e) {
     db.exec('ROLLBACK')
+    removeCopy(localCopy)
     throw e
   }
+}
+
+/** Version de l'algorithme de rapprochement : à incrémenter quand il change, pour re-rapprocher les listes déjà importées. */
+export const SOURCE_MATCH_VERSION = '2'
+
+/**
+ * Recalcule `game_id` / `matched` de toutes les sources déjà importées avec le matcher courant, sans retélécharger les listes.
+ * Appelé au démarrage quand la version change et après une synchro du catalogue (de nouveaux jeux peuvent exister).
+ */
+export function rematchSources(db: DatabaseSync): { total: number; matched: number } {
+  const matcher = new CatalogMatcher(db)
+  const rows = db.prepare('SELECT id, console, title, size_bytes, crc, sha1, game_id FROM sources').all() as unknown as
+    { id: number; console: string; title: string; size_bytes: number | null; crc: string | null; sha1: string | null; game_id: number | null }[]
+  const upd = db.prepare('UPDATE sources SET game_id = ?, matched = ? WHERE id = ?')
+  let matched = 0
+  db.exec('BEGIN')
+  try {
+    for (const r of rows) {
+      const gameId = matcher.match({ console: r.console, title: r.title, sizeBytes: r.size_bytes, crc: r.crc, sha1: r.sha1 })?.gameId ?? null
+      if (gameId !== null) matched++
+      if (gameId !== r.game_id) upd.run(gameId, gameId !== null ? 1 : 0, r.id)
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
+  return { total: rows.length, matched }
 }

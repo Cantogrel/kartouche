@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { DownloadProgress } from '@shared/downloads'
 
-interface DownloadJob extends DownloadProgress { label: string }
+interface DownloadJob extends DownloadProgress { label: string; gameId?: number }
 
 interface DownloadsState {
   /** Téléchargements en cours (`sourceId` → avancement), lus par la barre d'état et par le bouton Télécharger. */
@@ -9,7 +9,7 @@ interface DownloadsState {
   /** Dernier échec par source, conservé hors du composant (la fiche peut être quittée puis rouverte) jusqu'à fermeture ou nouvel essai. */
   errors: Record<number, string>
   dismissError: (sourceId: number) => void
-  start: (sourceId: number, label: string) => Promise<{ ok: boolean; error?: string }>
+  start: (sourceId: number, label: string, gameId?: number) => Promise<{ ok: boolean; error?: string }>
   cancel: (sourceId: number) => void
   listen: () => () => void
 }
@@ -20,9 +20,9 @@ export const useDownloads = create<DownloadsState>((set, get) => ({
   jobs: {},
   errors: {},
   dismissError: (sourceId) => set((s) => { const errors = { ...s.errors }; delete errors[sourceId]; return { errors } }),
-  start: async (sourceId, label) => {
+  start: async (sourceId, label, gameId) => {
     if (get().jobs[sourceId]) return { ok: false, error: 'busy' }
-    set((s) => { const errors = { ...s.errors }; delete errors[sourceId]; return { errors, jobs: { ...s.jobs, [sourceId]: { sourceId, phase: 'downloading', done: 0, total: 0, label } } } })
+    set((s) => { const errors = { ...s.errors }; delete errors[sourceId]; return { errors, jobs: { ...s.jobs, [sourceId]: { sourceId, phase: 'downloading', done: 0, total: 0, label, gameId } } } })
     try {
       const r = await window.api.invoke('downloads:start', sourceId)
       // Une annulation voulue n'est pas un échec ; sinon toujours un message, même si le main n'en a pas fourni.

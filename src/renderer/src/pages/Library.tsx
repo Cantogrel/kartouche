@@ -12,7 +12,7 @@ import { consoleById } from '@shared/consoles'
 import { orderConsolesByRecency, type ImportItem } from '@shared/library'
 
 const labelOf = (id: string): string => consoleById(id)?.label ?? id
-const itemLabel = (i: ImportItem): string => t(`import.${i.status}`)
+const itemLabel = (i: ImportItem): string => (i.status === 'attached' && i.parent ? `${t('import.attached')} · ${i.parent}` : t(`import.${i.status}`))
 // Position de scroll de la grille, conservée hors de l'état React pour survivre au démontage de la page (fiche jeu puis retour).
 let lastScrollTop = 0
 
@@ -63,7 +63,7 @@ export function Library() {
     void importPaths([...e.dataTransfer.files].map((f) => window.api.pathOf(f)).filter(Boolean))
   }
   const current = collectionId !== null ? collections.find((c) => c.id === collectionId) : undefined
-  const counts = result ? (['added', 'duplicate', 'ambiguous', 'error'] as const).map((k) => [k, result.items.filter((i) => i.status === k).length] as const).filter(([, n]) => n > 0) : []
+  const counts = result ? (['added', 'attached', 'orphan', 'duplicate', 'ambiguous', 'error'] as const).map((k) => [k, result.items.filter((i) => i.status === k).length] as const).filter(([, n]) => n > 0) : []
 
   return (
     <div className={`content dropzone${over ? ' over' : ''}`} ref={contentRef} onScroll={(e) => { lastScrollTop = e.currentTarget.scrollTop }} onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={(e) => { if (e.currentTarget === e.target) setOver(false) }} onDrop={onDrop}>

@@ -9,20 +9,20 @@ const UPDATE_WORD_RE = /\bupdate\b/i
 const DLC_WORD_RE = /\bdlc\b|\badd[- ]?on\b/i
 
 /**
- * Type de contenu Switch d'après son Title ID : un jeu de base finit par `000`, sa mise à jour a le même Title ID
- * avec le bit `0x800` posé (finit par `800`), un DLC a le 4e chiffre hexa en partant de la fin incrémenté de 1
- * (toujours impair) et les 3 derniers chiffres variables (index du DLC). Exemple (Breath of the Wild) :
- * base `…11E000`, mise à jour `…11E800`, DLC `…11F001`/`…11F002`.
+ * Type de contenu Switch d'après son Title ID, avec la règle d'Eden/Yuzu (`GetBaseTitleID` : on masque les 13 bits bas) : un jeu de base a
+ * ces 13 bits à 0, sa mise à jour vaut base | 0x800, un DLC a le bit 0x1000 posé et un index dans les bits restants. Exemples (Breath of
+ * the Wild) : base `…11E000`, mise à jour `…11E800`, DLC `…11F001`/`…11F002`. Null pour un identifiant qui ne suit aucun des trois motifs.
  */
-export function classifySwitchTitleId(id: string): SwitchContent {
+export function classifySwitchTitleId(id: string): SwitchContent | null {
   const hex = id.toUpperCase()
-  const tail = parseInt(hex.slice(-4), 16)
-  const nibble4 = (tail >> 12) & 0xf
-  const low3 = tail & 0xfff
-  const withTail = (nib: number): string => `${hex.slice(0, -4)}${nib.toString(16).toUpperCase()}000`
-  if (low3 === 0) return { kind: 'base', titleId: hex, baseTitleId: hex }
-  if (low3 === 0x800) return { kind: 'update', titleId: hex, baseTitleId: withTail(nibble4) }
-  return { kind: 'dlc', titleId: hex, baseTitleId: withTail(nibble4 % 2 === 1 ? nibble4 - 1 : nibble4) }
+  if (!/^[0-9A-F]{16}$/.test(hex)) return null
+  const n = BigInt(`0x${hex}`)
+  const low = Number(n & 0x1fffn)
+  const base = (n & ~0x1fffn).toString(16).padStart(16, '0').toUpperCase()
+  if (low === 0) return { kind: 'base', titleId: hex, baseTitleId: hex }
+  if (low === 0x800) return { kind: 'update', titleId: hex, baseTitleId: base }
+  if (low & 0x1000) return { kind: 'dlc', titleId: hex, baseTitleId: base }
+  return null
 }
 
 /**

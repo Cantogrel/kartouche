@@ -20,8 +20,8 @@ export const ROM_EXTENSIONS: Record<string, readonly string[]> = {
   // .iso et .wad (Wii U) : vérifiés dans les filtres de fichiers du binaire de Cemu (« Wii U image (*.wud, *.wux,
   // *.iso, *.wad) »), au même titre que .wud/.wux/.wua/.rpx déjà reconnus.
   wua: ['wiiu'], wud: ['wiiu'], wux: ['wiiu'], rpx: ['wiiu'],
-  // Pas de .nsz/.xcz : formats compressés qu'Eden ne sait pas ouvrir (vérifié : aucune trace dans son binaire), il
-  // faudrait les décompresser en .nsp/.xci avant import (outil externe « nsz ») — jamais implémenté ici.
+  // Pas de .nsz/.xcz : formats compressés qu'Eden ne sait pas ouvrir (vérifié : aucune trace dans son binaire). Le .nsz est
+  // accepté à l'import MAIS décompressé en .nsp d'abord (library/nsz.ts) ; le .xcz n'est pas pris en charge.
   nsp: ['switch'], xci: ['switch'],
   // Pas de .pkg : RPCS3 a besoin de l'installer d'abord (--installpkg, vérifié dans son binaire, distinct du boot
   // direct --no-gui) — même famille de piège que le .vpk Vita3K, jamais vérifié faute d'un vrai fichier .pkg. .iso
@@ -101,19 +101,30 @@ export function orderConsolesByRecency(entries: readonly LibraryEntry[]): string
   return [...withHistory, ...withoutHistory]
 }
 
-/** Mise à jour ou DLC Switch (identifié par Title ID) rattaché à un jeu de la bibliothèque plutôt que listé à part. */
+/** Mise à jour ou DLC (identifié par l'identifiant natif de la plateforme) rattaché à un jeu de la bibliothèque plutôt que listé à part. */
 export interface LibraryContentItem {
   id: number
   kind: 'update' | 'dlc'
-  /** Vide si le dump n'a pas de Title ID lisible (rattaché par nom). */
+  /** Identifiant natif du contenu (Title ID, ou identifiant de contenu PS3/Vita) ; null si inconnu (dump sans identifiant lisible). */
   titleId: string | null
   version: string | null
   label: string
   size: number
   addedAt: number
+  /** `installed` : l'émulateur le voit ; `pending` : sera installé automatiquement (voir `reason`) ; `failed` : échec, nouvelle tentative au prochain lancement. */
+  state: 'installed' | 'pending' | 'failed'
+  /** Pourquoi `pending` : `onLaunch`, `emulatorMissing`, `emulatorRunning`, `needsKey`, `unsupported`, `error`. */
+  reason: string | null
+  /** Clé fournie par l'utilisateur dont l'installation dépend (`license`) ; sert à expliquer l'attente. */
+  needs: string | null
+  detail: string | null
 }
 
-export type ImportStatus = 'added' | 'duplicate' | 'ambiguous' | 'error'
+/**
+ * `attached` : mise à jour/DLC rattaché à son jeu (pas une ligne de bibliothèque) ; `orphan` : mise à jour/DLC dont le jeu n'est pas (encore) dans la
+ * bibliothèque : le fichier n'est ni importé ni supprimé, il sera rattaché dès que le jeu sera importé.
+ */
+export type ImportStatus = 'added' | 'duplicate' | 'ambiguous' | 'error' | 'attached' | 'orphan'
 
 export interface ImportItem {
   file: string
@@ -122,6 +133,9 @@ export interface ImportItem {
   title?: string
   match?: MatchKind
   error?: string
+  /** Pour `attached` : sorte de contenu et jeu parent (titre de la bibliothèque). */
+  contentKind?: 'update' | 'dlc'
+  parent?: string
 }
 
 export interface ImportRequest {
@@ -146,3 +160,6 @@ export interface SbiImportResult {
   error?: 'notPs1' | 'notFound' | 'badFile' | 'failed'
   detail?: string
 }
+
+/** Consoles qui ont des mises à jour/DLC gérés par RomVault (voir `library/content/`) : leur fiche propose l'import et la désinstallation unitaires. */
+export const CONTENT_CONSOLES: readonly string[] = ['switch', 'n3ds', 'ps3', 'wiiu', 'vita']

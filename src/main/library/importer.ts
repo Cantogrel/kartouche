@@ -4,9 +4,16 @@ import { existsSync } from 'node:fs'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { ROM_EXTENSIONS, type ImportItem, type ImportResult, type LibraryProgress, type MatchKind } from '@shared/library'
 import { archiveVolume, cleanupWorkDir, newWorkDir, unpackArchive } from './archive'
-import { extractZipEntries, hashAndCopyFile, hashFile, readZip, readZipEntryText } from './hash'
+import { isNsz, unpackNsz } from './nsz'
+import { extractZipEntries, hashAndCopyFile, hashFile, readZip, readZipEntryHead, readZipEntryText } from './hash'
 import { identify, type Identified } from './identify'
-import { switchContentFromFilename } from './switchContent'
+import { baseKeyOfFile } from './content/baseKey'
+import { CONTENT_EXTENSIONS, filenameInfo, probeFile, probeWiiUFolder } from './content/probe'
+import { isTitleContainer, NOT_A_TITLE, parsePfs0 } from './content/switch'
+import { adoptOrphans, attachContent, contentLog, findParent, type ContentEnv } from './content/store'
+import type { ContentInfo } from './content/types'
+import { getRow } from '../emulators/emulatorStore'
+import { installerFor, installPendingContent } from '../emulators/content'
 
 export interface ImportOptions {
   /** Copier dans <roms>/<console>/ (sinon le fichier reste où il est). */
@@ -26,17 +33,38 @@ export interface ImportOptions {
    * Ne s'applique qu'au seul fichier importé par cet appel.
    */
   owned?: boolean
+  /** Dossier des journaux : les mises à jour/DLC sans jeu parent y laissent une trace (`content.log`). */
+  logDir?: string
+  /**
+   * Import depuis la fiche d'un jeu : seuls sont acceptés les mises à jour et DLC DE CE JEU (identifiant natif du parent = celui du jeu). Tout le reste — un jeu,
+   * un contenu d'un autre jeu, un fichier illisible — est refusé avec la raison, sans rien ranger ni créer d'entrée.
+   */
+  forGame?: { id: number }
 }
 
+/** `prod.keys` de l'Eden installé (déchiffre les NCA de métadonnées d'un NSP) ; undefined si Eden n'est pas installé. */
+const edenKeysFile = (db: DatabaseSync): string | undefined => { const r = getRow(db, 'eden'); return r ? join(r.dir, 'user', 'keys', 'prod.keys') : undefined }
+
 const extOf = (p: string): string => extname(p).slice(1).toLowerCase()
-const isRom = (p: string): boolean => extOf(p) in ROM_EXTENSIONS || extOf(p) === 'zip' || archiveVolume(p) !== null
+const isRom = (p: string): boolean => extOf(p) in ROM_EXTENSIONS || extOf(p) === 'zip' || isNsz(p) || archiveVolume(p) !== null || CONTENT_EXTENSIONS.includes(extOf(p))
 const stemOf = (p: string): string => basename(p, extname(p))
 
-async function walk(dir: string, out: string[]): Promise<void> {
+const NOT_CONTENT = 'pas une mise à jour ni un contenu additionnel'
+
+interface ContentFolder { path: string; info: ContentInfo }
+
+/**
+ * Parcourt un dossier. Un dossier de mise à jour/DLC Wii U (`title.tmd`, ou `meta/meta.xml`) est une unité à part entière : il est signalé dans `folders`
+ * et on n'y descend pas (ses fichiers `.app` ne sont pas des ROM).
+ */
+async function walk(dir: string, out: string[], folders: ContentFolder[]): Promise<void> {
   for (const e of await readdir(dir, { withFileTypes: true })) {
     const p = join(dir, e.name)
-    if (e.isDirectory()) await walk(p, out)
-    else if (e.isFile()) out.push(p)
+    if (e.isDirectory()) {
+      const info = await probeWiiUFolder(p).catch(() => null)
+      if (info) folders.push({ path: p, info })
+      else await walk(p, out, folders)
+    } else if (e.isFile()) out.push(p)
   }
 }
 
@@ -102,29 +130,30 @@ export async function prepare(file: string, extra: string[], onBytes?: (bytes: n
   return { crc: h.crc, sha1: h.sha1, size: ext === 'cue' ? h.size : (await stat(file)).size, name: stemOf(file), ext }
 }
 
-/** Messages précis affichés quand un import de mise à jour/DLC Switch est refusé (voir la note sur `importPaths`). */
-const SWITCH_CONTENT_MESSAGE: Record<'update' | 'dlc', string> = {
-  update: "mise à jour Switch non prise en charge : à installer manuellement dans l'émulateur (File > Install Files to NAND)",
-  dlc: "DLC Switch non pris en charge : à installer manuellement dans l'émulateur (File > Install Files to NAND)"
-}
-
 /**
  * Importe fichiers et dossiers : empreinte, identification contre le catalogue, copie dans le dossier de la console,
  * suppression éventuelle de l'original, enregistrement en bibliothèque. Un fichier en échec n'arrête pas les suivants.
- * Une mise à jour/un DLC Switch (repéré par Title ID ou par mot-clé, voir switchContent.ts) n'est jamais importé :
- * Eden (comme les autres émulateurs basés sur Yuzu) n'a pas de commande pour l'installer, seulement son propre menu
- * File > Install Files to NAND ; le fichier reste donc tel quel et l'erreur le dit clairement.
+ *
+ * Mises à jour et DLC (Switch, 3DS, PS3, Wii U, Vita — voir library/content/) : tout le lot est ANALYSÉ d'abord (identifiant natif lu dans le fichier),
+ * les jeux principaux sont importés, puis chaque mise à jour/DLC est rattachée à son jeu parent (déjà présent, ou importé dans ce lot) et installée dans
+ * l'émulateur par le mécanisme de celui-ci. Un contenu n'est jamais une ligne de la bibliothèque : sans jeu parent il est mis en attente (`orphan`), puis rattaché
+ * dès que le jeu arrive. L'ordre des fichiers du lot n'a aucune importance.
  */
 export async function importPaths(db: DatabaseSync, paths: string[], opt: ImportOptions, onProgress: (p: LibraryProgress) => void = () => undefined): Promise<ImportResult> {
   const items: ImportItem[] = []
   let ignored = 0
   const files: string[] = []
+  const folders: ContentFolder[] = []
+  /** Fichiers trouvés en parcourant un dossier (par opposition à ceux choisis un à un) : un `.pkg` hors périmètre y est ignoré sans bruit. */
+  const walked = new Set<string>()
   for (const p of paths) {
     try {
       if ((await stat(p)).isDirectory()) {
+        const own = await probeWiiUFolder(p).catch(() => null)
+        if (own) { folders.push({ path: p, info: own }); continue }
         const found: string[] = []
-        await walk(p, found)
-        for (const f of found) { if (isRom(f)) files.push(f); else ignored++ }
+        await walk(p, found, folders)
+        for (const f of found) { if (isRom(f)) { files.push(f); walked.add(f) } else ignored++ }
       } else if (isRom(p)) files.push(p)
       else items.push({ file: p, status: 'error', error: 'extension non prise en charge' })
     } catch (e) { items.push({ file: p, status: 'error', error: (e as Error).message }) }
@@ -149,6 +178,65 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
   }
   const queue = files.filter((f) => !consumed.has(resolve(f).toLowerCase()))
 
+  // Phase 1 — analyse de TOUT le lot avant la moindre décision : l'identifiant natif de chaque fichier (jeu, mise à jour, DLC) est lu dans le fichier
+  // lui-même (jamais deviné par son nom quand le format le porte). Les archives .7z/.rar ne sont lisibles qu'une fois extraites : voir plus bas.
+  const ctx = { switchKeysFile: edenKeysFile(db), cemuDir: getRow(db, 'cemu')?.dir }
+  const analysed = new Map<string, ContentInfo>()
+  for (const f of queue) {
+    if (archiveVolume(f)) continue
+    const info = await probeFile(f, ctx).catch((e: Error) => { void contentLog(opt.logDir, `analyse impossible ${f} : ${e.message}`); return null })
+    if (info) analysed.set(f, info)
+  }
+
+  // Phase 2 — tri : mises à jour/DLC (et dossiers Wii U) sont mis de côté pour après les jeux principaux ; un contenu non fiable ou un jeu `.pkg` est refusé.
+  const contents: { entry: string; info: ContentInfo }[] = folders.map((f) => ({ entry: f.path, info: f.info }))
+  const romQueue: string[] = []
+  for (const f of queue) {
+    const info = analysed.get(f)
+    if (info && info.kind === 'unknown' && extOf(f) === 'pkg' && walked.has(f)) ignored++
+    else if (info && info.kind !== 'base') contents.push({ entry: f, info })
+    else if (extOf(f) === 'pkg') {
+      // Un .pkg qui n'est pas un contenu rattachable (jeu PSN complet, autre plateforme, illisible) n'est pas une ROM : refusé s'il a été choisi explicitement, ignoré dans un dossier.
+      if (walked.has(f)) ignored++
+      else items.push({ file: f, status: 'error', error: info ? 'jeu PSN (.pkg) : installation du jeu non prise en charge' : 'paquet illisible ou non pris en charge' })
+    }
+    else if (opt.forGame && !archiveVolume(f) && !isNsz(f)) items.push({ file: f, status: 'error', error: NOT_CONTENT })
+    else romQueue.push(f)
+  }
+  const affected = new Set<number>()
+  const contentEnv = (consoleId: string, owned: boolean): ContentEnv => ({ ...ctx, romsDir: opt.romsDir, copy: opt.copy, deleteSource: opt.deleteSource, managed: installerFor(consoleId)?.managed === true, owned, logDir: opt.logDir })
+  /** Rattache (ou met en attente) un contenu identifié ; un contenu non fiable est refusé sans toucher au fichier. */
+  const handleContent = async (entry: string, file: string, info: ContentInfo, owned: boolean): Promise<ImportItem> => {
+    if (info.kind === 'unknown') {
+      await contentLog(opt.logDir, `contenu non fiable ${entry} : ${info.reason ?? 'identification impossible'}`)
+      return { file: entry, status: 'error', error: info.reason ?? 'contenu non identifiable de façon fiable' }
+    }
+    if (opt.forGame) {
+      const parent = info.baseKey ? await findParent(db, info.console, info.baseKey, ctx) : null
+      if (!parent || parent.id !== opt.forGame.id) {
+        await contentLog(opt.logDir, `contenu refusé pour le jeu ${opt.forGame.id} (parent ${info.baseKey || 'inconnu'}) : ${entry}`)
+        return { file: entry, status: 'error', console: info.console, title: info.label, error: parent ? `appartient à un autre jeu (${parent.title})` : 'ne correspond pas à ce jeu (jeu parent différent ou illisible)' }
+      }
+    }
+    try {
+      const r = await attachContent(db, info, file, contentEnv(info.console, owned))
+      if (r.libraryId !== undefined) affected.add(r.libraryId)
+      return { ...r.item, file: entry }
+    } catch (e) { return { file: entry, status: 'error', error: (e as Error).message } }
+  }
+  /**
+   * Mémorise l'identifiant natif d'un jeu de base (clé de ses futures mises à jour/DLC) puis lui rattache ceux qui l'attendaient. Seulement pour les consoles qui
+   * ont cette notion ; un format qui ne permet pas de lire l'identifiant laisse le jeu sans clé (jamais de devinette par le nom).
+   */
+  const learn = async (libraryId: number, consoleId: string, path: string, known: string | null): Promise<void> => {
+    if (!installerFor(consoleId)) return
+    const key = known ?? (await baseKeyOfFile(consoleId, path, ctx).catch(() => null))
+    if (!key) return
+    db.prepare('UPDATE library SET title_id = COALESCE(title_id, ?) WHERE id = ?').run(key, libraryId)
+    if (adoptOrphans(db, libraryId, consoleId, key) > 0) affected.add(libraryId)
+  }
+  const total = romQueue.length + contents.length
+
   const sameRom = db.prepare('SELECT id, path FROM library WHERE path = ? OR (console = ? AND crc = ? AND size = ?)')
   const byGame = db.prepare('SELECT id, path FROM library WHERE game_id = ? AND console = ?')
   // title_id : gardé seulement pour un jeu de base (voir switchContent.ts) ; COALESCE au relink pour ne jamais effacer une valeur déjà connue.
@@ -158,17 +246,18 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
   const tmpDir = join(opt.romsDir, '.import-tmp')
   let done = 0
   let lastReport = 0
-  for (const entry of queue) {
+  for (const entry of romQueue) {
     // Archive .7z/.rar : extraite d'abord dans un dossier temporaire (voir archive.ts) ; ce qui en sort (la ROM, ou un .zip
     // reconstitué pour un jeu à plusieurs fichiers) suit ensuite exactement le même chemin qu'un fichier importé tel quel.
     let file = entry
     let workDir: string | null = null
     let volumes: string[] = []
     let owned = opt.owned === true
-    if (archiveVolume(entry)) {
-      onProgress({ done, total: queue.length, current: basename(entry), bytesDone: 0 })
+    if (archiveVolume(entry) || isNsz(entry)) {
+      onProgress({ done, total, current: basename(entry), bytesDone: 0 })
       workDir = newWorkDir(opt.romsDir, String(done))
-      const unpacked = await unpackArchive(entry, workDir).catch((e: Error) => e.message)
+      // .nsz (NSP compressé) : décompressé en .nsp, qui suit ensuite le chemin d'un .nsp ordinaire (mise à jour/DLC reconnus dans le fichier décompressé).
+      const unpacked = await (isNsz(entry) ? unpackNsz(entry, workDir, (d, t) => { const now = Date.now(); if (now - lastReport >= 150 || d === t) { lastReport = now; onProgress({ done, total, current: basename(entry), bytesDone: d, bytesTotal: t }) } }) : unpackArchive(entry, workDir)).catch((e: Error) => e.message)
       if (typeof unpacked === 'string') {
         items.push({ file: entry, status: 'error', error: unpacked })
         await cleanupWorkDir(workDir)
@@ -178,6 +267,24 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
       file = unpacked.file
       volumes = unpacked.volumes
       owned = true
+      // Ce qui sort de l'archive peut être une mise à jour/DLC : lisible seulement maintenant. Déplacé hors du dossier de travail, rattaché ou mis en attente.
+      const inner = await probeFile(file, ctx).catch(() => null)
+      if (inner) analysed.set(file, inner)
+      if (inner && inner.kind !== 'base') {
+        const item = await handleContent(entry, file, inner, true)
+        items.push(item)
+        if (opt.deleteSource && (item.status === 'attached' || item.status === 'orphan')) for (const v of volumes) await rm(v, { force: true }).catch(() => undefined)
+        await cleanupWorkDir(workDir)
+        done++
+        continue
+      }
+    }
+    if (opt.forGame) {
+      // Archive qui ne contient ni mise à jour ni DLC (un jeu, ou rien de lisible) : refusée.
+      items.push({ file: entry, status: 'error', error: NOT_CONTENT })
+      if (workDir) await cleanupWorkDir(workDir)
+      done++
+      continue
     }
     const ext = extOf(file)
     const refs = extras.get(file) ?? []
@@ -191,9 +298,9 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
       const now = Date.now()
       if (now - lastReport < 150 && bytesDone !== bytesTotal) return
       lastReport = now
-      onProgress({ done, total: queue.length, current: basename(file), bytesDone, bytesTotal })
+      onProgress({ done, total, current: basename(file), bytesDone, bytesTotal })
     }
-    onProgress({ done, total: queue.length, current: basename(file), bytesDone: 0, bytesTotal })
+    onProgress({ done, total, current: basename(file), bytesDone: 0, bytesTotal })
     let tempPath: string | null = null
     try {
       let prep: Prepared | string
@@ -206,13 +313,23 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
         prep = await prepare(file, refs, reportBytes)
       }
       if (typeof prep === 'string') { items.push({ file: entry, status: 'error', error: prep }); continue }
-      // Mise à jour/DLC Switch (Title ID entre crochets/parenthèses, ou mot-clé à défaut) : jamais importé, voir la note ci-dessus.
-      const content = (ROM_EXTENSIONS[ext] ?? []).includes('switch') ? switchContentFromFilename(prep.name) : null
-      if (content && content.kind !== 'base') {
-        items.push({ file: entry, status: 'error', error: SWITCH_CONTENT_MESSAGE[content.kind] })
-        continue
+      // NSP/XCI dans un .zip : le conteneur n'est pas lisible sans extraction, seul le nom permet de reconnaître une mise à jour/un DLC — refusés plutôt que d'en faire un jeu.
+      if (ext === 'zip' && prep.ext === 'nsp') {
+        // Mais l'en-tête du NSP est lisible dans l'archive : un « .nsp » sans NCA (module système comme emuiibo, ExeFS) n'est pas un titre Switch.
+        const inner = (await readZip(file).catch(() => null))?.find((z) => extOf(z.name) === 'nsp')
+        const entries = inner ? parsePfs0((await readZipEntryHead(file, inner.name, 1 << 20).catch(() => null)) ?? Buffer.alloc(0)) : null
+        if (entries && !isTitleContainer(entries)) { items.push({ file: entry, status: 'error', error: NOT_A_TITLE }); continue }
       }
-      const titleId = content?.kind === 'base' ? content.titleId : null
+      if (ext === 'zip' && (prep.ext === 'nsp' || prep.ext === 'xci')) {
+        const named = filenameInfo(`${prep.name}.${prep.ext}`)
+        if (named && named.kind !== 'base') {
+          items.push({ file: entry, status: 'error', error: `${named.kind === 'update' ? 'mise à jour' : 'DLC'} Switch dans une archive .zip : extraire le fichier avant de l’importer` })
+          continue
+        }
+      }
+      // Jeu principal : son identifiant natif (lu dans le conteneur) rattachera plus tard ses mises à jour et ses DLC.
+      const baseInfo = analysed.get(file) ?? analysed.get(entry)
+      const titleId = baseInfo?.kind === 'base' && baseInfo.baseKey ? baseInfo.baseKey : null
       const id: Identified = opt.expected
         ? { gameId: opt.expected.gameId, console: opt.expected.console, title: opt.expected.title, match: opt.expected.match, candidates: [opt.expected.console] }
         : identify(db, prep)
@@ -220,7 +337,12 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
       if (!cons) { items.push({ file: entry, status: 'ambiguous', error: id.candidates.join(', ') }); continue }
       const title = id.title ?? prep.name
       const same = sameRom.all(file, cons, prep.crc ?? '', prep.size) as { id: number; path: string }[]
-      if (same.some((r) => existsSync(r.path))) { items.push({ file: entry, status: 'duplicate', console: cons, title, match: id.match }); continue }
+      const present = same.find((r) => existsSync(r.path))
+      if (present) {
+        await learn(present.id, cons, present.path, titleId)
+        items.push({ file: entry, status: 'duplicate', console: cons, title, match: id.match })
+        continue
+      }
       // Entrée du même jeu dont le fichier a disparu (ou jamais existé : jeu ajouté depuis le catalogue) : la ROM s'y rattache.
       const target = same[0] ?? (id.gameId !== null ? (byGame.all(id.gameId, cons) as { id: number; path: string }[]).find((r) => !existsSync(r.path)) : undefined)
 
@@ -263,8 +385,10 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
         if ((await stat(dest)).size !== (await stat(file)).size) { await rm(dest, { force: true }); throw new Error('copie incomplète') }
         if (opt.deleteSource) for (const f of [file, ...refs]) await rm(f, { force: true })
       }
-      if (target) relink.run(dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, titleId, target.id)
-      else insert.run(id.gameId, cons, title, dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, titleId, Date.now())
+      let libraryId: number
+      if (target) { relink.run(dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, titleId, target.id); libraryId = target.id }
+      else libraryId = Number(insert.run(id.gameId, cons, title, dest, prep.size, prep.crc ?? null, prep.sha1 ?? null, id.match, titleId, Date.now()).lastInsertRowid)
+      await learn(libraryId, cons, dest, titleId)
       if (opt.deleteSource) for (const v of volumes) await rm(v, { force: true }).catch(() => undefined)
       items.push({ file: entry, status: 'added', console: cons, title, match: id.match })
     } catch (e) {
@@ -275,7 +399,15 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
     }
     done++
   }
+  // Phase 3 — mises à jour et DLC : tous les jeux du lot sont maintenant en bibliothèque, quel que soit l'ordre des fichiers.
+  for (const { entry, info } of contents) {
+    onProgress({ done, total, current: basename(entry) })
+    items.push(await handleContent(entry, entry, info, false))
+    done++
+  }
+  // Phase 4 — installation dans l'émulateur, par le mécanisme propre à chacun (voir emulators/content/) ; ce qui n'a pas pu l'être reste en attente et sera retenté au lancement.
+  for (const libraryId of affected) await installPendingContent(db, libraryId, opt.romsDir, 'import').catch((e: Error) => contentLog(opt.logDir, `installation (jeu ${libraryId}) : ${e.message}`))
   await rm(tmpDir, { recursive: true, force: true }).catch(() => undefined)
-  onProgress({ done, total: queue.length, current: '' })
+  onProgress({ done, total, current: '' })
   return { items, ignored }
 }

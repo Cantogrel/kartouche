@@ -56,6 +56,16 @@ export interface SourceListSummary {
   entryCount: number
   matchedCount: number
   error: string | null
+  /** Liste ajoutée depuis un fichier (et non une URL) : RomVault en garde une copie dans son dossier de données. */
+  hasLocalCopy: boolean
+  /** Chemin de la copie locale (quand elle existe) : c'est ce fichier, et non l'original, que l'actualisation lit. */
+  localCopyPath: string | null
+}
+
+/** Bilan de « Actualiser tout » : une liste en échec n'empêche pas les suivantes. */
+export interface SourceListRefreshAllResult {
+  refreshed: number
+  failed: { name: string; error: string }[]
 }
 
 /** Une source de téléchargement rapprochée d'un jeu précis du catalogue (fiche jeu). */

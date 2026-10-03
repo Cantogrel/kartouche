@@ -4,13 +4,19 @@ import type { AppPaths } from '@shared/ipc'
 import type { MatchKind } from '@shared/library'
 import { archiveVolume, cleanupWorkDir, newWorkDir, unpackArchive } from '../library/archive'
 import { identify } from '../library/identify'
-import { importPaths, prepare } from '../library/importer'
+import { cueFiles, importPaths, prepare } from '../library/importer'
+import { contentLog } from '../library/content/store'
+import { importSbi } from '../library/libraryStore'
 import { hashFile } from '../library/hash'
 
 export interface InstallResult {
   ok: boolean
   error?: string
+  /** Ce que le fichier principal n'a pas couvert : fichiers du torrent refusés (mise à jour/DLC d'un autre jeu…) — le jeu, lui, est bien installé. */
+  notes?: string[]
 }
+
+const CONTENT_EXT = /\.(nsp|nsz|xci|cia|pkg)$/i
 
 /**
  * Installe un fichier téléchargé pour `sourceId`, avec le meilleur niveau de confiance possible — jamais d'échec
@@ -37,7 +43,29 @@ export interface InstallResult {
  * ordinaire — une seule ROM, ou un .cue/paquet Vita reconditionné en .zip ; plusieurs ROM différentes sont refusées. Réutilise le pipeline d'import existant (Phase 4,
  * `importPaths`) pour la copie et l'enregistrement en bibliothèque.
  */
-export async function installDownload(db: DatabaseSync, sourceId: number, download: string, paths: AppPaths): Promise<InstallResult> {
+/**
+ * Fichiers du torrent qui accompagnent le jeu principal, avec les règles de l'import : mises à jour et DLC rattachés à CE jeu (l'import lit leur identifiant natif et
+ * refuse tout ce qui appartient à un autre jeu — rien n'est jamais rangé par erreur), fichier .sbi d'un disque PS1 posé à côté de la ROM. Les pistes d'un disque,
+ * les volumes d'une archive ont déjà suivi le fichier principal.
+ */
+async function installCompanions(db: DatabaseSync, source: { game_id: number | null; console: string }, extras: string[], paths: AppPaths): Promise<string[]> {
+  const notes: string[] = []
+  const lib = db.prepare('SELECT id FROM library WHERE game_id = ? AND console = ? ORDER BY id DESC LIMIT 1').get(source.game_id, source.console) as { id: number } | undefined
+  if (!lib || !extras.length) return notes
+  const sbi = extras.find((f) => /\.sbi$/i.test(f))
+  if (sbi && source.console === 'ps1') await importSbi(db, lib.id, sbi).catch(() => undefined)
+  const content = extras.filter((f) => CONTENT_EXT.test(f))
+  if (content.length) {
+    const r = await importPaths(db, content, { copy: true, deleteSource: true, romsDir: paths.roms, logDir: paths.logs, forGame: { id: lib.id } })
+    for (const i of r.items) if (i.status === 'error' || i.status === 'orphan') {
+      notes.push(`${i.file.split(/[\/]/).pop() ?? i.file} : ${i.error ?? 'refusé'}`)
+      await contentLog(paths.logs, `torrent : ${i.file} non retenu pour le jeu ${lib.id} (${i.error ?? i.status})`)
+    }
+  }
+  return notes
+}
+
+export async function installDownload(db: DatabaseSync, sourceId: number, download: string, paths: AppPaths, extras: string[] = []): Promise<InstallResult> {
   let workDir: string | null = null
   try {
     const source = db.prepare('SELECT game_id, console, title, crc, sha1 FROM sources WHERE id = ?').get(sourceId) as
@@ -58,7 +86,9 @@ export async function installDownload(db: DatabaseSync, sourceId: number, downlo
       volumes = unpacked.volumes
     }
 
-    const prep = await prepare(file, [])
+    // Disque décrit par un .cue (torrent à plusieurs fichiers) : ses pistes sont lues dans la feuille, comme à l'import ordinaire.
+    const refs = /\.cue$/i.test(file) ? await cueFiles(file).catch(() => []) : []
+    const prep = await prepare(file, refs)
     if (typeof prep === 'string') return { ok: false, error: prep }
 
     const identified = identify(db, prep)
@@ -81,7 +111,8 @@ export async function installDownload(db: DatabaseSync, sourceId: number, downlo
     const item = result.items[0]
     if (!item || item.status === 'error') return { ok: false, error: item?.error ?? "échec de l'installation" }
     for (const v of volumes) await rm(v, { force: true }).catch(() => undefined)
-    return { ok: true }
+    const notes = await installCompanions(db, source, extras, paths)
+    return notes.length ? { ok: true, notes } : { ok: true }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   } finally {

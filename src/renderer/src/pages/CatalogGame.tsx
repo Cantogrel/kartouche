@@ -50,7 +50,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
           <div className="row">
             {!owned && <Button variant="primary" onClick={() => void addToLibrary(game.id)}>{t('addToLibrary')}</Button>}
             {owned?.missing && <Button variant="primary" onClick={() => void link()}>{t('linkRom')}</Button>}
-            {(!owned || owned.missing) && sources.length > 0 && <DownloadButton sources={sources} gameName={game.name} />}
+            {(!owned || owned.missing) && sources.length > 0 && <DownloadButton sources={sources} gameName={game.name} gameId={game.id} />}
             {owned && !owned.missing && <PlayButton entry={owned} />}
             {owned && !owned.missing && <OpenEmulatorButton entry={owned} />}
             {owned && !owned.missing && sources.length > 0 && <UninstallButton entry={owned} />}
@@ -82,7 +82,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
  * Télécharge une source choisie par l'utilisateur (Paramètres → Sources, P03-S1), puis vérifie son hash contre le
  * jeu attendu et l'installe dans la bibliothèque (P05) — jamais d'installation silencieuse si le hash ne correspond pas.
  */
-function DownloadButton({ sources, gameName }: { sources: GameSource[]; gameName: string }) {
+function DownloadButton({ sources, gameName, gameId }: { sources: GameSource[]; gameName: string; gameId: number }) {
   const [selected, setSelected] = useState(sources[0]?.id)
   const job = useDownloads((s) => (selected !== undefined ? s.jobs[selected] : undefined))
   const startDownload = useDownloads((s) => s.start)
@@ -91,7 +91,7 @@ function DownloadButton({ sources, gameName }: { sources: GameSource[]; gameName
 
   const start = async (): Promise<void> => {
     if (selected === undefined || busy) return
-    const r = await startDownload(selected, gameName)
+    const r = await startDownload(selected, gameName, gameId)
     if (r.ok) await useLibrary.getState().refresh()
   }
   const cancel = (): void => { if (selected !== undefined) cancelDownload(selected) }
@@ -120,7 +120,7 @@ function DownloadButton({ sources, gameName }: { sources: GameSource[]; gameName
               // Torrent : recherche de pairs/métadonnées (jusqu'à 2 min), annulable contrairement au court instant avant la 1re mesure HTTP.
               ? <Button onClick={cancel}>{t('download.connecting')}</Button>
               : <Button disabled>{t('download.downloading')}</Button>)
-        : <Button variant="primary" onClick={() => void start()}>{t('download.button')}</Button>}
+        : <Button variant="primary" onClick={() => void start()}>{t('download.button')}{sources.length === 1 && sources[0].sizeBytes ? ` · ${formatSize(sources[0].sizeBytes)}` : ''}</Button>}
     </div>
   )
 }

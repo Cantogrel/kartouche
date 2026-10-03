@@ -82,7 +82,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
     if (useDownloads.getState().jobs[id]) return
     setSourceId(id)
     setError(null)
-    const r = await startDownload(id, title)
+    const r = await startDownload(id, title, gameId ?? undefined)
     if (r.ok) await useLibrary.getState().refresh()
   }
   const clickDownload = (): void => {
@@ -112,7 +112,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
               ? <button data-nav className="bp-btn" onClick={() => sourceId !== undefined && cancelDownload(sourceId)}>
                   {job && job.total > 0 ? `${t('download.cancel')} (${Math.round((job.done / job.total) * 100)}%)` : job?.message === 'connecting' ? t('download.connecting') : t('download.downloading')}
                 </button>
-              : <button data-nav className="bp-btn primary" onClick={clickDownload}>⬇ {t('download.button')}</button>)}
+              : <button data-nav className="bp-btn primary" onClick={clickDownload}>⬇ {t('download.button')}{sources.length === 1 && sources[0].sizeBytes ? ` · ${formatSize(sources[0].sizeBytes)}` : ''}</button>)}
             {owned && <button data-nav className="bp-btn" onClick={() => void useLibrary.getState().setFlag(owned.id, { favorite: !owned.favorite })}>{owned.favorite ? '♥' : '♡'} {t(owned.favorite ? 'fav.remove' : 'fav.add')}</button>}
             {owned?.missing && <span className="muted">{t('game.noFile')}</span>}
             <button data-nav className="bp-btn" onClick={onClose}>{t('bp.back')}</button>

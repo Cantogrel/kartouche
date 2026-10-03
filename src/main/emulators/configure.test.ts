@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EMULATORS, emulatorMaker, emulatorRank } from '@shared/emulators'
@@ -13,7 +13,8 @@ import { readPs3Serial, rpcs3ConfigYaml, rpcs3InputYaml, rpcs3Scale, sfoString }
 import { azaharScale, ncsdTitleId } from './azahar'
 import { melondsRendering, ndsGameCode, tomlSection } from './melonds'
 import { edenResolution, hasQuarterResolutions } from './eden'
-import { applyDolphinFastDiscExclusion, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyAzaharGameConfig, applyAzaharPad, applyMelondsGame, applyEdenGameConfig, applyEdenPad, isUntouchedEdenControls, applyDolphinPad, configureEmulator, isUntouchedPadFile, patchCfg, patchIni, patchYaml, resolutionTier, setCfgLanguage, setSysconfLanguage, type ConfigContext } from './configure'
+import { emulatorEnv } from './sdlEnv'
+import { applyDolphinFastDiscExclusion, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyAzaharGameConfig, applyAzaharPad, applyMelondsGame, applyEdenGameConfig, applyEdenPad, isUntouchedEdenControls, sdlXInputGuid, applyDolphinPad, configureEmulator, isUntouchedPadFile, patchCfg, patchIni, patchYaml, resolutionTier, setCfgLanguage, setSysconfLanguage, type ConfigContext } from './configure'
 
 describe('patchIni / patchCfg', () => {
   it('met à jour, ajoute et conserve le reste', () => {
@@ -701,27 +702,91 @@ describe('configuration automatique des émulateurs', () => {
     expect(t).toContain('output_device=auto')
     expect(t).toContain('volume=100')
     expect(t).not.toContain('player_0_button_a')
-    expect(existsSync(join(dir, 'user', 'config', 'input', 'RomVault Xbox.ini'))).toBe(true)
     expect(read('user', 'config', 'input', 'RomVault Clavier.ini')).toContain('button_a=engine:keyboard,code:67,toggle:0')
-    await applyEdenPad(dir, true)
+    // Manette Xbox One (XInput 045E:02FF) : mêmes liaisons qu'Eden écrit lui-même quand on la lui désigne (GUID du pilote XInput de SDL, joystick brut).
+    const pad = { vid: 0x045e, pid: 0x02ff, ver: 0 }
+    expect(sdlXInputGuid(pad.vid, pad.pid, pad.ver)).toBe('030000005e040000ff02000000007801')
+    await applyEdenPad(dir, pad)
     const c = read('user', 'config', 'qt-config.ini')
+    const g = '030000005e040000ff02000000007801'
     expect(c).toContain('player_0_button_a\\default=false')
-    expect(c).toMatch(/player_0_button_a=engine:sdl,port:0,guid:78696e70757401000000000000000000,button:0/)
-    expect(c).toMatch(/player_0_button_zl=engine:sdl,port:0,guid:78696e70757401000000000000000000,axis:4,threshold:0\.5,invert:\+/)
-    expect(c).toMatch(/player_0_lstick=engine:sdl,port:0,guid:78696e70757401000000000000000000,axis_x:0,axis_y:1,offset_x:0,offset_y:0,invert_x:\+,invert_y:\+/)
+    expect(c).toContain(`player_0_button_a=engine:sdl,port:0,guid:${g},button:1`)
+    expect(c).toContain(`player_0_button_b=engine:sdl,port:0,guid:${g},button:0`)
+    expect(c).toContain(`player_0_button_zl=engine:sdl,port:0,guid:${g},axis:2,threshold:0.5,invert:+`)
+    expect(c).toContain(`player_0_button_dup=engine:sdl,port:0,guid:${g},hat:0,direction:up`)
+    expect(c).toContain(`player_0_lstick=engine:sdl,port:0,guid:${g},axis_x:0,axis_y:1,offset_x:0,offset_y:0,invert_x:+,invert_y:+`)
+    expect(c).toContain(`player_0_rstick=engine:sdl,port:0,guid:${g},axis_x:3,axis_y:4,offset_x:0,offset_y:0,invert_x:+,invert_y:+`)
     expect(c).not.toContain('motion')
+    // Autre manette (autre VID/PID) au lancement suivant : les liaisons de RomVault suivent la manette branchée.
+    await applyEdenPad(dir, { vid: 0x045e, pid: 0x028e, ver: 0 })
+    expect(read('user', 'config', 'qt-config.ini')).toContain('player_0_button_a=engine:sdl,port:0,guid:030000005e0400008e02000000007801,button:1')
+    // Identité illisible : rien n'est deviné.
+    const before = read('user', 'config', 'qt-config.ini')
+    await applyEdenPad(dir, { vid: 0, pid: 0, ver: 0 })
+    expect(read('user', 'config', 'qt-config.ini')).toBe(before)
     // Manette débranchée : retour aux touches d'Eden (marqueur par défaut), sans effacer le reste.
-    await applyEdenPad(dir, false)
+    await applyEdenPad(dir, null)
     expect(read('user', 'config', 'qt-config.ini')).toContain('player_0_button_a\\default=true')
+  })
+  it('Eden : les anciennes liaisons de RomVault (GUID générique, jamais reconnu par Eden) sont remplacées', async () => {
+    await configureEmulator('eden', dir, ctx())
+    const file = join(dir, 'user', 'config', 'qt-config.ini')
+    writeFileSync(file, `${read('user', 'config', 'qt-config.ini')}[Controls]
+player_0_button_a\\default=false
+player_0_button_a="engine:sdl,port:0,guid:78696e70757401000000000000000000,button:0"
+`)
+    await applyEdenPad(dir, { vid: 0x045e, pid: 0x02ff, ver: 0 })
+    const c = read('user', 'config', 'qt-config.ini')
+    expect(c).toContain('player_0_button_a=engine:sdl,port:0,guid:030000005e040000ff02000000007801,button:1')
+    expect(c).not.toContain('78696e70757401000000000000000000')
   })
   it('Eden : une manette configurée à la main (autre GUID) n’est jamais réécrite', async () => {
     await configureEmulator('eden', dir, ctx())
     const file = join(dir, 'user', 'config', 'qt-config.ini')
     writeFileSync(file, `${read('user', 'config', 'qt-config.ini')}[Controls]\nplayer_0_button_a\\default=false\nplayer_0_button_a="engine:sdl,guid:030000005e040000,port:0,button:1"\n`)
     const before = read('user', 'config', 'qt-config.ini')
-    await applyEdenPad(dir, true)
+    await applyEdenPad(dir, { vid: 0x045e, pid: 0x02ff, ver: 0 })
     expect(read('user', 'config', 'qt-config.ini')).toBe(before)
     expect(isUntouchedEdenControls('player_0_button_a\\default=true\nplayer_0_button_a="engine:keyboard,code:67,toggle:0"')).toBe(true)
+  })
+  it('manettes : aucune liaison écrite à l’installation ne vise un matériel précis (GUID, VID/PID) — seule la manette détectée au lancement le fait', async () => {
+    for (const id of ['retroarch', 'dolphin', 'duckstation', 'pcsx2', 'melonds', 'azahar', 'cemu', 'ppsspp', 'rpcs3', 'vita3k', 'eden']) {
+      const d = join(dir, id)
+      await configureEmulator(id, d, ctx({ biosDir: join(dir, 'bios') })).catch(() => undefined)
+      const files: string[] = []
+      const walk = (p: string): void => { for (const e of readdirSync(p, { withFileTypes: true })) { const f = join(p, e.name); if (e.isDirectory()) walk(f); else if (/\.(ini|toml|yml|xml|cfg)$/i.test(e.name)) files.push(f) } }
+      if (existsSync(d)) walk(d)
+      for (const f of files) {
+        const t = readFileSync(f, 'utf8')
+        // Azahar : GUID générique + `maptype:all` + `api:controller` = n'importe quelle manette SDL (vérifié dans son code) ; tout autre GUID serait propre à un matériel.
+        const bad = t.split(/\r?\n/).filter((l) => /guid:[0-9a-f]{8,}/i.test(l) && !(/maptype:all/.test(l) && /api:controller/.test(l)))
+        expect(bad, `${id} : ${f}`).toEqual([])
+      }
+    }
+  })
+  it('manettes : Azahar lit n’importe quelle manette SDL (API controller, tous ports) — aucune liaison ne dépend du GUID', async () => {
+    await configureEmulator('azahar', dir, ctx())
+    const c = read('user', 'config', 'qt-config.ini')
+    const binds = c.split(/\r?\n/).filter((l) => /^profiles\\2\\(button_|[lr]stick|c_stick|circle_pad)/.test(l) && /guid:/.test(l))
+    expect(binds.length).toBeGreaterThan(10)
+    for (const l of binds) { expect(l).toContain('api:controller'); expect(l).toContain('maptype:all') }
+  })
+  it('manettes : Eden et melonDS (liaisons dépendantes du pilote SDL) sont lancés avec le pilote XInput imposé, les autres inchangés', () => {
+    for (const id of ['eden', 'melonds']) expect(emulatorEnv(id)).toMatchObject({ SDL_JOYSTICK_HIDAPI: '0', SDL_JOYSTICK_RAWINPUT: '0', SDL_JOYSTICK_WGI: '0' })
+    for (const id of ['azahar', 'dolphin', 'duckstation', 'pcsx2', 'ppsspp', 'retroarch', 'rpcs3', 'vita3k', 'cemu']) expect(emulatorEnv(id)).toBeUndefined()
+  })
+  it('manettes : Eden — le profil suit la manette détectée, jamais l’ancien GUID générique, quelle que soit la manette XInput', async () => {
+    for (const [vid, pid] of [[0x045e, 0x02ff], [0x045e, 0x028e], [0x045e, 0x0b12], [0x0e6f, 0x0301], [0x046d, 0xc21d]]) {
+      const d = join(dir, `eden-${vid.toString(16)}-${pid.toString(16)}`)
+      await configureEmulator('eden', d, ctx())
+      await applyEdenPad(d, { vid, pid, ver: 0 })
+      const c = readFileSync(join(d, 'user', 'config', 'qt-config.ini'), 'utf8')
+      const guid = sdlXInputGuid(vid, pid, 0)
+      const lines = c.split(/\r?\n/).filter((l) => /^player_0_(button_(a|b|x|y|l|r|zl|zr|plus|minus|lstick|rstick|dup|ddown|dleft|dright)|lstick|rstick)=/.test(l))
+      expect(lines.length).toBe(18)
+      for (const l of lines) expect(l).toContain(`guid:${guid},`)
+      expect(c).not.toContain('78696e70757401000000000000000000')
+    }
   })
   it('Eden : résolution selon l’écran et le GPU, et selon l’énumération du binaire', () => {
     expect(edenResolution({ vulkan: true, tier: 'high' }, 2160)).toBe(6)

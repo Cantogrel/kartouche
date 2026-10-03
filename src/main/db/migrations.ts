@@ -96,7 +96,29 @@ export const MIGRATIONS: readonly string[] = [
   CREATE INDEX sources_list ON sources (list_id);
   CREATE INDEX sources_game ON sources (game_id)`,
   // v14 : identifiant du jeu qui sert à retrouver ses sauvegardes (numéro de série, Title ID…), lu dans le jeu ou appris du journal de l'émulateur
-  `ALTER TABLE library ADD COLUMN game_key TEXT`
+  `ALTER TABLE library ADD COLUMN game_key TEXT`,
+  // v15 : mises à jour/DLC de toutes les consoles qui en ont (Switch, 3DS, PS3, Wii U, Vita), plus seulement Switch. state = installé côté émulateur,
+  // en attente (reason : onLaunch, needsKey, emulatorRunning…) ou en échec (nouvelle tentative possible) ; needs = clé fournie par l'utilisateur
+  // dont l'installation dépend (licence, zRIF) ; source = d'où le fichier a été identifié (conteneur ou nom). library_orphans : mises à jour/DLC identifiés
+  // dont le jeu parent n'est pas (encore) dans la bibliothèque — jamais un faux jeu : ils attendent, et sont rattachés dès que le jeu est importé.
+  `ALTER TABLE library_content ADD COLUMN state TEXT NOT NULL DEFAULT 'pending';
+  ALTER TABLE library_content ADD COLUMN reason TEXT;
+  ALTER TABLE library_content ADD COLUMN detail TEXT;
+  ALTER TABLE library_content ADD COLUMN needs TEXT;
+  ALTER TABLE library_content ADD COLUMN source TEXT NOT NULL DEFAULT 'container';
+  ALTER TABLE library_content ADD COLUMN installed_at INTEGER;
+  CREATE TABLE library_orphans (
+    id INTEGER PRIMARY KEY, console TEXT NOT NULL, base_key TEXT NOT NULL, kind TEXT NOT NULL, title_id TEXT, version TEXT,
+    label TEXT NOT NULL, path TEXT NOT NULL UNIQUE, size INTEGER NOT NULL, needs TEXT, source TEXT NOT NULL, added_at INTEGER NOT NULL
+  );
+  CREATE INDEX library_orphans_key ON library_orphans (console, base_key)`,
+  // v16 : fichiers que l'émulateur a créés dans son propre espace en installant ce contenu (JSON, chemins absolus) — la désinstallation retire exactement ceux-là, rien d'autre.
+  `ALTER TABLE library_content ADD COLUMN emu_files TEXT`,
+  // v17 : copie locale (dans <data>/sources/) d'une liste de sources ajoutée depuis un fichier : l'actualisation reste possible même si le fichier d'origine disparaît.
+  `ALTER TABLE source_lists ADD COLUMN local_copy TEXT`,
+  // v18 : fichiers de l'émulateur que l'installation d'un contenu a RÉÉCRITS (Vita3K fusionne une mise à jour dans le dossier du jeu) : copie de sauvegarde de chaque original (JSON
+  // cible → copie), restaurée à la désinstallation. Sans elle, une mise à jour de ce genre ne pourrait pas être défaite.
+  `ALTER TABLE library_content ADD COLUMN emu_backup TEXT`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

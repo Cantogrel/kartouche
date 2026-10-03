@@ -99,6 +99,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .btn.danger:hover { background: rgba(255,123,123,.15); }
 .tag { display: inline-block; border: 1px solid var(--border-strong); border-radius: 5px; padding: 1px 8px; font-size: 12px; margin-right: 6px; }
 .tags { margin-top: 8px; }
+.tag-state { background: #2a2f3a; }
+.tag-ok { background: #1f5a34; border-color: #2e7d4a; color: #d8f5e2; }
+.tag-busy { background: #5a4a1f; border-color: #7d672e; color: #f5e8d8; }
 .tag-p2p { background: #1f5a34; border-color: #2e7d4a; color: #d8f5e2; }
 .bp-btn .tag-p2p { margin: 0 0 0 8px; }
 .mins { position: absolute; left: 8px; bottom: 12px; font-size: 11px; background: rgba(0,0,0,.6); padding: 1px 6px; border-radius: 4px; }
@@ -260,7 +263,10 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 
 .fav-wrap { position: relative; }
 .fav-wrap .fav-mark { top: 34px; }
-.fav-wrap .pin-mark { top: 34px; }
+.fav-wrap .state-mark { position: absolute; left: 8px; top: 8px; z-index: 2; padding: 2px 8px; border-radius: 5px; font-size: 13px; background: rgba(0,0,0,.75); color: #fff; pointer-events: none; }
+.state-mark.installed { background: #1f5a34; }
+.state-mark.downloading { background: #7d672e; }
+.pin-mark { top: 34px; }
 .fav-mark { position: absolute; right: 8px; top: 8px; z-index: 2; color: #ff5d7a; font-size: 18px; text-shadow: 0 1px 4px rgba(0,0,0,.9); pointer-events: none; }
 .pin-mark { position: absolute; right: 8px; top: 8px; z-index: 2; color: var(--accent); font-size: 18px; text-shadow: 0 1px 4px rgba(0,0,0,.9); pointer-events: none; }
 /* Les deux à la fois : l'étoile se décale pour ne pas chevaucher le cœur, sinon elle prend sa place. */

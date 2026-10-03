@@ -48,6 +48,12 @@ const collectionAction = (entry: LibraryEntry): Action =>
 const uninstallAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>): Action =>
   ({ key: 'uninstall', label: t('action.uninstall'), danger: true, run: async () => { if (await confirmDialog(t('confirm.uninstall', { title: entry.title }))) await lib.removeEntry(entry.id, 'file') } })
 
+const deleteFileAction = (entry: LibraryEntry): Action =>
+  ({ key: 'file', label: t('action.deleteFile'), danger: true, run: async () => { if (await confirmDialog(t('confirm.file', { title: entry.title }))) await useLibrary.getState().removeEntry(entry.id, 'file') } })
+/** Retire la fiche de la bibliothèque (le jeu n'a plus de fichier : rien d'autre à supprimer). */
+const removeEntryAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>, back: () => void): Action =>
+  ({ key: 'entry', label: t('action.removeEntry'), run: async () => { if (await confirmDialog(t('confirm.entry', { title: entry.title }))) { await lib.removeEntry(entry.id, 'entry'); leaveIfOpen(entry.id, back) } } })
+
 /**
  * Menu rapide (clic droit sur une tuile ou dans la liste latérale) : seulement les actions les plus courantes, pas
  * les suppressions fines (ça reste dans le menu ⚙ Options complet de la fiche, pour ne pas supprimer quelque chose
@@ -69,7 +75,10 @@ function quickActionsFor(entry: LibraryEntry): Action[] {
   }
   if (list.length) list.push(sep('sep1'))
   list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry))
-  if (hasFile && entry.hasSources) list.push(sep('sep2'), uninstallAction(entry, lib))
+  // Avec une source de téléchargement : « Désinstaller » (le jeu se retélécharge) ; sinon « Supprimer le fichier » (aller simple). Jamais les deux.
+  if (hasFile) list.push(sep('sep2'), entry.hasSources ? uninstallAction(entry, lib) : deleteFileAction(entry))
+  // Dans la bibliothèque mais pas installé (sans fichier) : on peut retirer la fiche.
+  else list.push(sep('sep2'), removeEntryAction(entry, lib, useApp.getState().back))
   return list
 }
 
@@ -82,13 +91,11 @@ function fullActionsFor(entry: LibraryEntry, back: () => void): Action[] {
   if (!hasFile) list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
   if (hasFile) {
     list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })
-    list.push(entry.hasSources
-      ? uninstallAction(entry, lib)
-      : { key: 'file', label: t('action.deleteFile'), danger: true, run: async () => { if (await ask('file')) await lib.removeEntry(entry.id, 'file') } })
+    list.push(entry.hasSources ? uninstallAction(entry, lib) : deleteFileAction(entry))
   }
   list.push(sep('sep2'))
   list.push({ key: 'save', label: t('action.deleteSave'), danger: true, run: () => deleteSaves(entry, ask) })
-  list.push({ key: 'entry', label: t('action.removeEntry'), run: async () => { if (await ask('entry')) { await lib.removeEntry(entry.id, 'entry'); leaveIfOpen(entry.id, back) } } })
+  if (!hasFile) list.push(removeEntryAction(entry, lib, back))
   list.push({ key: 'all', label: t('action.deleteAll'), danger: true, run: async () => { if (await ask('all')) { await lib.removeEntry(entry.id, 'all'); leaveIfOpen(entry.id, back) } } })
   return list
 }

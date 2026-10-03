@@ -111,7 +111,7 @@ export interface EmulatorProgress {
 
 export interface LatestVersion { id: string; version: string | null; error?: string }
 
-export interface LaunchResult { ok: boolean; error?: 'noEmulator' | 'notInstalled' | 'noFile' | 'spawn' | 'unsupported' | 'running' | 'otherRunning' | 'zipUnreadable' | 'ciaInstallFailed' | 'vitaInstallFailed'; detail?: string }
+export interface LaunchResult { ok: boolean; error?: 'noEmulator' | 'notInstalled' | 'noFile' | 'spawn' | 'unsupported' | 'running' | 'otherRunning' | 'zipUnreadable' | 'ciaInstallFailed' | 'vitaInstallFailed' | 'vwiiWrapper'; detail?: string }
 
 /** Présent quand le jeu s'est fermé (ou a planté) très vite après son lancement, sans que l'utilisateur ne l'ait fermé lui-même. */
 export interface QuickExit {

@@ -3,6 +3,8 @@ import { FilterGroup, Tag, Badge, Cover, Button } from '@/ui'
 import { t } from '@/i18n'
 import { useApp } from '@/store/app'
 import { useSettings } from '@/store/settings'
+import { useLibrary } from '@/store/library'
+import { useDownloads } from '@/store/downloads'
 import { CONSOLES, MAKERS, consoleById } from '@shared/consoles'
 import { genreLabel } from '@shared/genres'
 import { PUBLISHER_OTHER, publisherLabel } from '@shared/publishers'
@@ -24,6 +26,14 @@ export function Catalog({ query }: { query: string }) {
   const [page, setPage] = useState<CatalogPage | null>(null)
   const [status, setStatus] = useState<{ total: number; syncing: boolean; enriched: boolean } | null>(null)
   const [progress, setProgress] = useState<SyncProgress | null>(null)
+  // Jeux déjà à la bibliothèque (gameId → fichier présent ou non) et téléchargements en cours (gameId → % ou null), pour l'indicateur des cartes.
+  const entries = useLibrary((s) => s.entries)
+  const jobs = useDownloads((s) => s.jobs)
+  useEffect(() => { void useLibrary.getState().refresh() }, [])
+  const owned = new Map<number, boolean>()
+  for (const e of entries) if (e.gameId !== null) owned.set(e.gameId, (owned.get(e.gameId) ?? false) || !e.missing)
+  const downloading = new Map<number, number | null>()
+  for (const j of Object.values(jobs)) if (j.gameId !== undefined) downloading.set(j.gameId, j.total > 0 ? Math.round((j.done / j.total) * 100) : null)
   const reqId = useRef(0)
   const contentRef = useRef<HTMLDivElement>(null)
   const scrollRestored = useRef(false)
@@ -135,10 +145,13 @@ export function Catalog({ query }: { query: string }) {
               <div className="title">{g.name}</div>
               <div className="muted">{[g.developer, g.year].filter(Boolean).join(' · ')}</div>
               <div className="tags">{g.genre && <Tag>{genreLabel(g.genre, lang)}</Tag>}</div>
-              {(g.sourceLists?.length ?? 0) > 0 && (
+              {((g.sourceLists?.length ?? 0) > 0 || owned.has(g.id) || downloading.has(g.id)) && (
                 <div className="tags source-tags">
-                  {g.sourceLists!.slice(0, SOURCE_TAGS_SHOWN).map((name) => <Tag key={name} title={t('catalog.sourceTagTitle', { name })}>⬇ {name}</Tag>)}
-                  {g.sourceLists!.length > SOURCE_TAGS_SHOWN && <Tag>+{g.sourceLists!.length - SOURCE_TAGS_SHOWN}</Tag>}
+                  {downloading.has(g.id)
+                    ? <Tag className="tag-state tag-busy">⬇ {t('catalog.downloading')}{downloading.get(g.id) !== null ? ` ${downloading.get(g.id)} %` : ''}</Tag>
+                    : owned.has(g.id) && (owned.get(g.id) ? <Tag className="tag-state tag-ok">✓ {t('catalog.installed')}</Tag> : <Tag className="tag-state">{t('catalog.inLibrary')}</Tag>)}
+                  {(g.sourceLists ?? []).slice(0, SOURCE_TAGS_SHOWN).map((name) => <Tag key={name} title={t('catalog.sourceTagTitle', { name })}>⬇ {name}</Tag>)}
+                  {(g.sourceLists?.length ?? 0) > SOURCE_TAGS_SHOWN && <Tag>+{g.sourceLists!.length - SOURCE_TAGS_SHOWN}</Tag>}
                 </div>
               )}
             </div>

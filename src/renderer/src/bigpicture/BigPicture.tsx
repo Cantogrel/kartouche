@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { t } from '@/i18n'
 import { Badge, Cover, artStyle } from '@/ui'
 import { useLibrary } from '@/store/library'
+import { useDownloads } from '@/store/downloads'
 import { useEmulators } from '@/store/emulators'
 import { useSettings } from '@/store/settings'
 import { CONSOLES, consoleById } from '@shared/consoles'
@@ -22,7 +23,7 @@ interface Opened { gameId: number | null; entryId?: number }
 /** Dernière tuile ouverte : le focus y revient à la fermeture de la fiche. */
 let lastOpened: string | null = null
 
-function Tile({ id, gameId, entryId, title, cons, dim, fav, pinned, onOpen }: { id: string; gameId: number | null; entryId?: number; title: string; cons: string; dim?: boolean; fav?: boolean; pinned?: boolean; onOpen: () => void }) {
+function Tile({ id, gameId, entryId, title, cons, dim, fav, pinned, state, onOpen }: { id: string; gameId: number | null; entryId?: number; title: string; cons: string; dim?: boolean; fav?: boolean; pinned?: boolean; state?: 'installed' | 'library' | 'downloading'; onOpen: () => void }) {
   const tag = <Badge>{label(cons)}</Badge>
   const name = <span className="card-title">{title}</span>
   return (
@@ -32,12 +33,19 @@ function Tile({ id, gameId, entryId, title, cons, dim, fav, pinned, onOpen }: { 
         : <div className="cover-fill" style={artStyle(title)}>{name}{tag}</div>}
       {fav && <span className="fav-mark">♥</span>}
       {pinned && <span className="pin-mark">★</span>}
+      {state && <span className={`state-mark ${state}`}>{t(state === 'installed' ? 'catalog.installed' : state === 'downloading' ? 'catalog.downloading' : 'catalog.inLibrary')}</span>}
     </button>
   )
 }
 
 export function BigPicture({ onExit }: { onExit: () => void }) {
   const entries = useLibrary((s) => s.entries)
+  const jobs = useDownloads((s) => s.jobs)
+  const downloadingGames = new Set(Object.values(jobs).flatMap((j) => (j.gameId !== undefined ? [j.gameId] : [])))
+  const catalogState = (gameId: number): 'installed' | 'library' | undefined => {
+    const mine = entries.filter((e) => e.gameId === gameId)
+    return mine.length === 0 ? undefined : mine.some((e) => !e.missing) ? 'installed' : 'library'
+  }
   const collections = useLibrary((s) => s.collections)
   const running = useEmulators((s) => s.running)
   const [section, setSection] = useState<Section>('home')
@@ -186,7 +194,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
 
         {section === 'catalog' && (
           <div className="bp-grid" ref={grid}>
-            {(page?.games ?? []).map((g) => <Tile key={g.id} id={`g${g.id}`} gameId={g.id} entryId={entries.find((e) => e.gameId === g.id)?.id} title={g.name} cons={g.console} dim={!entries.some((e) => e.gameId === g.id)} onOpen={() => setOpened({ gameId: g.id })} />)}
+            {(page?.games ?? []).map((g) => <Tile key={g.id} id={`g${g.id}`} gameId={g.id} entryId={entries.find((e) => e.gameId === g.id)?.id} title={g.name} cons={g.console} dim={!entries.some((e) => e.gameId === g.id) && !downloadingGames.has(g.id)} state={downloadingGames.has(g.id) ? 'downloading' : catalogState(g.id)} onOpen={() => setOpened({ gameId: g.id })} />)}
             {page && page.total > page.games.length && <button data-nav className="bp-tile bp-more" onClick={() => { focusAfterMore.current = page.games.length; setLimit(limit + PAGE) }}>{t('catalog.more')}</button>}
           </div>
         )}

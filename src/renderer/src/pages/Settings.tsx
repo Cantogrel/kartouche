@@ -222,6 +222,8 @@ function DangerSection() {
   const installed = emuList.filter((e) => e.installed)
   const [busy, setBusy] = useState(false)
   const withFile = entries.filter((e) => !e.missing).length
+  const [sourceCount, setSourceCount] = useState(0)
+  useEffect(() => { void window.api.invoke('sourceLists:list').then((l) => setSourceCount(l.length)) }, [])
 
   const run = async (confirmText: string, job: () => Promise<void>): Promise<void> => {
     if (!await confirmDialog(confirmText)) return
@@ -250,6 +252,12 @@ function DangerSection() {
           {installed.length === 0
             ? <span className="muted">{t('danger.uninstallAllEmulatorsNone')}</span>
             : <Button variant="danger" disabled={busy} onClick={() => void run(t('danger.uninstallAllEmulatorsConfirm', { n: installed.length }), uninstallAll)}>{t('danger.uninstallAllEmulators')}</Button>}
+        </div>
+        <div className="danger-row">
+          <div><strong>{t('danger.removeAllSources')}</strong><p className="muted">{t('danger.removeAllSourcesHint')}</p></div>
+          {sourceCount === 0
+            ? <span className="muted">{t('danger.removeAllSourcesNone')}</span>
+            : <Button variant="danger" disabled={busy} onClick={() => void run(t('danger.removeAllSourcesConfirm', { n: sourceCount }), async () => { await window.api.invoke('sourceLists:removeAll'); setSourceCount(0) })}>{t('danger.removeAllSources')}</Button>}
         </div>
         <div className="danger-row">
           <div><strong>{t('danger.factoryReset')}</strong><p className="muted">{t('danger.factoryResetHint')}</p></div>
@@ -300,8 +308,9 @@ function SourcesSection() {
   const [lists, setLists] = useState<SourceListSummary[]>([])
   const [url, setUrl] = useState('')
   const [addError, setAddError] = useState<string | null>(null)
-  const [busyId, setBusyId] = useState<number | 'add' | null>(null)
+  const [busyId, setBusyId] = useState<number | 'add' | 'all' | null>(null)
   const [over, setOver] = useState(false)
+  const [allReport, setAllReport] = useState<string[] | null>(null)
 
   const refresh = async (): Promise<void> => setLists(await window.api.invoke('sourceLists:list'))
   useEffect(() => { void refresh() }, [])
@@ -338,6 +347,14 @@ function SourcesSection() {
     try { await window.api.invoke('sourceLists:refresh', id) } finally { setBusyId(null); await refresh() }
   }
 
+  const refreshAll = async (): Promise<void> => {
+    setBusyId('all'); setAllReport(null)
+    try {
+      const r = await window.api.invoke('sourceLists:refreshAll')
+      setAllReport([t('sources.refreshAllDone', { n: r.refreshed }), ...r.failed.map((f) => t('sources.refreshAllFailed', { name: f.name, e: f.error }))])
+    } finally { setBusyId(null); await refresh() }
+  }
+
   const remove = async (list: SourceListSummary): Promise<void> => {
     if (!await confirmDialog(t('sources.removeConfirm', { n: list.entryCount }))) return
     setBusyId(list.id)
@@ -362,11 +379,17 @@ function SourcesSection() {
       {addError && <p className="notice">{addError}</p>}
 
       {lists.length === 0 && <p className="muted">{t('sources.empty')}</p>}
+      {lists.length > 0 && (
+        <div className="row" style={{ margin: '8px 0', justifyContent: 'flex-end' }}>
+          <Button disabled={busyId !== null} onClick={() => void refreshAll()}>{busyId === 'all' ? t('sources.refreshingAll') : t('sources.refreshAll')}</Button>
+        </div>
+      )}
+      {allReport && allReport.map((l, k) => <p key={k} className={k === 0 ? 'muted' : 'notice'}>{l}</p>)}
       {lists.map((l) => (
         <div key={l.id} className="danger-row">
           <div>
             <strong>{l.name}</strong>
-            <p className="muted">{l.url}</p>
+            <p className="muted" title={l.localCopyPath ? t('sources.copyOf', { p: l.url }) : undefined}>{l.localCopyPath ?? l.url}</p>
             <p className="muted">
               {t('sources.matched', { matched: l.matchedCount, total: l.entryCount })}
               {' · '}
@@ -375,7 +398,7 @@ function SourcesSection() {
             {l.error && <p className="notice">{l.error}</p>}
           </div>
           <div className="row">
-            <Button disabled={busyId === l.id} onClick={() => void refreshOne(l.id)}>{t('sources.refresh')}</Button>
+            <Button disabled={busyId === l.id || busyId === 'all'} onClick={() => void refreshOne(l.id)}>{t('sources.refresh')}</Button>
             <Button variant="danger" disabled={busyId === l.id} onClick={() => void remove(l)}>{t('sources.remove')}</Button>
           </div>
         </div>

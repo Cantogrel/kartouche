@@ -289,38 +289,30 @@ describe('bibliothèque', () => {
     expect(relinkUnmatched(db)).toBe(1)
     expect(listLibrary(db)[0]).toMatchObject({ gameId: newId, match: 'name' })
   })
-  // Un jeu Switch lourd (Smash Bros Ultimate) importé avec sa mise à jour et ses DLC ne doit jamais devenir
-  // plusieurs « jeux » identiques dans la bibliothèque (voir switchContent.ts). Eden n'a pas de commande pour
-  // installer une mise à jour/un DLC (seulement son propre menu File > Install Files to NAND) : RomVault refuse
-  // l'import plutôt que de copier un fichier qu'il ne peut de toute façon pas rendre jouable.
-  it('refuse d’importer une mise à jour ou un DLC Switch (Title ID) sans toucher au fichier', async () => {
+  // Un jeu Switch lourd (Smash Bros Ultimate) importé avec sa mise à jour et ses DLC ne doit jamais devenir plusieurs « jeux » identiques dans la
+  // bibliothèque : ils sont rattachés au jeu (voir library/content/, tests complets dans content/pipeline.test.ts). Ici, des « NSP » sans conteneur
+  // lisible : seul le Title ID du nom les identifie (repère le plus faible), et c'est déjà suffisant pour ne jamais en faire des jeux.
+  it('rattache une mise à jour ou un DLC Switch (Title ID du nom) à son jeu au lieu de les lister', async () => {
     const base = await importPaths(db, [rom('Smash Bros Ultimate [0100000000010000][v0].nsp', 'base')], opt())
     expect(base.items[0]).toMatchObject({ status: 'added', console: 'switch' })
     expect(listLibrary(db)).toHaveLength(1)
 
-    const updFile = rom('Smash Bros Ultimate [0100000000010800][v131072].nsp', 'update')
-    const upd = await importPaths(db, [updFile], opt())
-    expect(upd.items[0]).toMatchObject({ status: 'error' })
-    expect(upd.items[0].error).toMatch(/mise à jour switch/i)
+    const upd = await importPaths(db, [rom('Smash Bros Ultimate [0100000000010800][v131072].nsp', 'update')], opt())
+    expect(upd.items[0]).toMatchObject({ status: 'attached', contentKind: 'update' })
 
-    const dlcFile = rom('Piranha Plant [0100000000011001].nsp', 'dlc')
-    const dlc = await importPaths(db, [dlcFile], opt())
-    expect(dlc.items[0]).toMatchObject({ status: 'error' })
-    expect(dlc.items[0].error).toMatch(/dlc switch/i)
+    const dlc = await importPaths(db, [rom('Piranha Plant [0100000000011001].nsp', 'dlc')], opt())
+    expect(dlc.items[0]).toMatchObject({ status: 'attached', contentKind: 'dlc' })
 
-    // Toujours un seul jeu dans la bibliothèque, et les fichiers d'origine n'ont pas bougé (jamais copiés ni supprimés).
     expect(listLibrary(db)).toHaveLength(1)
-    expect(db.prepare('SELECT COUNT(*) AS n FROM library_content').get()).toEqual({ n: 0 })
-    expect(existsSync(updFile)).toBe(true)
-    expect(existsSync(dlcFile)).toBe(true)
+    expect(db.prepare('SELECT COUNT(*) AS n FROM library_content').get()).toEqual({ n: 2 })
   })
-  it('refuse aussi un DLC/mise à jour dont le jeu de base n’est pas dans la bibliothèque (même message, pas de jeu fantôme)', async () => {
+  it('un DLC/une mise à jour dont le jeu de base n’est pas dans la bibliothèque attend son jeu (pas de jeu fantôme)', async () => {
     const r = await importPaths(db, [rom('Piranha Plant [0100000000011001].nsp', 'dlc')], opt())
-    expect(r.items[0].status).toBe('error')
+    expect(r.items[0].status).toBe('orphan')
     expect(listLibrary(db)).toHaveLength(0)
   })
   // Cas réel rencontré : le dump de mise à jour n'a pas de Title ID dans son nom, seulement le mot « Update ».
-  it('refuse aussi une mise à jour Switch sans Title ID lisible (repli mot-clé)', async () => {
+  it('refuse une mise à jour Switch sans Title ID lisible (repli mot-clé) : jeu parent invérifiable, fichier laissé en place', async () => {
     const f = rom('Super Smash Bros. Ultimate Switch NSP Update v2031616.nsp', 'update')
     const r = await importPaths(db, [f], opt())
     expect(r.items[0]).toMatchObject({ status: 'error' })

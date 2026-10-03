@@ -7,10 +7,12 @@ import { randomBytes } from 'node:crypto'
 import type { DownloadProgress } from '@shared/downloads'
 import type { AppPaths } from '@shared/ipc'
 import { migrate } from '../db/migrations'
+import { makeWuaFiles } from '../library/content/emu.testutil'
+import { VWII_REASON } from '../library/content/wua'
 import { listLibrary } from '../library/libraryStore'
 import { cancelDownload, downloadSource, type HttpFetch } from './engine'
 import { installDownload } from './install'
-import { downloadTorrent, fileBytesDone, pickTorrentFile, setTorrentClientOptions, uriKind } from './torrent'
+import { downloadTorrent, fileBytesDone, pickTorrentFile, setTorrentClientOptions, torrentKey, uriKind } from './torrent'
 
 // Réseau 100 % local : un client WebTorrent « semeur » sur 127.0.0.1, aucun tracker/DHT/pair public, aucun contenu réel.
 const LOCAL = { dht: false, tracker: true, lsd: false, natUpnp: false, natPmp: false, utp: false, webSeeds: false }
@@ -104,6 +106,16 @@ describe('pickTorrentFile', () => {
   })
 })
 
+describe('torrentKey', () => {
+  it('infohash d’un magnet (hexadécimal ou base32, casse indifférente), empreinte d’un .torrent, null sinon', () => {
+    expect(torrentKey('magnet:?xt=urn:btih:0123456789ABCDEF0123456789abcdef01234567&dn=x')).toBe('0123456789abcdef0123456789abcdef01234567')
+    expect(torrentKey('magnet:?dn=x&xt=urn:btih:5df8edfc6cd1641ae6e10131949ba2ee55b24e69&so=3')).toBe('5df8edfc6cd1641ae6e10131949ba2ee55b24e69')
+    expect(torrentKey('magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')).toBe('0'.repeat(40))
+    expect(torrentKey(Buffer.from('abc'))).toBe('a9993e364706816aba3e25717850c26c9cd0d89d')
+    expect(torrentKey('magnet:?dn=sans-hash')).toBeNull()
+  })
+})
+
 describe('downloadSource — BitTorrent', () => {
   it('magnet mono-fichier : téléchargement, progression, nettoyage', async () => {
     const data = randomBytes(300_000)
@@ -131,6 +143,20 @@ describe('downloadSource — BitTorrent', () => {
     expect(r.error).toBeUndefined()
     expect(readFileSync(r.file!)).toEqual(wanted)
     expect(readdirSync(join(cache, '1'))).toEqual(['Mario (USA).sfc'])
+  })
+
+  it('deux jeux d’une même collection téléchargés en même temps (même torrent) : les deux réussissent, aucun n’abat l’autre', async () => {
+    const a = randomBytes(300_000), b = randomBytes(250_000)
+    makeFile('Pack/Mario (USA).sfc', a)
+    makeFile('Pack/Zelda (USA).sfc', b)
+    const t = await seed(join(work, 'Pack'), 'Pack')
+    const run = (title: string, size: number, dir: string): Promise<string[]> => downloadTorrent({ input: t.magnet, workDir: join(cache, dir), title, sizeBytes: size, consoleId: 'snes', signal: new AbortController().signal, onProgress: () => {} })
+    const [ra, rb] = await Promise.all([run('Mario (USA)', a.length, 'w1'), run('Zelda (USA)', b.length, 'w2')])
+    expect(readFileSync(ra[0])).toEqual(a)
+    expect(readFileSync(rb[0])).toEqual(b)
+    // Et une seconde fois de suite : le client partagé est réutilisable après les deux.
+    const again = await run('Mario (USA)', a.length, 'w3')
+    expect(readFileSync(again[0])).toEqual(a)
   })
 
   it('torrent multi-fichiers ambigu : erreur claire, rien téléchargé', async () => {
@@ -174,6 +200,79 @@ describe('downloadSource — BitTorrent', () => {
       input: 'magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567', workDir: join(cache, 'w'), title: 'X', sizeBytes: null,
       signal: ac.signal, onProgress: () => {}, metadataTimeoutMs: 800
     })).rejects.toThrow(/métadonnées/)
+  })
+})
+
+describe('Wii U : titre Wii (vWii) emballé — jamais téléchargé', () => {
+  const T = '00050000101bff00_v0'
+  const vwii = (lead = 0): Buffer => makeWuaFiles([`${T}/code/app.xml`, `${T}/code/frisbiiU.rpx`, `${T}/code/fw.img`, `${T}/content/hif_000000.nfs`, `${T}/meta/meta.xml`], lead)
+  const normal = (): Buffer => makeWuaFiles([`${T}/code/app.xml`, `${T}/code/Game.rpx`, `${T}/content/data.bin`, `${T}/meta/meta.xml`])
+  const wiiuSource = (title: string, uris: string[]): number => {
+    db = new DatabaseSync(':memory:')
+    migrate(db)
+    db.prepare("INSERT INTO source_lists (name, url, added_at) VALUES ('L', 'https://x/l.json', 0)").run()
+    db.prepare("INSERT INTO sources (list_id, console, title, uris) VALUES (1, 'wiiu', ?, ?)").run(title, JSON.stringify(uris))
+    return 1
+  }
+  /** Serveur HTTP simulé avec requêtes « Range » ; compte les octets réellement servis. */
+  const server = (file: Buffer): { fetch: HttpFetch; served: () => number } => {
+    let served = 0
+    return {
+      served: () => served,
+      fetch: async (_url, init) => {
+        const m = /bytes=(\d+)-(\d*)/.exec(init.headers['range'] ?? '')
+        if (!m) { served += file.length; return new Response(new Uint8Array(file), { status: 200, headers: { 'content-length': String(file.length) } }) }
+        const a = Number(m[1]), b = m[2] === '' ? file.length - 1 : Math.min(Number(m[2]), file.length - 1)
+        const part = file.subarray(a, b + 1); served += part.length
+        return new Response(new Uint8Array(part), { status: 206, headers: { 'content-range': `bytes ${a}-${b}/${file.length}`, 'content-length': String(part.length) } })
+      }
+    }
+  }
+
+  it('HTTP : un .wua vWii est refusé avant téléchargement (quelques octets de fin seulement) ; un .wua normal se télécharge', async () => {
+    const bad = server(vwii(2_000_000))
+    const id = wiiuSource('Mario Galaxy', ['https://x/Mario%20Galaxy.wua'])
+    const r = await downloadSource(db, id, cache, () => {}, bad.fetch)
+    expect(r).toEqual({ ok: false, error: VWII_REASON })
+    expect(bad.served()).toBeLessThan(10_000)
+    expect(existsSync(join(cache, '1', 'Mario Galaxy.wua.part'))).toBe(false)
+    const ok = server(normal())
+    const id2 = wiiuSource('Jeu', ['https://x/Jeu.wua'])
+    const r2 = await downloadSource(db, id2, cache, () => {}, ok.fetch)
+    expect(r2.ok).toBe(true)
+  })
+
+  it('HTTP sans prise en charge de « Range » : aucun blocage (l’import tranchera)', async () => {
+    const file = vwii()
+    const noRange: HttpFetch = async () => new Response(new Uint8Array(file), { status: 200, headers: { 'content-length': String(file.length) } })
+    const id = wiiuSource('Sans range', ['https://x/Sans.wua'])
+    expect((await downloadSource(db, id, cache, () => {}, noRange)).ok).toBe(true)
+  })
+
+  it('torrent : un .wua vWii est refusé sans télécharger le reste ; un .wua normal passe', { timeout: 30_000 }, async () => {
+    const run = async (data: Buffer, dir: string): Promise<string[]> => {
+      const f = makeFile(`${dir}/Jeu (USA).wua`, data)
+      const t = await seed(f, "Jeu (USA).wua")
+      return downloadTorrent({ input: t.magnet, workDir: join(cache, dir), title: 'Jeu (USA)', sizeBytes: null, consoleId: 'wiiu', signal: new AbortController().signal, onProgress: () => {} })
+    }
+    await expect(run(vwii(300_000), 'v')).rejects.toThrow(/vWii/)
+    const ok = await run(makeWuaFiles([`${T}/code/app.xml`, `${T}/code/Game.rpx`, `${T}/meta/meta.xml`], 300_000), 'n')
+    expect(existsSync(ok[0])).toBe(true)
+  })
+})
+
+describe('Wii U vWii via downloadSource : dossier de travail supprimé', () => {
+  it('un torrent .wua vWii : erreur claire et rien ne reste dans le cache', async () => {
+    const T = '00050000101bff00_v0'
+    const f = makeFile('g/Galaxy (EU).wua', makeWuaFiles([`${T}/code/frisbiiU.rpx`, `${T}/code/fw.img`, `${T}/meta/meta.xml`], 200_000))
+    const t = await seed(f, 'Galaxy (EU).wua')
+    db = new DatabaseSync(':memory:')
+    migrate(db)
+    db.prepare("INSERT INTO source_lists (name, url, added_at) VALUES ('L', 'https://x/l.json', 0)").run()
+    db.prepare("INSERT INTO sources (list_id, console, title, uris) VALUES (1, 'wiiu', 'Galaxy (EU)', ?)").run(JSON.stringify([t.magnet]))
+    const r = await downloadSource(db, 1, cache, () => {})
+    expect(r).toEqual({ ok: false, error: VWII_REASON })
+    expect(existsSync(join(cache, '1', 'torrent-0'))).toBe(false)
   })
 })
 

@@ -7,6 +7,8 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { DownloadProgress } from '@shared/downloads'
 import { uriKind } from '@shared/uriKind'
 import { downloadTorrent, fetchTorrentFile } from './torrent'
+import { remoteWuaProblem } from './precheck'
+import { VWII_REASON } from '../library/content/wua'
 
 export type Report = (p: DownloadProgress) => void
 export type HttpFetch = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<Response>
@@ -52,17 +54,22 @@ async function fetchOne(uri: string, part: string, sourceId: number, signal: Abo
   report({ sourceId, phase: 'downloading', done, total })
 }
 
-/** Source BitTorrent (magnet ou URL .torrent) : le fichier choisi est déplacé à plat dans `dir`, le dossier de travail du client supprimé. */
-async function fetchTorrent(uri: string, kind: 'magnet' | 'torrent', work: string, dir: string, row: { title: string; size_bytes: number | null }, sourceId: number, signal: AbortSignal, report: Report, httpFetch: HttpFetch): Promise<string> {
+/**
+ * Source BitTorrent (magnet ou URL .torrent). Un seul fichier retenu : déplacé à plat dans `dir`, dossier de travail du client supprimé. Plusieurs (disque et ses
+ * pistes, jeu et ses mises à jour/DLC — voir `planTorrent`) : laissés dans leur dossier de travail avec leur arborescence (un .cue référence ses pistes par chemin) ;
+ * l'appelant les installe puis supprime le dossier.
+ */
+async function fetchTorrent(uri: string, kind: 'magnet' | 'torrent', work: string, dir: string, row: { title: string; size_bytes: number | null; console: string }, sourceId: number, signal: AbortSignal, report: Report, httpFetch: HttpFetch, dhtCacheFile: string): Promise<string[]> {
   const input = kind === 'magnet' ? uri : await fetchTorrentFile(uri, signal, httpFetch)
   const got = await downloadTorrent({
-    input, workDir: work, title: row.title, sizeBytes: row.size_bytes, signal,
+    input, workDir: work, title: row.title, sizeBytes: row.size_bytes, consoleId: row.console, signal, dhtCacheFile,
     onProgress: (done, total) => report({ sourceId, phase: 'downloading', done, total, message: total ? undefined : 'connecting' })
   })
-  const dest = join(dir, basename(got))
-  await rename(got, dest)
+  if (got.length > 1) return got
+  const dest = join(dir, basename(got[0]))
+  await rename(got[0], dest)
   await rm(work, { recursive: true, force: true })
-  return dest
+  return [dest]
 }
 
 /**
@@ -70,8 +77,8 @@ async function fetchTorrent(uri: string, kind: 'magnet' | 'torrent', work: strin
  * (ou dossier de travail BitTorrent) partiel survit à un échec réseau (repris au prochain appel) mais est retiré sur une annulation explicite.
  * Ne fait ni extraction ni vérification ni installation bibliothèque : uniquement le téléchargement (voir P05).
  */
-export async function downloadSource(db: DatabaseSync, sourceId: number, cacheDir: string, report: Report, httpFetch: HttpFetch = fetch): Promise<{ ok: boolean; file?: string; error?: string }> {
-  const row = db.prepare('SELECT uris, title, size_bytes FROM sources WHERE id = ?').get(sourceId) as { uris: string; title: string; size_bytes: number | null } | undefined
+export async function downloadSource(db: DatabaseSync, sourceId: number, cacheDir: string, report: Report, httpFetch: HttpFetch = fetch): Promise<{ ok: boolean; file?: string; /** Tous les fichiers retenus (le principal en premier) : plusieurs pour un torrent dont le disque ou le jeu en demande davantage. */ files?: string[]; error?: string }> {
+  const row = db.prepare('SELECT uris, title, size_bytes, console FROM sources WHERE id = ?').get(sourceId) as { uris: string; title: string; size_bytes: number | null; console: string } | undefined
   if (!row) return { ok: false, error: 'source introuvable' }
   const uris = JSON.parse(row.uris) as string[]
   if (!uris.length) return { ok: false, error: 'aucun lien pour cette source' }
@@ -87,22 +94,28 @@ export async function downloadSource(db: DatabaseSync, sourceId: number, cacheDi
       const kind = uriKind(uri)
       try {
         let dest: string
+        let files: string[] | undefined
         if (kind === 'http') {
           dest = join(dir, filenameFromUri(uri))
           const part = `${dest}.part`
           currentPart = part
+          // Titre Wii (vWii) emballé pour Wii U : repéré par quelques octets de fin d'archive, avant de télécharger des Go inutilisables.
+          if (row.console === 'wiiu') { const bad = await remoteWuaProblem(uri, controller.signal, httpFetch); if (bad) throw new Error(bad) }
           await fetchOne(uri, part, sourceId, controller.signal, report, httpFetch)
           await rename(part, dest)
         } else {
           const work = join(dir, `torrent-${i}`)
           currentPart = work
-          dest = await fetchTorrent(uri, kind, work, dir, row, sourceId, controller.signal, report, httpFetch)
+          files = await fetchTorrent(uri, kind, work, dir, row, sourceId, controller.signal, report, httpFetch, join(cacheDir, 'dht-nodes.json'))
+          dest = files[0]
         }
         report({ sourceId, phase: 'done', done: 1, total: 1 })
-        return { ok: true, file: dest }
+        return { ok: true, file: dest, files: files ?? [dest] }
       } catch (e) {
         if (controller.signal.aborted) break
         lastError = e instanceof Error ? e.message : String(e)
+        // Titre vWii refusé : rien à reprendre plus tard, on libère aussitôt ce que la lecture de fin d'archive a alloué (un torrent préalloue la taille du fichier).
+        if (lastError === VWII_REASON && currentPart) await rm(currentPart, { recursive: true, force: true }).catch(() => {})
       }
     }
     if (controller.signal.aborted) {
