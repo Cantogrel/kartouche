@@ -1,6 +1,6 @@
 {
   "name": "romvault",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Bibliothèque de jeux d'émulation pour Windows",
   "main": "./out/main/index.js",
   "private": true,
@@ -10,6 +10,7 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
+    "test:real": "set ROMVAULT_REAL_EMU=1&& vitest run src/main/emulators/content/real-emulators.test.ts src/main/library/content/real-content.test.ts",
     "dist": "electron-vite build && electron-builder --win --publish never",
     "dist:dir": "electron-vite build && electron-builder --win --dir --publish never"
   },

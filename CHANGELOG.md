@@ -3,6 +3,25 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.2.4
+
+- Mises à jour et DLC (Switch, 3DS, PS3, Wii U, PS Vita) : ils sont identifiés par l'identifiant natif lu dans le fichier,
+  rattachés au bon jeu (jamais à un autre, jamais comme un faux jeu) et installés avec le mécanisme propre à chaque
+  émulateur (Eden, Azahar, RPCS3, Cemu, Vita3K). L'état s'affiche sur la fiche du jeu ; désinstaller un jeu désinstalle
+  proprement tout son contenu additionnel, et seulement ce que RomVault a lui-même installé.
+- Torrents multi-fichiers : seuls les fichiers utiles au jeu sont téléchargés (le jeu, ses mises à jour et ses DLC, les
+  pistes d'un disque…), pas le reste de la collection ; un torrent partagé par des centaines de jeux (Minerva, switch
+  games) fonctionne, y compris pour plusieurs téléchargements simultanés.
+- Recherche de pairs corrigée : le DHT public ne trouvait aucun pair sous Windows, seuls les trackers servaient. Les
+  magnets dont le tracker est mort fonctionnent maintenant ; connexions en TCP, nœuds DHT mémorisés entre deux
+  téléchargements, et message clair quand personne ne partage un torrent.
+- Switch : les fichiers .nsz (NSP compressés) sont décompressés automatiquement en .nsp à l'import et vérifiés (un fichier
+  corrompu est refusé).
+- Wii U : les jeux Wii (vWii) emballés pour Wii U, comme Super Mario Galaxy, ne sont plus téléchargés (Cemu ne sait pas
+  les exécuter, écran noir) ; un tel jeu déjà présent affiche un message clair au lancement.
+- Mise à jour de l'application : la vérification se fait dès l'affichage de la fenêtre et réessaie 10 s plus tard en cas
+  d'échec.
+
 ## 0.2.3
 
 - Archives .7z et .rar : un téléchargement ou un import dans ce format est maintenant extrait automatiquement (plus
