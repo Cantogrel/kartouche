@@ -29,6 +29,8 @@ Une section `## <version>` par version ; le texte est repris tel quel dans le po
 - **Langues** : l'interface est disponible en français, anglais, espagnol, allemand, italien, portugais (Portugal),
   chinois simplifié et japonais. Vous pouvez ajouter votre propre langue avec un fichier JSON (Paramètres → Langue).
   Les traductions n'ont pas été relues par des locuteurs natifs.
+- Émulateurs personnalisés : un `.bat` ou `.cmd` se lance correctement, et supprimer un émulateur retire aussi son statut
+  d'émulateur par défaut d'une console (le suivant ajouté ne le récupère plus).
 - Big Picture : bouton Médias sur la fiche, trailers triés par titre, mêmes modifications d'affichage qu'en classique.
 - Le tag torrent est affiché au-dessus du bouton Télécharger sans décaler la rangée de boutons.
 
