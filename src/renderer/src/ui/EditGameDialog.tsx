@@ -39,6 +39,11 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
   /** Lancement d'un exécutable ajouté (exécutable, arguments, dossier) : enregistré avec le reste. */
   const [launch, setLaunch] = useState<{ exe: string; args: string; cwd: string } | null>(null)
   const gameId = entry?.gameId ?? null
+  // Hooks avant le retour anticipé plus bas (sinon React plante au passage « fiche chargée » et tout devient noir).
+  // Fond par défaut : une image IGDB du jeu, jamais la bannière (voir defaultBackgroundId).
+  const catalogMedia = useGameMedia(gameId)
+  const pcMeta = usePcMeta(entry)
+  const defaultBg = defaultBackgroundId(entry?.kind === 'rom' ? catalogMedia : pcMeta?.media, entry?.kind !== 'rom')
   const title = entry?.title ?? ''
 
   useEffect(() => {
@@ -118,10 +123,6 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
     } finally { setBusy(false) }
   }
 
-  // Fond par défaut : une image IGDB du jeu, jamais la bannière (voir defaultBackgroundId).
-  const catalogMedia = useGameMedia(gameId)
-  const pcMeta = usePcMeta(entry)
-  const defaultBg = defaultBackgroundId(entry?.kind === 'rom' ? catalogMedia : pcMeta?.media, entry?.kind !== 'rom')
   const preview = (f: OverrideImageField): string | null => (ov[f] ? `kimg://custom/${ov[f]}`
     : f === 'background' ? (defaultBg ? igdbImageUrl(defaultBg, 't_screenshot_med') : null)
     : gameId !== null ? `kimg://${ORIGINAL_KIND[f]}/${gameId}` : null)
