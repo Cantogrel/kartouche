@@ -148,7 +148,13 @@ export const MIGRATIONS: readonly string[] = [
     id TEXT PRIMARY KEY, name TEXT NOT NULL, exe TEXT NOT NULL, args TEXT NOT NULL DEFAULT '"{rom}"',
     consoles TEXT NOT NULL DEFAULT '[]', extensions TEXT NOT NULL DEFAULT '[]', created_at INTEGER NOT NULL
   );
-  ALTER TABLE library ADD COLUMN emulator_id TEXT`
+  ALTER TABLE library ADD COLUMN emulator_id TEXT`,
+  // v23 : fiche IGDB des jeux PC (exécutables, jeux de launchers) : origine affichée sous les surcharges. `matched` = 0 : recherche sans résultat (retentée après 24 h).
+  // `cover` : chemin relatif de la jaquette enregistrée (`pc/<entrée>/cover-<ts>.<ext>`, servie par kimg://custom/).
+  `CREATE TABLE pc_meta (
+    entry_id INTEGER PRIMARY KEY REFERENCES library(id) ON DELETE CASCADE, matched INTEGER NOT NULL DEFAULT 0, name TEXT, summary TEXT, genres TEXT,
+    year INTEGER, developer TEXT, media TEXT, cover TEXT, fetched_at INTEGER NOT NULL
+  )`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

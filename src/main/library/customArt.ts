@@ -31,7 +31,10 @@ export function sniffImage(head: Buffer): ImageType | null {
 /** Chemin absolu d'une image personnelle, ou null s'il sort du dossier des images personnelles, ou n'existe pas. */
 export function resolveCustomArtPath(dataDir: string, rel: string): string | null {
   if (normalizeOverride('cover', rel) !== rel) return null // mêmes règles que la valeur d'une surcharge : relatif, sans « .. », en slashs
-  const root = resolve(customArtDir(dataDir))
+  // `pc/<entrée>/<fichier>` : jaquette d'un jeu PC identifié (dossier pc-art, voir library/pcMeta.ts), pas une image de l'utilisateur.
+  const isPc = rel.startsWith('pc/')
+  const root = resolve(isPc ? join(dataDir, 'pc-art') : customArtDir(dataDir))
+  if (isPc) rel = rel.slice(3)
   const abs = resolve(root, rel)
   return abs.startsWith(root + sep) && existsSync(abs) ? abs : null
 }

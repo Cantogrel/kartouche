@@ -5,6 +5,7 @@ import type { CustomEmulatorState, SaveEmulatorResult } from './customEmulators'
 import type { EmulatorOption } from './emulatorChoice'
 import type { EntryOverrides, OverrideField, OverrideImageField, OverrideTextField, SetImageResult } from './overrides'
 import type { ConnectorStatus, ScanReport } from './connectors'
+import type { PcMetaView } from './pcMeta'
 import type { AddExeResult } from './exeEntry'
 import type { LaunchSpec } from './launch'
 import type { AchievementsResult } from './achievements'
@@ -76,6 +77,10 @@ export interface IpcChannels {
   'customEmulators:delete': { req: string; res: void }
   /** Ouvre l'émulateur seul (sans jeu), pour vérifier qu'il démarre ; faux si l'exécutable est introuvable. */
   'customEmulators:open': { req: string; res: boolean }
+  /** Fiche IGDB d'un jeu PC (exécutable, jeu de launcher) ; null tant qu'il n'est pas reconnu. */
+  'library:pcMeta': { req: number; res: PcMetaView | null }
+  /** (Re)lance l'identification d'un jeu PC, avec un autre titre de recherche si `title` est donné. */
+  'library:identify': { req: { id: number; title?: string }; res: PcMetaView | null }
   /** Launchers pris en charge : détectés sur ce PC ? activés ? combien de jeux ? */
   'connectors:list': { req: void; res: ConnectorStatus[] }
   'connectors:setEnabled': { req: { id: string; enabled: boolean }; res: void }
@@ -234,6 +239,8 @@ export interface IpcEvents {
   'download:progress': DownloadProgress
   'game:session': GameSession
   'update:state': UpdateState
+  /** Des fiches de jeux PC viennent d'être identifiées en arrière-plan : la bibliothèque affichée est à relire. */
+  'library:metaUpdated': void
   /** Le thème clair/sombre de Windows a changé pendant que l'app tourne (réglage 'auto' uniquement). */
   'theme:osDark': boolean
 }

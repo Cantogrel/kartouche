@@ -581,5 +581,12 @@
   "launchers.rescan": "Scan",
   "launchers.report": "{found} game(s) found, {added} added, {dup} already present elsewhere.",
   "launchers.absent": "Launcher not found.",
-  "launchers.error": "Could not read: {error}"
+  "launchers.error": "Could not read: {error}",
+  "launcher.from": "{source} game",
+  "identify.title": "Identification",
+  "identify.found": "Matched: {name}",
+  "identify.notFound": "Not matched yet. Enter the game's name to search again.",
+  "identify.search": "Search",
+  "identify.searching": "Searching…",
+  "identify.none": "No matching game found."
 }

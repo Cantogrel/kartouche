@@ -13,6 +13,7 @@ import { OVERRIDE_FIELDS, OVERRIDE_IMAGE_FIELDS, type EntryOverrides, type Overr
 import { launchCheckPath, parseLaunchSpec, type EntryKind } from '@shared/launch'
 import { loadOverrides } from './overrides'
 import { customArtDir, removeEntryArt } from './customArt'
+import { loadPcCovers, removePcArt } from './pcMeta'
 
 interface Row {
   id: number; game_id: number | null; console: string; title: string; path: string; size: number; match: string
@@ -20,10 +21,11 @@ interface Row {
   kind: string; source: string | null; launch: string | null; emulator_id: string | null
 }
 
-const toEntry = (r: Row, collections: number[] = [], hasSources = false, overrides: EntryOverrides = {}): LibraryEntry => ({
+const toEntry = (r: Row, collections: number[] = [], hasSources = false, overrides: EntryOverrides = {}, pcCover?: string): LibraryEntry => ({
   id: r.id, gameId: r.game_id, console: r.console, title: r.title, shownTitle: overrides.title ?? r.title,
   overridden: OVERRIDE_FIELDS.filter((f) => overrides[f] !== undefined),
-  art: Object.fromEntries(OVERRIDE_IMAGE_FIELDS.filter((f) => overrides[f] !== undefined).map((f) => [f, overrides[f]])) as Partial<Record<OverrideImageField, string>>, kind: r.kind as EntryKind, source: r.source, emulatorId: r.emulator_id, path: r.path, size: r.size, match: r.match as MatchKind,
+  // Images affichées : celles de l'utilisateur, sinon la jaquette trouvée pour un jeu PC (jamais comptée dans `overridden`).
+  art: { ...(pcCover ? { cover: pcCover } : {}), ...Object.fromEntries(OVERRIDE_IMAGE_FIELDS.filter((f) => overrides[f] !== undefined).map((f) => [f, overrides[f]])) } as Partial<Record<OverrideImageField, string>>, kind: r.kind as EntryKind, source: r.source, emulatorId: r.emulator_id, path: r.path, size: r.size, match: r.match as MatchKind,
   missing: r.missing === 1, addedAt: r.added_at, playMinutes: r.play_minutes, lastPlayed: r.last_played,
   favorite: r.favorite === 1, pinned: r.pinned === 1, collections, hasSources
 })
@@ -63,15 +65,16 @@ export function listLibrary(db: DatabaseSync): LibraryEntry[] {
   const mem = membership(db)
   const withSources = gamesWithSources(db)
   const overrides = loadOverrides(db)
+  const covers = loadPcCovers(db)
   const entries = (db.prepare('SELECT * FROM library ORDER BY title COLLATE NOCASE').all() as unknown as Row[])
-    .map((r) => toEntry(r, mem.get(r.id), r.game_id !== null && withSources.has(r.game_id), overrides.get(r.id)))
+    .map((r) => toEntry(r, mem.get(r.id), r.game_id !== null && withSources.has(r.game_id), overrides.get(r.id), covers.get(r.id)))
   // Liste triée par titre affiché : seulement quand un titre a été modifié (sinon l'ordre SQL d'origine est déjà le bon).
   if (entries.some((e) => e.shownTitle !== e.title)) entries.sort((a, b) => a.shownTitle.toLowerCase().localeCompare(b.shownTitle.toLowerCase()))
   return entries
 }
 
 const entryById = (db: DatabaseSync, id: number): LibraryEntry =>
-  toEntry(db.prepare('SELECT * FROM library WHERE id = ?').get(id) as unknown as Row, undefined, undefined, loadOverrides(db, [id]).get(id))
+  toEntry(db.prepare('SELECT * FROM library WHERE id = ?').get(id) as unknown as Row, undefined, undefined, loadOverrides(db, [id]).get(id), loadPcCovers(db).get(id))
 
 /**
  * Retente l'identification des entrées sans fiche VALIDE : `game_id` NULL (jeu absent du catalogue au moment de
@@ -134,7 +137,7 @@ export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAc
   if (r.kind !== 'rom') {
     if (action === 'entry' || action === 'all') {
       db.prepare('DELETE FROM library WHERE id = ?').run(id)
-      if (dataDir) await removeEntryArt(null, dataDir, id)
+      if (dataDir) { await removeEntryArt(null, dataDir, id); await removePcArt(dataDir, id) }
     }
     return
   }

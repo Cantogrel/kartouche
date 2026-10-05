@@ -4,6 +4,7 @@ import { Modal } from './Modal'
 import { confirmDialog } from './AskDialog'
 import { t } from '@/i18n'
 import { useLibrary } from '@/store/library'
+import type { PcMetaView } from '@shared/pcMeta'
 import { baseViewFrom, YEAR_MAX, YEAR_MIN, type BaseView, type EntryOverrides, type OverrideImageField, type OverrideTextField } from '@shared/overrides'
 
 /*
@@ -28,6 +29,10 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
   const [edits, setEdits] = useState<Partial<Record<OverrideTextField, string>>>({})
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** Jeu PC : fiche IGDB trouvée (origine des champs) et titre de la recherche manuelle. */
+  const [pc, setPc] = useState<PcMetaView | null>(null)
+  const [search, setSearch] = useState('')
+  const [searching, setSearching] = useState(false)
   /** Lancement d'un exécutable ajouté (exécutable, arguments, dossier) : enregistré avec le reste. */
   const [launch, setLaunch] = useState<{ exe: string; args: string; cwd: string } | null>(null)
   const gameId = entry?.gameId ?? null
@@ -36,11 +41,12 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
   useEffect(() => {
     let off = false
     void (async () => {
-      const [o, game] = await Promise.all([window.api.invoke('library:overrides', entryId), gameId !== null ? window.api.invoke('catalog:get', gameId) : Promise.resolve(null)])
+      const [o, game, pcView] = await Promise.all([window.api.invoke('library:overrides', entryId), gameId !== null ? window.api.invoke('catalog:get', gameId) : Promise.resolve(null), entry?.kind !== undefined && entry.kind !== 'rom' ? window.api.invoke('library:pcMeta', entryId) : Promise.resolve(null)])
       if (off) return
       setOv(o)
+      setPc(pcView)
       if (entry?.kind === 'exe') { const l = await window.api.invoke('library:launchSpec', entryId); if (!off && l) setLaunch({ exe: l.exe ?? '', args: l.args ?? '', cwd: l.cwd ?? '' }) }
-      setBase(baseViewFrom(game, null, title))
+      setBase(baseViewFrom(game, pcView?.details ?? null, title))
       // La fiche (description, genre de repli…) peut demander du réseau : elle complète les valeurs d'origine quand elle arrive, sans bloquer la fenêtre.
       if (gameId !== null) void window.api.invoke('catalog:details', { id: gameId }).then((d) => { if (!off) setBase(baseViewFrom(game, d, title)) }).catch(() => undefined)
     })()
@@ -54,6 +60,16 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
   const modified = (f: OverrideTextField): boolean => { const v = value(f).trim(); return v !== '' && v !== original(f) }
   const setText = (f: OverrideTextField, v: string): void => { setError(null); setEdits((e) => ({ ...e, [f]: v })) }
 
+  const identify = async (): Promise<void> => {
+    setSearching(true); setError(null)
+    try {
+      const r = await window.api.invoke('library:identify', { id: entryId, title: search.trim() || undefined })
+      setPc(r)
+      if (r) setBase(baseViewFrom(null, r.details, title))
+      else setError(t('identify.none'))
+      await refresh()
+    } finally { setSearching(false) }
+  }
   const reload = async (): Promise<void> => { setOv(await window.api.invoke('library:overrides', entryId)); await refresh() }
   const resetField = async (f: OverrideTextField | OverrideImageField): Promise<void> => {
     setBusy(true)
@@ -117,6 +133,13 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
             )}
           </label>
         ))}
+        {entry.kind !== 'rom' && (
+          <div className="field edit-field" style={{ maxWidth: 'none' }}>
+            <span className="edit-label">{t('identify.title')}</span>
+            <span className="muted">{pc ? t('identify.found', { name: pc.name }) : t('identify.notFound')}</span>
+            <div className="row"><input value={search} placeholder={title} onChange={(e) => setSearch(e.target.value)} /><Button disabled={searching} onClick={() => void identify()}>{searching ? t('identify.searching') : t('identify.search')}</Button></div>
+          </div>
+        )}
         {launch && (
           <>
             <h3 className="edit-section">{t('exe.launch')}</h3>

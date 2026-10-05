@@ -581,5 +581,12 @@
   "launchers.rescan": "Analyser",
   "launchers.report": "{found} jeu(x) trouvé(s), {added} ajouté(s), {dup} déjà présent(s) ailleurs.",
   "launchers.absent": "Launcher introuvable.",
-  "launchers.error": "Lecture impossible : {error}"
+  "launchers.error": "Lecture impossible : {error}",
+  "launcher.from": "Jeu {source}",
+  "identify.title": "Identification",
+  "identify.found": "Reconnu : {name}",
+  "identify.notFound": "Pas encore reconnu. Indiquez le nom du jeu pour relancer la recherche.",
+  "identify.search": "Rechercher",
+  "identify.searching": "Recherche…",
+  "identify.none": "Aucun jeu correspondant trouvé."
 }
