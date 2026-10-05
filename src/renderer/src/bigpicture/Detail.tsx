@@ -36,8 +36,11 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   // qui ferait défiler les titres en place (souvent longs, ex. « (Europe, Australia) (En,Fr,De,Es,It) » : ça débordait
   // et cassait la barre d'actions avec `white-space: nowrap` sur `.bp-btn`).
   const [sources, setSources] = useState<GameSource[]>([])
-  const [sourceId, setSourceId] = useState<number | undefined>(undefined)
+  const [pickedId, setSourceId] = useState<number | undefined>(undefined)
   const [pickingSource, setPickingSource] = useState(false)
+  // Le job vit dans le store global : si la fiche est ouverte pendant un téléchargement, la source active prime sur la 1re de la liste.
+  const activeId = useDownloads((s) => sources.find((x) => s.jobs[x.id])?.id)
+  const sourceId = activeId ?? pickedId
   const job = useDownloads((s) => (sourceId !== undefined ? s.jobs[sourceId] : undefined))
   const startDownload = useDownloads((s) => s.start)
   const cancelDownload = useDownloads((s) => s.cancel)
@@ -114,7 +117,6 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
                 </button>
               : <button data-nav className="bp-btn primary" onClick={clickDownload}>⬇ {t('download.button')}{sources.length === 1 && sources[0].sizeBytes ? ` · ${formatSize(sources[0].sizeBytes)}` : ''}</button>)}
             {owned && <button data-nav className="bp-btn" onClick={() => void useLibrary.getState().setFlag(owned.id, { favorite: !owned.favorite })}>{owned.favorite ? '♥' : '♡'} {t(owned.favorite ? 'fav.remove' : 'fav.add')}</button>}
-            {owned?.missing && <span className="muted">{t('game.noFile')}</span>}
             <button data-nav className="bp-btn" onClick={onClose}>{t('bp.back')}</button>
           </div>
           {/* B (retour) et X (favoris) agissent tout de suite en plus des boutons ci-dessus, sans devoir y amener le focus : cf. le gestionnaire `opened` dans BigPicture.tsx. Pas d'indice ici (redondant avec les boutons visibles). */}

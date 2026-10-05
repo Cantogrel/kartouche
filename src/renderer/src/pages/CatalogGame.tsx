@@ -83,7 +83,12 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
  * jeu attendu et l'installe dans la bibliothèque (P05) — jamais d'installation silencieuse si le hash ne correspond pas.
  */
 function DownloadButton({ sources, gameName, gameId }: { sources: GameSource[]; gameName: string; gameId: number }) {
-  const [selected, setSelected] = useState(sources[0]?.id)
+  const [picked, setPicked] = useState(sources[0]?.id)
+  // Le téléchargement vit dans le store global : à la réouverture de la fiche, la sélection locale retombe sur la 1re source,
+  // alors que le job en cours peut porter sur une autre — la source active prime tant qu'il tourne.
+  const activeId = useDownloads((s) => sources.find((x) => s.jobs[x.id])?.id)
+  const selected = activeId ?? picked
+  const setSelected = setPicked
   const job = useDownloads((s) => (selected !== undefined ? s.jobs[selected] : undefined))
   const startDownload = useDownloads((s) => s.start)
   const cancelDownload = useDownloads((s) => s.cancel)

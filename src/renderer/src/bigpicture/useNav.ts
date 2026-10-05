@@ -5,6 +5,26 @@ import { heldActions, pickNext, Repeater, rightStickScroll, type Dir, type PadAc
 
 const KEYS: Record<string, PadAction> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Escape: 'back', F11: 'start', PageUp: 'prev', PageDown: 'next', Home: 'prevFilter', End: 'nextFilter' }
 
+/**
+ * Saisie au clavier physique d'un texte (recherche) : caractères imprimables et Retour arrière, sans toucher aux
+ * raccourcis (Ctrl/Alt/Méta). L'espace n'est pris qu'une fois du texte saisi, sinon il garde son rôle de clic sur l'élément focalisé.
+ */
+export function useTypeText(value: string, onChange: (v: string) => void, enabled: boolean): void {
+  const cur = useRef({ value, onChange })
+  cur.current = { value, onChange }
+  useEffect(() => {
+    if (!enabled) return
+    const key = (e: KeyboardEvent): void => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return
+      const { value: v, onChange: set } = cur.current
+      if (e.key === 'Backspace') { if (v) { e.preventDefault(); set(v.slice(0, -1)) } }
+      else if (e.key.length === 1 && (e.key !== ' ' || v)) { e.preventDefault(); set(v + e.key.toLowerCase()) }
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [enabled])
+}
+
 /** Racine de focus active : la dernière `[data-focus-root]` du document (une fenêtre superposée prend la main). */
 function activeRoot(): HTMLElement | null {
   const roots = document.querySelectorAll<HTMLElement>('[data-focus-root]')

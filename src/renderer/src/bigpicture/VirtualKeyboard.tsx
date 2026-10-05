@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { t } from '@/i18n'
-import { focusEl, navItems, useNav } from './useNav'
+import { focusEl, navItems, useNav, useTypeText } from './useNav'
 
 const ROWS = ['ABCDEFGHIJ', 'KLMNOPQRST', 'UVWXYZ0123', "456789-'.:"]
 
@@ -12,6 +12,7 @@ export function VirtualKeyboard({ value, onChange, onClose }: { value: string; o
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => { focusEl(navItems().find((e) => e.dataset.key === 'H')) }, [])
   const type = (c: string): void => onChange(value + c)
+  useTypeText(value, onChange, true)
   useNav((a) => {
     if (a === 'back' || a === 'start') onClose()
     else if (a === 'x') onChange(value.slice(0, -1))

@@ -14,6 +14,16 @@ interface DownloadsState {
   listen: () => () => void
 }
 
+/** Avancement du téléchargement en cours pour un jeu du catalogue : `undefined` = aucun, `null` = en cours sans mesure, sinon 0–100. */
+export function useGameDownloadPercent(gameId: number | null | undefined): number | null | undefined {
+  return useDownloads((s) => {
+    if (gameId == null) return undefined
+    const j = Object.values(s.jobs).find((x) => x.gameId === gameId && x.phase === 'downloading')
+    if (!j) return undefined
+    return j.total > 0 ? Math.min(100, Math.round((j.done / j.total) * 100)) : null
+  })
+}
+
 /** Store global (pas un état local du bouton) : le téléchargement continue si on quitte la fiche du jeu, et la
  * barre d'état en bas de l'app doit pouvoir le montrer quelle que soit la page affichée. */
 export const useDownloads = create<DownloadsState>((set, get) => ({

@@ -1,4 +1,4 @@
-export type CatalogSort = 'popularity' | 'title' | 'year'
+export type CatalogSort = 'popularity' | 'title' | 'year' | 'random'
 
 /** Valeur spéciale de `CatalogQuery.sources`/`CatalogPage.sources` : jeux ayant au moins une source de téléchargement (toutes listes confondues), plutôt qu'une liste précise. */
 export const SOURCE_FILTER_ANY = 'any'
@@ -36,6 +36,8 @@ export interface CatalogQuery {
   offset?: number
   /** Sens du tri ; par défaut : décroissant pour la popularité et l'année, croissant pour le titre. */
   dir?: 'asc' | 'desc'
+  /** Graine du tri `random` : même graine = même ordre (la pagination reste cohérente) ; une nouvelle graine relance le tirage. */
+  seed?: number
   limit?: number
   /** Inclure bêtas, prototypes, démos, pirates et les autres versions/régions d'un même jeu (masqués par défaut). */
   includeVariants?: boolean

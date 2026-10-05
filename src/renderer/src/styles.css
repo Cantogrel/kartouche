@@ -68,6 +68,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .nav-item .ico { width: 18px; text-align: center; opacity: .8; }
 .nav-item.small { padding: 6px 10px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .nav-item.dim { opacity: .5; }
+.nav-item.small { position: relative; overflow: hidden; }
+/* Téléchargement en cours : voile clair qui fait office de barre de progression sur toute la tuile / la ligne. */
+.dl-veil { position: absolute; left: 0; top: 0; bottom: 0; z-index: 3; background: rgba(255,255,255,.28); pointer-events: none; transition: width .4s linear; }
+.dl-veil.indeterminate { width: 100%; animation: dl-veil-pulse 1.6s ease-in-out infinite; }
+@keyframes dl-veil-pulse { 0%, 100% { opacity: .15; } 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .dl-veil.indeterminate { animation: none; opacity: .3; } }
+.reduce-motion .dl-veil.indeterminate { animation: none; opacity: .3; }
+/* Big Picture : tuiles plus grandes, vues à distance — voile un peu plus marqué. */
+.bp-tile .dl-veil { background: rgba(255,255,255,.34); }
 .search.side { width: 100%; margin: 12px 0 8px; }
 .searchbox { position: relative; display: inline-block; }
 .searchbox.side { display: block; width: 100%; }
@@ -227,7 +236,9 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .bp-detail-cover { position: relative; flex: none; align-self: flex-start; width: 260px; aspect-ratio: 2 / 3; border-radius: var(--radius-lg); overflow: hidden; }
 .bp-detail-body { display: flex; flex-direction: column; gap: 14px; justify-content: center; }
 .bp-detail-body h2, .bp-playing h2 { margin: 0; font-size: 32px; color: var(--text-strong); }
-.bp-actions { display: flex; gap: 14px; margin: 12px 0; }
+.bpv.mouse-idle, .bpv.mouse-idle * { cursor: none !important; }
+.bp-actions { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0; }
+.bp-detail-body { min-width: 0; }
 .bp-error { color: var(--warn); }
 .bp-playing { text-align: center; display: flex; flex-direction: column; gap: 12px; }
 .vk { background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 10px; }
@@ -250,7 +261,7 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .bp-tile.dim:focus { filter: none; }
 .bp-more { display: grid; place-items: center; color: var(--text-strong); }
 .bp-summary { max-height: 170px; overflow-y: auto; font-size: 16px; line-height: 1.5; padding: 6px 10px; margin: 0 -10px; }
-.bp-detail { width: min(1000px, 90vw); }
+.bp-detail { width: min(1120px, 94vw); max-width: none; }
 .bp-menu { display: flex; flex-direction: column; gap: 14px; min-width: 360px; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: 16px; padding: 28px; }
 /* Titres de source souvent longs (région, langues…) : le bouton générique est en `white-space: nowrap`, ce qui
    débordait ou cassait la mise en page quand il était affiché en ligne dans la barre d'actions — ici il peut

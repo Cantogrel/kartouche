@@ -59,6 +59,8 @@
   "sort.popularity": "Popularité",
   "sort.title": "Titre (A-Z)",
   "sort.year": "Année de sortie",
+  "sort.random": "Aléatoire",
+  "sort.reroll": "Relancer le tirage",
   "filter.console": "Console",
   "filter.allConsoles": "Toutes consoles",
   "filter.genre": "Genres",

@@ -14,13 +14,14 @@ const PAGE = 60
 const SOURCE_TAGS_SHOWN = 3
 const toggle = (arr: string[], v: string): string[] => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
 const labelOf = (id: string): string => consoleById(id)?.label ?? id
-const DEFAULT_DIR = { popularity: 'desc', year: 'desc', title: 'asc' } as const
+const DEFAULT_DIR = { popularity: 'desc', year: 'desc', title: 'asc', random: 'asc' } as const
+const newSeed = (): number => Math.floor(Math.random() * 1_000_000)
 // Position de scroll de la liste, conservée hors de l'état React pour survivre au démontage de la page (fiche jeu puis retour).
 let lastScrollTop = 0
 
 export function Catalog({ query }: { query: string }) {
   const { go, catalog: view, setCatalog } = useApp()
-  const { consoles, genres, publishers, sources, sort, dir, variants, limit } = view
+  const { consoles, genres, publishers, sources, sort, dir, seed, variants, limit } = view
   const lang = useSettings((s) => s.lang)
   const effectiveDir = dir ?? DEFAULT_DIR[sort]
   const [page, setPage] = useState<CatalogPage | null>(null)
@@ -59,18 +60,18 @@ export function Catalog({ query }: { query: string }) {
   useEffect(() => {
     const id = ++reqId.current
     const h = setTimeout(() => {
-      window.api.invoke('catalog:search', { q: query, consoles, genres, publishers, sources, sort, dir: effectiveDir, limit, includeVariants: variants })
+      window.api.invoke('catalog:search', { q: query, consoles, genres, publishers, sources, sort, dir: effectiveDir, seed, limit, includeVariants: variants })
         .then((p) => { if (id === reqId.current) setPage(p) })
     }, 150)
     return () => clearTimeout(h)
-  }, [query, consoles, genres, publishers, sources, sort, effectiveDir, limit, variants, status?.total, status?.enriched])
+  }, [query, consoles, genres, publishers, sources, sort, effectiveDir, seed, limit, variants, status?.total, status?.enriched])
 
   // Tout changement de filtre ou de recherche (après le premier rendu) revient à la première page.
   const first = useRef(true)
   useEffect(() => {
     if (first.current) { first.current = false; return }
     setCatalog({ limit: PAGE })
-  }, [query, consoles, genres, publishers, sources, sort, effectiveDir, variants, setCatalog])
+  }, [query, consoles, genres, publishers, sources, sort, effectiveDir, seed, variants, setCatalog])
 
   const sync = async (): Promise<void> => {
     setStatus((s) => ({ total: s?.total ?? 0, syncing: true, enriched: s?.enriched ?? false }))
@@ -117,14 +118,19 @@ export function Catalog({ query }: { query: string }) {
           <div className="row">
             <Button onClick={sync} disabled={status?.syncing}>{t('catalog.refresh')}</Button>
             <label className="row">{t('sortBy')}
-              <select value={sort} onChange={(e) => setCatalog({ sort: e.target.value as CatalogSort, dir: null })}>
+              <select value={sort} onChange={(e) => setCatalog({ sort: e.target.value as CatalogSort, dir: null, seed: newSeed() })}>
                 <option value="popularity">{t('sort.popularity')}</option>
                 <option value="title">{t('sort.title')}</option>
                 <option value="year">{t('sort.year')}</option>
+                <option value="random">{t('sort.random')}</option>
               </select>
             </label>
-            <Button className="sortdir" aria-label={t(effectiveDir === 'asc' ? 'sort.asc' : 'sort.desc')} title={t(effectiveDir === 'asc' ? 'sort.asc' : 'sort.desc')}
-              onClick={() => setCatalog({ dir: effectiveDir === 'asc' ? 'desc' : 'asc' })}>{effectiveDir === 'asc' ? '↑' : '↓'}</Button>
+            {sort === 'random'
+              // Aléatoire : pas de sens de tri, la flèche circulaire relance le tirage.
+              ? <Button className="sortdir" aria-label={t('sort.reroll')} title={t('sort.reroll')} onClick={() => setCatalog({ seed: newSeed() })}>↻</Button>
+              // ↓ = ordre naturel du critère (plus populaires/récents d'abord, A→Z), ↑ = inversé.
+              : <Button className="sortdir" aria-label={t(effectiveDir === 'asc' ? 'sort.asc' : 'sort.desc')} title={t(effectiveDir === 'asc' ? 'sort.asc' : 'sort.desc')}
+                  onClick={() => setCatalog({ dir: effectiveDir === 'asc' ? 'desc' : 'asc' })}>{effectiveDir === DEFAULT_DIR[sort] ? '↓' : '↑'}</Button>}
           </div>
         </div>
         {status && status.total === 0 && !status.syncing && <p className="muted">{t('catalog.empty')}</p>}

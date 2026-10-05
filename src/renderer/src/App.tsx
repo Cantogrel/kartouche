@@ -10,6 +10,7 @@ import { useUpdate } from '@/store/update'
 import { useChangelog } from '@/store/changelog'
 import { GameIcon } from '@/ui/ConsoleTile'
 import { EntryMenu, onEntryContext } from '@/ui/EntryMenu'
+import { DownloadVeil } from '@/ui/EntryCard'
 import { StatusBar } from '@/ui/StatusBar'
 import { Dialogs } from '@/ui/CollectionDialogs'
 import { ChangelogDialog } from '@/ui/ChangelogDialog'
@@ -90,6 +91,7 @@ export default function App() {
           <div className="side-games" role="group" aria-label={t('a11y.games')}>
             {libEntries.filter((g) => !librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase())).sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((g) => (
               <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} aria-current={gameId === `lib:${g.id}` && route === 'game' ? 'page' : undefined} onClick={() => go('game', `lib:${g.id}`)} onContextMenu={onEntryContext(g.id)}>
+                <DownloadVeil gameId={g.gameId} />
                 <GameIcon gameId={g.gameId} console={g.console} />
                 <span className="side-name">{g.title}</span>{g.pinned && <span className="side-pin">★</span>}
               </button>

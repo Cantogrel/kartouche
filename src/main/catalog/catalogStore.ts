@@ -143,9 +143,11 @@ function where(q: CatalogQuery, skip?: 'consoles' | 'genres' | 'publishers' | 's
 }
 
 /** Tri par défaut de chaque critère : les plus populaires et les plus récents d'abord, le titre de A à Z. Les valeurs inconnues passent toujours en dernier. */
-export const DEFAULT_DIR = { popularity: 'desc', year: 'desc', title: 'asc' } as const
+export const DEFAULT_DIR = { popularity: 'desc', year: 'desc', title: 'asc', random: 'asc' } as const
 
-function orderBy(sort: CatalogQuery['sort'] = 'popularity', dir?: 'asc' | 'desc'): string {
+function orderBy(sort: CatalogQuery['sort'] = 'popularity', dir?: 'asc' | 'desc', seed = 0): string {
+  // Mélange déterministe (congruence linéaire sur id + graine) : stable d'une page à l'autre pour une même graine. Entier borné, jamais interpolé brut.
+  if (sort === 'random') return `((id + ${Math.abs(Math.trunc(seed) || 0) % 1000003}) * 1103515245) % 2147483648, id`
   const d = (dir ?? DEFAULT_DIR[sort]) === 'asc' ? 'ASC' : 'DESC'
   if (sort === 'title') return `name COLLATE NOCASE ${d}`
   if (sort === 'year') return `year IS NULL, year ${d}, name COLLATE NOCASE`
@@ -160,7 +162,7 @@ export function queryCatalog(db: DatabaseSync, q: CatalogQuery): CatalogPage {
   const offset = Math.max(q.offset ?? 0, 0)
   const total = (db.prepare(`SELECT COUNT(*) AS n FROM catalog_games ${w.sql}`).get(...w.args) as { n: number }).n
   const games = db.prepare(`SELECT id, console, title, name, region, year, genre, developer, crc, sha1, size, popularity, img FROM catalog_games ${w.sql}
-    ORDER BY ${orderBy(q.sort, q.dir)} LIMIT ? OFFSET ?`).all(...w.args, limit, offset) as unknown as CatalogGame[]
+    ORDER BY ${orderBy(q.sort, q.dir, q.seed)} LIMIT ? OFFSET ?`).all(...w.args, limit, offset) as unknown as CatalogGame[]
   const wc = where(q, 'consoles')
   const consoles = db.prepare(`SELECT console AS id, COUNT(*) AS count FROM catalog_games ${wc.sql} GROUP BY console ORDER BY count DESC`).all(...wc.args) as { id: string; count: number }[]
   const wg = where(q, 'genres')

@@ -3,6 +3,7 @@ import { t } from '@/i18n'
 import { Badge, Cover, artStyle } from '@/ui'
 import { useLibrary } from '@/store/library'
 import { useDownloads } from '@/store/downloads'
+import { DownloadVeil } from '@/ui/EntryCard'
 import { useEmulators } from '@/store/emulators'
 import { useSettings } from '@/store/settings'
 import { CONSOLES, consoleById } from '@shared/consoles'
@@ -10,7 +11,8 @@ import { EMULATORS } from '@shared/emulators'
 import type { CatalogPage } from '@shared/catalog'
 import type { LanguageSetting } from '@shared/settings'
 import { orderConsolesByRecency, type LibraryEntry } from '@shared/library'
-import { focusEl, navItems, useNav } from './useNav'
+import { focusEl, navItems, useNav, useTypeText } from './useNav'
+import type { CatalogGame } from '@shared/catalog'
 import { VirtualKeyboard } from './VirtualKeyboard'
 import { Detail } from './Detail'
 
@@ -18,6 +20,7 @@ const label = (c: string): string => consoleById(c)?.label ?? c
 type Section = 'home' | 'library' | 'collections' | 'catalog' | 'settings'
 const SECTIONS: Section[] = ['home', 'library', 'collections', 'catalog', 'settings']
 const PAGE = 60
+const MOUSE_IDLE_MS = 3000
 /** Jeu ouvert : `gameId` du catalogue (peut être null pour un fichier non reconnu) et/ou entrée de la bibliothèque. */
 interface Opened { gameId: number | null; entryId?: number }
 /** Dernière tuile ouverte : le focus y revient à la fermeture de la fiche. */
@@ -31,6 +34,7 @@ function Tile({ id, gameId, entryId, title, cons, dim, fav, pinned, state, onOpe
       {gameId !== null
         ? <Cover className="cover-fill" gameId={gameId} title={title} kind="tile">{name}{tag}</Cover>
         : <div className="cover-fill" style={artStyle(title)}>{name}{tag}</div>}
+      <DownloadVeil gameId={gameId} />
       {fav && <span className="fav-mark">♥</span>}
       {pinned && <span className="pin-mark">★</span>}
       {state && <span className={`state-mark ${state}`}>{t(state === 'installed' ? 'catalog.installed' : state === 'downloading' ? 'catalog.downloading' : 'catalog.inLibrary')}</span>}
@@ -67,6 +71,16 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
     focusEl(grid.current?.querySelectorAll<HTMLElement>('[data-nav]:not(.bp-more)')[from])
   }, [page])
 
+  // Souris masquée après quelques secondes sans mouvement (interface pensée pour la manette), réaffichée au moindre mouvement.
+  const [idleMouse, setIdleMouse] = useState(false)
+  useEffect(() => {
+    let h = setTimeout(() => setIdleMouse(true), MOUSE_IDLE_MS)
+    const move = (): void => { setIdleMouse(false); clearTimeout(h); h = setTimeout(() => setIdleMouse(true), MOUSE_IDLE_MS) }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mousedown', move)
+    return () => { clearTimeout(h); window.removeEventListener('mousemove', move); window.removeEventListener('mousedown', move) }
+  }, [])
+
   useEffect(() => { void useLibrary.getState().refresh(); window.api.window.fullscreen(true); return () => window.api.window.fullscreen(false) }, [])
   const go = (s: Section): void => { setSection(s); setConsoleTab('all'); setQuery(''); setLimit(PAGE) }
 
@@ -74,6 +88,21 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   const q = query.trim().toLowerCase()
   const libraryConsoles = useMemo(() => orderConsolesByRecency(playable), [playable])
   const libShown = playable.filter((e) => (consoleTab === 'all' || e.console === consoleTab) && (!q || e.title.toLowerCase().includes(q)))
+
+  // Jeux en cours de téléchargement : visibles dans la bibliothèque (entrée sans fichier, ou jeu pas encore ajouté) tant que le job existe —
+  // annulé ou échoué, il quitte le store et disparaît d'ici.
+  const dlKey = [...downloadingGames].sort((a, b) => a - b).join(',')
+  const [dlCatalog, setDlCatalog] = useState<Record<number, CatalogGame>>({})
+  useEffect(() => {
+    for (const id of downloadingGames) {
+      if (entries.some((e) => e.gameId === id) || dlCatalog[id]) continue
+      void window.api.invoke('catalog:get', id).then((g) => { if (g) setDlCatalog((p) => ({ ...p, [id]: g })) })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dlKey, entries])
+  const matches = (title: string, cons: string): boolean => (consoleTab === 'all' || cons === consoleTab) && (!q || title.toLowerCase().includes(q))
+  const dlEntries = entries.filter((e) => e.missing && e.gameId !== null && downloadingGames.has(e.gameId) && matches(e.title, e.console))
+  const dlGames = [...downloadingGames].filter((id) => !entries.some((e) => e.gameId === id) && dlCatalog[id] && matches(dlCatalog[id].name, dlCatalog[id].console)).map((id) => dlCatalog[id])
 
   // Catalogue : recherche côté principal (la même que la page classique), triée par popularité.
   useEffect(() => {
@@ -150,9 +179,11 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   const playing = entries.find((e) => running.includes(e.id))
   const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} entryId={e.id} title={e.title} cons={e.console} fav={e.favorite} pinned={e.pinned} onOpen={() => openEntry(e)} />)
   const searchable = section === 'library' || section === 'catalog'
+  // Clavier physique : on tape directement la recherche (le clavier virtuel reste pour la manette).
+  useTypeText(query, (v) => { setQuery(v); setLimit(PAGE) }, searchable && !overlay && !inGame)
 
   return (
-    <div className="bpv" data-focus-root>
+    <div className={`bpv${idleMouse ? ' mouse-idle' : ''}`} data-focus-root>
       <header className="bp-head">
         <h1>RomVault</h1>
         <div className="bp-tabs">
@@ -188,7 +219,13 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
           </>
         ))}
 
-        {section === 'library' && (playable.length === 0 ? <p className="empty">{t('bp.empty')}</p> : libShown.length === 0 ? <p className="empty">{t('library.noMatch')}</p> : <div className="bp-grid">{libTiles(libShown, 'l')}</div>)}
+        {section === 'library' && (playable.length + dlEntries.length + dlGames.length === 0 ? <p className="empty">{t('bp.empty')}</p> : libShown.length + dlEntries.length + dlGames.length === 0 ? <p className="empty">{t('library.noMatch')}</p> : (
+          <div className="bp-grid">
+            {dlEntries.map((e) => <Tile key={`d${e.id}`} id={`d${e.id}`} gameId={e.gameId} entryId={e.id} title={e.title} cons={e.console} state="downloading" onOpen={() => openEntry(e)} />)}
+            {dlGames.map((g) => <Tile key={`dg${g.id}`} id={`dg${g.id}`} gameId={g.id} title={g.name} cons={g.console} state="downloading" onOpen={() => setOpened({ gameId: g.id })} />)}
+            {libTiles(libShown, 'l')}
+          </div>
+        ))}
 
         {section === 'collections' && (colKeys.length === 0 ? <p className="empty">{collections.length === 0 ? t('bp.noCollections') : t('bp.emptyCollection')}</p> : <div className="bp-grid">{libTiles(colShown, 'k')}</div>)}
 
