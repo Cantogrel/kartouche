@@ -39,3 +39,13 @@ export function pickImages(images: { image_id?: unknown }[] | undefined, max = 1
   for (const im of images ?? []) if (isMediaId(im.image_id) && !out.includes(im.image_id)) out.push(im.image_id)
   return out.slice(0, max)
 }
+
+/**
+ * Image de fond par défaut d'une fiche : une illustration ou capture IGDB qui n'est PAS celle de la bannière (sinon elle passe derrière et ne se voit pas).
+ * `bannerFromIgdb` : la bannière est elle-même une image IGDB (jeux PC : première illustration, à défaut première capture).
+ */
+export function defaultBackgroundId(media: Pick<GameMedia, 'screenshots' | 'artworks'> | null | undefined, bannerFromIgdb: boolean): string | null {
+  if (!media) return null
+  const bannerId = bannerFromIgdb ? media.artworks[0] ?? media.screenshots[0] : undefined
+  return [...media.screenshots, ...media.artworks].find((id) => id !== bannerId) ?? null
+}
