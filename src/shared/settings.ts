@@ -1,3 +1,5 @@
+import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeLayout } from './homeLayout'
+
 export type LanguageSetting = 'auto' | 'en' | 'fr'
 export type ThemeSetting = 'auto' | 'light' | 'dark'
 
@@ -33,6 +35,8 @@ export interface Settings {
   emulatorDefaults: Record<string, string>
   /** Launchers dont la bibliothèque est lue (id de connecteur → activé) ; absent = désactivé : rien n'est lu sans que l'utilisateur l'ait demandé. */
   connectors: Record<string, boolean>
+  /** Accueil (classique et Big Picture) : ordre et visibilité des blocs. */
+  homeLayout: HomeLayout
 }
 
 export const ACCENTS = ['white', 'violet', 'blue', 'green', 'orange'] as const
@@ -59,7 +63,8 @@ export const DEFAULT_SETTINGS: Settings = {
   accent: 'violet',
   reduceMotion: false,
   emulatorDefaults: {},
-  connectors: {}
+  connectors: {},
+  homeLayout: DEFAULT_HOME_LAYOUT
 }
 
 /** Fusionne une saisie partielle non fiable avec les valeurs actuelles : toute valeur invalide est ignorée. */
@@ -91,6 +96,7 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (typeof p.connectors === 'object' && p.connectors !== null && !Array.isArray(p.connectors)) {
     out.connectors = Object.fromEntries(Object.entries(p.connectors as Record<string, unknown>).filter(([k, v]) => /^[a-z0-9]{2,20}$/.test(k) && typeof v === 'boolean') as [string, boolean][])
   }
+  if (typeof p.homeLayout === 'object' && p.homeLayout !== null) out.homeLayout = normalizeHomeLayout(p.homeLayout)
   return out
 }
 
