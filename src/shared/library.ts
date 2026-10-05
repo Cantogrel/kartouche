@@ -161,5 +161,5 @@ export interface SbiImportResult {
   detail?: string
 }
 
-/** Consoles qui ont des mises à jour/DLC gérés par RomVault (voir `library/content/`) : leur fiche propose l'import et la désinstallation unitaires. */
+/** Consoles qui ont des mises à jour/DLC gérés par Kartouche (voir `library/content/`) : leur fiche propose l'import et la désinstallation unitaires. */
 export const CONTENT_CONSOLES: readonly string[] = ['switch', 'n3ds', 'ps3', 'wiiu', 'vita']

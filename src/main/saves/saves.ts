@@ -123,7 +123,7 @@ export async function learnCemuKey(db: DatabaseSync, entryId: number, mlc: strin
 const startingWith = async (rel: string, root: string, prefix: string): Promise<string[]> =>
   (await readdir(join(root, rel)).catch(() => [] as string[])).filter((n) => n.startsWith(prefix)).map((n) => join(rel, n))
 
-/** Dossier `mlc01` de Cemu : celui de `settings.xml` (<mlc_path>) s'il y en a un, sinon à côté de l'exécutable (mode portable de RomVault). */
+/** Dossier `mlc01` de Cemu : celui de `settings.xml` (<mlc_path>) s'il y en a un, sinon à côté de l'exécutable (mode portable de Kartouche). */
 export async function cemuMlcDir(dir: string): Promise<string> {
   const xml = await readFile(join(dir, 'settings.xml'), 'utf8').catch(() => '')
   const custom = /<mlc_path>\s*([^<]*?)\s*<\/mlc_path>/.exec(xml)?.[1]
@@ -346,7 +346,7 @@ export async function deleteGameSaves(db: DatabaseSync, savesRoot: string, entry
 }
 
 /**
- * RetroArch : range sauvegardes et états dans le dossier de données de RomVault (par jeu, hors de l'installation).
+ * RetroArch : range sauvegardes et états dans le dossier de données de Kartouche (par jeu, hors de l'installation).
  * Les fichiers déjà présents dans les anciens dossiers de l'installation y sont recopiés une fois.
  */
 export async function prepareRetroarch(dir: string, savesRoot: string): Promise<void> {

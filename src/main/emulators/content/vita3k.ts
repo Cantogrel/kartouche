@@ -176,7 +176,7 @@ export function makeVita3kInstaller(runners: Vita3kRunners = defaultRunners): Co
       }
       const backups = it.emuBackups ?? {}
       for (const [target, backup] of Object.entries(backups)) if (!inside(target, ux0) || !existsSync(backup)) return { ok: false, detail: "copie de sauvegarde d'origine introuvable : désinstallation refusée (rien n'a été modifié)" }
-      if (!it.emuFiles) { leftover = true; continue } // jamais installé par RomVault avec suivi : rien ne prouve ce qui lui appartient
+      if (!it.emuFiles) { leftover = true; continue } // jamais installé par Kartouche avec suivi : rien ne prouve ce qui lui appartient
       if (it.emuFiles.length === 0 && Object.keys(backups).length === 0) { leftover = true; continue }
       for (const [target, backup] of Object.entries(backups)) { await copyFile(backup, target); removed.push(target) }
       for (const p of it.emuFiles) {

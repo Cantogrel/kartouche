@@ -3,7 +3,7 @@ import type { CatalogGame, GameDetails } from '@shared/catalog'
 import { matchKey } from './popularity'
 
 type Json = (url: string) => Promise<unknown | null>
-const UA = 'RomVault/0.1 (game library; https://github.com/)'
+const UA = 'Kartouche/0.1 (game library; https://github.com/)'
 
 const getJson: Json = async (url) => {
   const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) })

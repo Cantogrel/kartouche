@@ -39,7 +39,7 @@ export const MELONDS_WINDOW: TomlValues = { ScreenLayout: 0, ScreenSizing: 3, Sc
 
 /**
  * Touches (valeurs Qt::Key : lettres = ASCII majuscule, touches spéciales = 0x01000000 + décalage) : mêmes conventions que les autres émulateurs
- * de RomVault (IJKL boutons, flèches croix, Retour arrière/Entrée Select/Start). La souris n'a aucun mapping : melonDS l'utilise nativement
+ * de Kartouche (IJKL boutons, flèches croix, Retour arrière/Entrée Select/Start). La souris n'a aucun mapping : melonDS l'utilise nativement
  * pour le stylet (clic, maintien, glisser sur l'écran du bas).
  */
 export const MELONDS_KEYBOARD: TomlValues = {
@@ -65,7 +65,7 @@ export const MELONDS_JOYSTICK: TomlValues = {
   A: 1, B: 0, X: 3, Y: 2, Select: 6, Start: 7,
   L: 4 | axis(4, 2), R: 5 | axis(5, 2),
   Up: 0x101 | axis(1, 1), Down: 0x104 | axis(1, 0), Left: 0x108 | axis(0, 1), Right: 0x102 | axis(0, 0),
-  // Clic du stick gauche/droit : écran mis en avant / échange des écrans. Back+Start (fermeture RomVault) n'est pas touché.
+  // Clic du stick gauche/droit : écran mis en avant / échange des écrans. Back+Start (fermeture Kartouche) n'est pas touché.
   HK_SwapScreens: 9, HK_SwapScreenEmphasis: 8
 }
 

@@ -6,7 +6,7 @@ import type { ImportItem } from '@shared/library'
 import { baseKeyOfFile, type BaseKeyContext } from './baseKey'
 import type { ContentInfo } from './types'
 
-/** Où RomVault range les mises à jour/DLC d'un jeu : à côté des ROM de sa console, un dossier par jeu parent. */
+/** Où Kartouche range les mises à jour/DLC d'un jeu : à côté des ROM de sa console, un dossier par jeu parent. */
 export const contentDir = (romsDir: string, consoleId: string, baseKey: string): string => join(romsDir, consoleId, '.content', baseKey)
 
 export interface ContentEnv extends BaseKeyContext {

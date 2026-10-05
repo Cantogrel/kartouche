@@ -102,8 +102,8 @@ export interface BiosSlotStatus {
   /** Présent mais de somme inconnue (non vérifié). */
   unverified?: boolean
   detail?: string
-  /** Où il a été trouvé : dans le dossier de BIOS de RomVault, ou déjà configuré dans l'émulateur. */
-  source?: 'romvault' | 'emulator'
+  /** Où il a été trouvé : dans le dossier de BIOS de Kartouche, ou déjà configuré dans l'émulateur. */
+  source?: 'app' | 'emulator'
 }
 
 export interface BiosImportResult {

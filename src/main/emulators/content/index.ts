@@ -75,7 +75,7 @@ export async function splitShared(owned: readonly string[], others: readonly str
 export interface UninstallResult { ok: boolean; error?: string; /** Reste côté émulateur, à dire à l'utilisateur. */ leftover?: string }
 
 /**
- * Désinstalle UN contenu : le retire de l'émulateur (ce que son installateur y a mis), supprime le fichier rangé par RomVault (jamais un fichier laissé là où
+ * Désinstalle UN contenu : le retire de l'émulateur (ce que son installateur y a mis), supprime le fichier rangé par Kartouche (jamais un fichier laissé là où
  * l'utilisateur l'avait mis : seulement ce qui est sous `romsDir`), puis oublie la ligne. Si l'émulateur refuse (ouvert…), rien n'est supprimé.
  * `deps` est injectable pour les tests.
  */
@@ -94,7 +94,7 @@ export async function uninstallContent(
     const row = getRow(db, installer.emulatorId)
     const env: InstallEnv = { romsDir, emulator: row && existsSync(row.exe) ? { dir: row.dir, exe: row.exe } : null, isRunning: processRunning, ...deps.env }
     const owned = c.emu_files ? JSON.parse(c.emu_files) as string[] : null
-    // Un fichier que RomVault a écrit pour CE contenu mais que d'autres contenus (même jeu ou non) ont écrit aussi — mise à jour qui en remplace une autre, DLC rangés dans un même
+    // Un fichier que Kartouche a écrit pour CE contenu mais que d'autres contenus (même jeu ou non) ont écrit aussi — mise à jour qui en remplace une autre, DLC rangés dans un même
     // dossier — n'est retiré qu'avec son DERNIER propriétaire : retiré maintenant, il casserait les autres. Détecté AVANT toute suppression.
     const others = (db.prepare('SELECT emu_files FROM library_content WHERE id <> ? AND emu_files IS NOT NULL').all(c.id) as { emu_files: string }[]).flatMap((o) => JSON.parse(o.emu_files) as string[])
     const { free, kept: sharedKept } = owned ? await splitShared(owned, others) : { free: null, kept: [] as string[] }
@@ -118,7 +118,7 @@ export async function uninstallContent(
       }
     }
   }
-  // Seul le rangement de RomVault est supprimé ; un fichier laissé en place par l'utilisateur (mode « ne pas copier ») lui appartient.
+  // Seul le rangement de Kartouche est supprimé ; un fichier laissé en place par l'utilisateur (mode « ne pas copier ») lui appartient.
   const inRoms = resolve(c.path).toLowerCase().startsWith(resolve(romsDir).toLowerCase() + sep)
   if (inRoms) {
     await rm(c.path, { recursive: true, force: true }).catch(() => undefined)

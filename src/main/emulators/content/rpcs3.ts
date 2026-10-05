@@ -52,7 +52,7 @@ export async function snapshotGameData(dir: string, serial: string): Promise<Sna
 
 /**
  * Ce que l'installation a CRÉÉ depuis `before` (dossiers entiers nouveaux, fichiers nouveaux des dossiers déjà là) et ce qu'elle a seulement RÉÉCRIT (fichiers déjà présents dont la
- * taille ou la date a changé). Les seconds ne sont jamais à RomVault : ils appartiennent au jeu ou à un autre contenu, qu'une désinstallation ne doit pas toucher.
+ * taille ou la date a changé). Les seconds ne sont jamais à Kartouche : ils appartiennent au jeu ou à un autre contenu, qu'une désinstallation ne doit pas toucher.
  */
 export async function diffGameDataFull(dir: string, serial: string, before: Snapshot): Promise<{ created: string[]; modified: string[] }> {
   const root = gameRoot(dir)
@@ -76,7 +76,7 @@ export async function diffGameData(dir: string, serial: string, before: Snapshot
 
 const insideGameRoot = (dir: string, p: string): boolean => resolve(p).toLowerCase().startsWith(resolve(gameRoot(dir)).toLowerCase() + sep)
 
-/** Marge entre les dates d'écriture des fichiers d'une installation et le moment où RomVault l'a marquée terminée (une installation de paquet peut durer plusieurs minutes). */
+/** Marge entre les dates d'écriture des fichiers d'une installation et le moment où Kartouche l'a marquée terminée (une installation de paquet peut durer plusieurs minutes). */
 const WRITTEN_BEFORE_MS = 25 * 60_000
 const WRITTEN_AFTER_MS = 2 * 60_000
 
@@ -92,7 +92,7 @@ async function pkgFilePaths(root: string, pkg: string): Promise<{ path: string; 
  * `installpkg` ; en mode `--headless` il n'y a ni fenêtre ni boîte de confirmation, contrairement au mode graphique qui ouvre l'assistant d'installation).
  * RPCS3 range lui-même le contenu sous `dev_hdd0/game/<dossier d'installation>` et le jeu en profite au lancement.
  *
- * Suivi : photographie de `dev_hdd0/game` avant et après ; seuls les fichiers CRÉÉS appartiennent à RomVault (RPCS3 n'écrase d'ailleurs un fichier existant que si le paquet
+ * Suivi : photographie de `dev_hdd0/game` avant et après ; seuls les fichiers CRÉÉS appartiennent à Kartouche (RPCS3 n'écrase d'ailleurs un fichier existant que si le paquet
  * le demande). L'installation n'est annoncée terminée que si TOUS les fichiers du paquet sont présents (liste lue dans le paquet) : sinon elle reste « en échec ».
  *
  * NON VALIDÉ sur un vrai paquet (aucun .pkg de test disponible) : la commande, les lignes de verdict et le format du paquet viennent du code source de RPCS3, pas d'un essai réel.
@@ -162,7 +162,7 @@ export function makeRpcs3Installer(run: (exe: string, cwd: string, pkg: string) 
       for (const [target, backup] of Object.entries(backups)) if (!insideGameRoot(env.emulator.dir, target) || !existsSync(backup)) return { ok: false, detail: "copie de sauvegarde d'origine introuvable : désinstallation refusée (rien n'a été modifié)" }
       for (const [target, backup] of Object.entries(backups)) { await copyFile(backup, target); removed.push(target) }
       if (Object.keys(backups).length) await rm(join(dirname(env.romsDir), 'content-backups', 'rpcs3', String(it.id)), { recursive: true, force: true }).catch(() => undefined)
-      // Ce que l'installation a réellement CRÉÉ (comparaison avant/après) : retiré à l'identique, rien d'autre. `[]` : rien n'appartient à RomVault.
+      // Ce que l'installation a réellement CRÉÉ (comparaison avant/après) : retiré à l'identique, rien d'autre. `[]` : rien n'appartient à Kartouche.
       if (it.emuFiles) {
         if (it.emuFiles.length === 0 && Object.keys(backups).length === 0) leftover = true
         for (const p of it.emuFiles) await remove(p)

@@ -187,7 +187,7 @@ export interface IpcEvents {
 }
 export type IpcChannel = keyof IpcChannels
 
-export interface RomVaultApi {
+export interface KartoucheApi {
   invoke<C extends IpcChannel>(channel: C, req?: IpcChannels[C]['req']): Promise<IpcChannels[C]['res']>
   on<E extends keyof IpcEvents>(event: E, cb: (payload: IpcEvents[E]) => void): () => void
   window: { minimize(): void; maximize(): void; close(): void; fullscreen(on: boolean): void }

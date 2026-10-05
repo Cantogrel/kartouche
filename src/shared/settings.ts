@@ -8,7 +8,7 @@ export interface Settings {
   /** Proposer par défaut la suppression du fichier d'origine après import. */
   importDeleteSource: boolean
   scanFolders: string[]
-  /** Ouvrir RomVault directement en Big Picture (aussi possible avec l'argument --bigpicture). */
+  /** Ouvrir Kartouche directement en Big Picture (aussi possible avec l'argument --bigpicture). */
   startInBigPicture: boolean
   /** Identifiants Twitch de l'utilisateur pour IGDB (jamais commités : stockés dans la base locale). */
   igdbClientId: string

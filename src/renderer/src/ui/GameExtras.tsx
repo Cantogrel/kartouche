@@ -83,7 +83,7 @@ export function SavesPanel({ entry }: { entry: LibraryEntry }) {
 }
 
 /**
- * Mises à jour et DLC rattachés à ce jeu (voir `library/content/`) : jamais des jeux à part, et rien à installer à la main — RomVault les rend visibles de
+ * Mises à jour et DLC rattachés à ce jeu (voir `library/content/`) : jamais des jeux à part, et rien à installer à la main — Kartouche les rend visibles de
  * l'émulateur tout seul. L'état dit où ils en sont (installé, en attente d'un lancement ou d'une clé, pas encore pris en charge).
  */
 function ContentState({ c }: { c: LibraryContentItem }) {

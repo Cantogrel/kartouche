@@ -143,7 +143,7 @@ export async function installResolutionPacks(dir: string, maxHeight: number, dep
   const settingsFile = join(dir, 'settings.xml')
   const settings = await readFile(settingsFile, 'utf8').catch(() => '')
   if (!settings || /<GraphicPack>/.test(settings)) return 0
-  const rel = await fetch('https://api.github.com/repos/cemu-project/cemu_graphic_packs/releases/latest', { headers: { 'user-agent': 'RomVault' }, signal: AbortSignal.timeout(15000) }).then((r) => r.json()) as { assets?: { name: string; browser_download_url: string }[] }
+  const rel = await fetch('https://api.github.com/repos/cemu-project/cemu_graphic_packs/releases/latest', { headers: { 'user-agent': 'Kartouche' }, signal: AbortSignal.timeout(15000) }).then((r) => r.json()) as { assets?: { name: string; browser_download_url: string }[] }
   const asset = rel.assets?.find((a) => /^graphicPacks\d+\.zip$/.test(a.name))
   if (!asset) return 0
   const packs = join(dir, ...PACKS_REL.split('/'))
@@ -179,7 +179,7 @@ const IDS: Record<PadKind, Record<string, number>> = {
   }
 }
 
-/** Clavier (codes de touche wx = VK Windows) : IJKL boutons, WASD stick gauche, THGF stick droit, flèches croix — comme les autres émulateurs de RomVault. */
+/** Clavier (codes de touche wx = VK Windows) : IJKL boutons, WASD stick gauche, THGF stick droit, flèches croix — comme les autres émulateurs de Kartouche. */
 const KEYBOARD: Record<string, number> = {
   A: 76, B: 75, X: 73, Y: 74, L: 81, R: 69, ZL: 49, ZR: 51, Plus: 13, Minus: 8, Up: 38, Down: 40, Left: 37, Right: 39, StickL: 50, StickR: 52,
   StickL_Up: 87, StickL_Down: 83, StickL_Left: 65, StickL_Right: 68, StickR_Up: 84, StickR_Down: 71, StickR_Left: 70, StickR_Right: 72, Home: 27
@@ -211,8 +211,8 @@ ${entries}
 
 /**
  * Profil du Pad 1 : clavier + 1ère manette XInput (identifiants génériques de Cemu, valides même sans manette branchée). La souris sert
- * de doigt sur l'écran tactile du GamePad (natif Cemu, pas de mapping). Un commentaire marque le fichier comme écrit par RomVault : Cemu
- * le réécrit sans ce commentaire dès que l'utilisateur retouche ses réglages, et RomVault n'y touche alors plus jamais.
+ * de doigt sur l'écran tactile du GamePad (natif Cemu, pas de mapping). Un commentaire marque le fichier comme écrit par Kartouche : Cemu
+ * le réécrit sans ce commentaire dès que l'utilisateur retouche ses réglages, et Kartouche n'y touche alors plus jamais.
  */
 export function cemuProfileXml(kind: PadKind): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -249,7 +249,7 @@ const normTitle = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, 
 /** Vrai si l'un des noms (titre de la bibliothèque, nom du fichier) correspond à un jeu qui exige le GamePad. */
 export const needsGamePad = (...names: string[]): boolean => names.some((n) => GAMEPAD_REQUIRED.some((g) => g.title.test(normTitle(n))))
 
-/** Profils nommés « RomVault … » dans le dossier des profils : chargeables à la main depuis les réglages de manettes de Cemu. Créés une fois, jamais modifiés. */
+/** Profils nommés « Kartouche … » dans le dossier des profils : chargeables à la main depuis les réglages de manettes de Cemu. Créés une fois, jamais modifiés. */
 export async function writeCemuProfiles(dir: string): Promise<void> {
   const profiles = join(dir, 'controllerProfiles')
   await mkdir(profiles, { recursive: true })
@@ -261,7 +261,7 @@ export async function writeCemuProfiles(dir: string): Promise<void> {
 
 /**
  * Choisit le profil du Pad 1 au lancement d'un jeu : Pro Controller par défaut, GamePad pour les jeux de `GAMEPAD_REQUIRED`.
- * Ne touche que le fichier absent ou encore marqué RomVault ; un profil retouché par l'utilisateur (marqueur disparu) est laissé tel quel.
+ * Ne touche que le fichier absent ou encore marqué Kartouche ; un profil retouché par l'utilisateur (marqueur disparu) est laissé tel quel.
  */
 export async function applyCemuControls(dir: string, ...names: string[]): Promise<void> {
   const file = join(dir, 'controllerProfiles', 'controller0.xml')

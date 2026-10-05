@@ -179,7 +179,7 @@ describe('bios : sources officielles', () => {
 })
 
 describe('bios : retrait', () => {
-  it('retire un BIOS installé par RomVault, mais pas celui rangé par l’utilisateur dans l’émulateur', async () => {
+  it('retire un BIOS installé par Kartouche, mais pas celui rangé par l’utilisateur dans l’émulateur', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'rv-bios3-'))
     try {
       const db = new DatabaseSync(':memory:')

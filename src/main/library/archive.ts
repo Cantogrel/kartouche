@@ -8,7 +8,7 @@ import { ROM_EXTENSIONS } from '@shared/library'
 /**
  * Archives .7z et .rar (le .zip garde son lecteur maison, voir hash.ts) : extraites par 7-Zip compilé en WebAssembly
  * (paquet `7z-wasm`, LGPL-2.1+ avec restriction unRAR — le .wasm reste un fichier séparé et remplaçable, jamais
- * fusionné dans le code de RomVault ; la restriction unRAR n'interdit que de recréer la compression RAR, on ne fait
+ * fusionné dans le code de Kartouche ; la restriction unRAR n'interdit que de recréer la compression RAR, on ne fait
  * qu'extraire). Aucun exécutable externe (ni 7z.exe ni WinRAR) : le moteur tourne dans un processus enfant lancé avec
  * le runtime déjà embarqué (Electron en mode « node »), pour ne pas geler l'interface pendant l'extraction d'une ISO de
  * plusieurs Go, et pour qu'un plantage ne tombe jamais le processus principal.

@@ -39,7 +39,7 @@ export async function extract(archive: string, dest: string): Promise<void> {
   }
 }
 
-export async function download(url: string, file: string, onProgress: (done: number, total: number) => void, userAgent = 'RomVault'): Promise<void> {
+export async function download(url: string, file: string, onProgress: (done: number, total: number) => void, userAgent = 'Kartouche'): Promise<void> {
   const res = await fetch(url, { headers: { 'user-agent': userAgent }, redirect: 'follow' })
   if (!res.ok || !res.body) throw new Error(`Téléchargement impossible (HTTP ${res.status})`)
   const total = Number(res.headers.get('content-length') ?? 0)
@@ -102,7 +102,7 @@ async function installCores(def: EmulatorDef, dir: string, cache: string, report
 }
 
 /**
- * Vrai si rien d'une installation précédente ne subsiste (jamais installé, ou dossier/exe supprimé hors de RomVault, ou
+ * Vrai si rien d'une installation précédente ne subsiste (jamais installé, ou dossier/exe supprimé hors de Kartouche, ou
  * installation précédente jamais allée au bout) : dans ce cas les réglages automatiques (langue, manette, plein écran)
  * sont (ré)écrits. Un exécutable enregistré mais absent ne compte pas comme « déjà installé » : il n'y a alors rien à préserver.
  */

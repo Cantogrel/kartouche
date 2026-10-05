@@ -1,4 +1,4 @@
-// Proxy Cloudflare Worker de RomVault : ajoute les clés IGDB / TheGamesDB / SteamGridDB côté serveur (secrets du Worker),
+// Proxy Cloudflare Worker de Kartouche : ajoute les clés IGDB / TheGamesDB / SteamGridDB côté serveur (secrets du Worker),
 // l'app n'en contient aucune.
 //   POST /igdb            corps Apicalypse -> https://api.igdb.com/v4/games (jeton Twitch mis en cache)
 //   GET  /tgdb/<chemin>   -> https://api.thegamesdb.net/<chemin>?apikey=...

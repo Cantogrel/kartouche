@@ -80,15 +80,15 @@ async function contentFiles(titleDir: string): Promise<{ tmd: number; app: numbe
   return out
 }
 
-/** Marge de temps entre la création d'un dossier par l'installation de RomVault et le moment où RomVault l'a marquée terminée : une installation d'un .cia dure quelques secondes. */
+/** Marge de temps entre la création d'un dossier par l'installation de Kartouche et le moment où Kartouche l'a marquée terminée : une installation d'un .cia dure quelques secondes. */
 const PROVENANCE_BEFORE_MS = 15 * 60_000
 const PROVENANCE_AFTER_MS = 2 * 60_000
 
 /**
- * Ce contenu a-t-il été CRÉÉ par l'installation de RomVault ? Pour un contenu installé avant le suivi des fichiers, la seule preuve disponible est la date de création du
- * dossier : s'il a été créé pendant l'installation que RomVault a enregistrée, c'est elle qui l'a créé. Un dossier plus ancien (installé à la main, ou par un autre outil) n'est jamais retiré.
+ * Ce contenu a-t-il été CRÉÉ par l'installation de Kartouche ? Pour un contenu installé avant le suivi des fichiers, la seule preuve disponible est la date de création du
+ * dossier : s'il a été créé pendant l'installation que Kartouche a enregistrée, c'est elle qui l'a créé. Un dossier plus ancien (installé à la main, ou par un autre outil) n'est jamais retiré.
  */
-async function createdByRomVault(path: string, installedAt: number | null | undefined): Promise<boolean> {
+async function createdByKartouche(path: string, installedAt: number | null | undefined): Promise<boolean> {
   if (!installedAt) return false
   const st = await stat(path).catch(() => null)
   return !!st && st.birthtimeMs >= installedAt - PROVENANCE_BEFORE_MS && st.birthtimeMs <= installedAt + PROVENANCE_AFTER_MS
@@ -114,7 +114,7 @@ export function makeAzaharInstaller(run: (exe: string, dir: string, cia: string)
     const diff = roots.length ? await diffTrees(before, roots) : { created: [], modified: [] }
     return {
       state: 'installed',
-      // Seulement ce que l'installation a créé ; si le titre était déjà là (installé à la main), rien n'appartient à RomVault.
+      // Seulement ce que l'installation a créé ; si le titre était déjà là (installé à la main), rien n'appartient à Kartouche.
       emuFiles: await expandCreatedRoots(diff.created, roots),
       detail: diff.modified.length ? `déjà présent dans Azahar : ${diff.modified.length} fichier(s) réécrits, non retirés à la désinstallation` : undefined
     }
@@ -136,14 +136,14 @@ export function makeAzaharInstaller(run: (exe: string, dir: string, cia: string)
       const title = it.titleId ? azaharTitleDir(env.emulator.dir, it.titleId) : null
       if (!title || !it.titleId) continue
       if (it.emuFiles) {
-        // Suivi exact : seulement ce que l'installation a créé. `[]` = le titre était déjà là avant RomVault (ou rien n'a été créé) : il n'est pas à lui.
+        // Suivi exact : seulement ce que l'installation a créé. `[]` = le titre était déjà là avant Kartouche (ou rien n'a été créé) : il n'est pas à lui.
         if (it.emuFiles.length === 0) { leftover = true; continue }
         for (const p of it.emuFiles) await drop(p)
       } else {
-        // Installé avant le suivi : retiré seulement si le dossier `content/` a été créé pendant l'installation que RomVault a enregistrée (UninstallProgram d'Azahar : supprimer `content/`).
-        if (!(await createdByRomVault(join(title, 'content'), it.installedAt))) { leftover = true; continue }
+        // Installé avant le suivi : retiré seulement si le dossier `content/` a été créé pendant l'installation que Kartouche a enregistrée (UninstallProgram d'Azahar : supprimer `content/`).
+        if (!(await createdByKartouche(join(title, 'content'), it.installedAt))) { leftover = true; continue }
         await drop(join(title, 'content'))
-        for (const t of await azaharTickets(env.emulator.dir, it.titleId)) if (await createdByRomVault(t, it.installedAt)) await drop(t)
+        for (const t of await azaharTickets(env.emulator.dir, it.titleId)) if (await createdByKartouche(t, it.installedAt)) await drop(t)
       }
       // Le dossier du titre ne disparaît que s'il est vide : une sauvegarde (`data/`) dedans reste intacte.
       await rmdir(title).catch(() => undefined)

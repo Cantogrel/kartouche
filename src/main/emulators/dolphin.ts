@@ -130,7 +130,7 @@ export function dolphinWiimote(device: string | null, kind: WiimoteKind): IniPat
   return { Wiimote1: wii }
 }
 
-/** Signature de la touche A écrite par RomVault sur la Wiimote : tant qu'elle est là, le fichier n'a pas été retouché à la main. */
+/** Signature de la touche A écrite par Kartouche sur la Wiimote : tant qu'elle est là, le fichier n'a pas été retouché à la main. */
 export function isUntouchedWiimoteFile(text: string): boolean {
   const a = /^\s*Buttons\/A\s*=\s*(.*?)\s*$/m.exec(text)
   return !a || /^`Click 0`(\s*\|.*)?$/.test(a[1])

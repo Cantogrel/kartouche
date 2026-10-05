@@ -4,12 +4,12 @@ import type { InstallOutcome } from '../../library/content/types'
 export interface ContentRef {
   id: number
   kind: 'update' | 'dlc'
-  /** Fichier (ou dossier, Wii U) rangé par RomVault ; c'est lui que l'émulateur doit finir par voir. */
+  /** Fichier (ou dossier, Wii U) rangé par Kartouche ; c'est lui que l'émulateur doit finir par voir. */
   path: string
   titleId: string | null
   version: string | null
   needs: string | null
-  /** Quand RomVault l'a marqué installé (ms) ; renseigné pour les contenus « frères » d'une désinstallation. */
+  /** Quand Kartouche l'a marqué installé (ms) ; renseigné pour les contenus « frères » d'une désinstallation. */
   installedAt?: number | null
 }
 
@@ -17,10 +17,10 @@ export interface ContentRef {
 export interface UninstallRef extends ContentRef {
   /**
    * `null` = installé avant le suivi des fichiers (provenance à établir par l'installateur, jamais supposée) ; un tableau = ce que l'installation a réellement CRÉÉ côté
-   * émulateur (déjà débarrassé des fichiers partagés avec d'autres contenus) ; `[]` = rien n'appartient à RomVault (déjà présent avant, ou rien d'écrit côté émulateur).
+   * émulateur (déjà débarrassé des fichiers partagés avec d'autres contenus) ; `[]` = rien n'appartient à Kartouche (déjà présent avant, ou rien d'écrit côté émulateur).
    */
   emuFiles?: string[] | null
-  /** Quand RomVault a marqué ce contenu installé (ms) : sert à prouver, pour un contenu sans suivi, que ce qui est dans l'émulateur date de cette installation. */
+  /** Quand Kartouche a marqué ce contenu installé (ms) : sert à prouver, pour un contenu sans suivi, que ce qui est dans l'émulateur date de cette installation. */
   installedAt?: number | null
   /** Les AUTRES contenus de ce jeu déjà installés : un installateur sans suivi s'en sert pour ne jamais retirer ce qu'ils partagent avec celui-ci. */
   siblings?: ContentRef[]
@@ -42,7 +42,7 @@ export interface GameRef { id: number; console: string; title: string; path: str
 export interface InstallEnv {
   /** Dossier des ROM gérées (`<roms>/<console>/.content/` y héberge les contenus). */
   romsDir: string
-  /** Émulateur installé dans RomVault ; null sinon. */
+  /** Émulateur installé dans Kartouche ; null sinon. */
   emulator: { dir: string; exe: string } | null
   /** L'exécutable (nom d'image Windows) tourne-t-il ? */
   isRunning: (image: string) => Promise<boolean>
@@ -55,11 +55,11 @@ export interface InstallEnv {
  */
 export interface ContentInstaller {
   emulatorId: string
-  /** Vrai si le contenu doit être rangé par RomVault sous `<roms>/<console>/.content/` même en mode « ne pas copier » (l'émulateur le lit dans un dossier configuré). */
+  /** Vrai si le contenu doit être rangé par Kartouche sous `<roms>/<console>/.content/` même en mode « ne pas copier » (l'émulateur le lit dans un dossier configuré). */
   managed: boolean
   install(env: InstallEnv, item: ContentRef, game: GameRef, when: 'import' | 'launch'): Promise<InstallOutcome>
   /**
-   * Retire de l'émulateur ce que `install` y a mis (jamais le fichier rangé par RomVault : c'est `uninstallContent` qui s'en charge). Absente = rien n'est
+   * Retire de l'émulateur ce que `install` y a mis (jamais le fichier rangé par Kartouche : c'est `uninstallContent` qui s'en charge). Absente = rien n'est
    * installé dans l'émulateur (Eden lit le dossier géré, Cemu/Vita3K n'installent pas encore). `ok: false` = échec (émulateur ouvert…) : le contenu est conservé.
    */
   uninstall?(env: InstallEnv, items: UninstallRef[], game: GameRef): Promise<UninstallOutcome | void>
