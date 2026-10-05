@@ -269,7 +269,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('library:metaUpdated'))
     return r
   })
-  handle('connectors:list', () => listConnectors(db))
+  handle('connectors:list', ({ detect }) => listConnectors(db, undefined, detect))
   handle('connectors:setEnabled', async ({ id, enabled }) => {
     if (!isConnectorId(id)) return
     saveSettings(db, { connectors: { ...loadUserSettings(db).connectors, [id]: enabled } })

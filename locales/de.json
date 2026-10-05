@@ -625,5 +625,9 @@
   "settings.homeDrag": "Zum Umsortieren ziehen (oder Pfeiltasten nach oben und unten)",
   "home.statsRoms": "{n} Spiele · {r} ROMs · {h} Std. gespielt",
   "bp.media": "Medien",
-  "edit.genreHint": "Genres mit Kommas trennen"
+  "edit.genreHint": "Genres mit Kommas trennen",
+  "launchers.link": "Verknüpfen",
+  "launchers.unlink": "Trennen",
+  "launchers.detecting": "Wird erkannt…",
+  "launchers.unlinkConfirm": "{name} trennen? Die {n} Spiel(e) werden aus der Bibliothek entfernt (ihre Dateien bleiben unberührt)."
 }

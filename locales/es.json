@@ -625,5 +625,9 @@
   "settings.homeDrag": "Arrastra para reordenar (o usa las flechas arriba y abajo)",
   "home.statsRoms": "{n} juegos · {r} ROM · {h} h jugadas",
   "bp.media": "Multimedia",
-  "edit.genreHint": "Separa los géneros con comas"
+  "edit.genreHint": "Separa los géneros con comas",
+  "launchers.link": "Asociar",
+  "launchers.unlink": "Disociar",
+  "launchers.detecting": "Detectando…",
+  "launchers.unlinkConfirm": "¿Disociar {name}? Sus {n} juego(s) se quitarán de la biblioteca (sus archivos no se tocan)."
 }

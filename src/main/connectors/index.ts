@@ -10,15 +10,25 @@ import { eaConnector } from './ea'
 import { ubisoftConnector } from './ubisoft'
 import { battleNetConnector } from './battlenet'
 import { itchConnector } from './itch'
-import { connectorStatus, scanConnector, type Connector } from './core'
+import { connectorStatus, detectConnector, scanConnector, type Connector } from './core'
 
 /** Connecteurs pris en charge (un par launcher ; chacun est ajouté par sa propre étape de la feuille de route). */
 export const CONNECTORS: Connector[] = [steamConnector(), epicConnector(), gogConnector(), hydraConnector(), xboxConnector(), eaConnector(), ubisoftConnector(), battleNetConnector(), itchConnector()]
 
 const enabledMap = (db: DatabaseSync): Record<string, boolean> => loadSettings(db).connectors
 
-export const listConnectors = (db: DatabaseSync, connectors: Connector[] = CONNECTORS): Promise<ConnectorStatus[]> =>
-  Promise.all(connectors.map((c) => connectorStatus(db, c, enabledMap(db)[c.id] === true)))
+/** Dernière détection de chaque launcher (la détection lit le registre, parfois plusieurs secondes : on ne la refait pas à chaque ouverture de la page). */
+const detected = new Map<string, boolean>()
+
+/**
+ * État des launchers. `detect: false` répond tout de suite avec la dernière détection connue (`null` si jamais faite) ; `true` détecte
+ * vraiment, tous les launchers en parallèle, et mémorise le résultat.
+ */
+export async function listConnectors(db: DatabaseSync, connectors: Connector[] = CONNECTORS, detect = true): Promise<ConnectorStatus[]> {
+  if (detect) await Promise.all(connectors.map(async (c) => { detected.set(c.id, await detectConnector(c)) }))
+  const enabled = enabledMap(db)
+  return connectors.map((c) => connectorStatus(db, c, enabled[c.id] === true, detected.get(c.id) ?? null))
+}
 
 /** Analyse un launcher, ou tous ceux qui sont activés (`id` absent) : c'est ce que fait le démarrage de l'application. */
 export async function scanConnectors(db: DatabaseSync, id?: string, connectors: Connector[] = CONNECTORS): Promise<ScanReport[]> {

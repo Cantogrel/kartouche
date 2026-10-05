@@ -90,7 +90,8 @@ export interface IpcChannels {
   /** (Re)lance l'identification d'un jeu PC, avec un autre titre de recherche si `title` est donné. */
   'library:identify': { req: { id: number; title?: string }; res: PcMetaView | null }
   /** Launchers pris en charge : détectés sur ce PC ? activés ? combien de jeux ? */
-  'connectors:list': { req: void; res: ConnectorStatus[] }
+  /** `detect: false` : réponse immédiate (dernière détection connue, sinon `null`) ; `true` : détecte vraiment chaque launcher (registre, fichiers), plus lent. */
+  'connectors:list': { req: { detect: boolean }; res: ConnectorStatus[] }
   'connectors:setEnabled': { req: { id: string; enabled: boolean }; res: void }
   /** Analyse un launcher (`id`) ou tous ceux qui sont activés (sans `id`) et met la bibliothèque à jour. */
   'connectors:scan': { req: string | undefined; res: ScanReport[] }
