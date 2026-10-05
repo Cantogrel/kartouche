@@ -12,6 +12,7 @@ import type { CatalogPage } from '@shared/catalog'
 import type { LanguageSetting } from '@shared/settings'
 import { orderConsolesByRecency, type LibraryEntry } from '@shared/library'
 import { focusEl, navItems, useNav, useTypeText } from './useNav'
+import { dispatchToLayer } from './layers'
 import type { CatalogGame } from '@shared/catalog'
 import { VirtualKeyboard } from './VirtualKeyboard'
 import { Detail } from './Detail'
@@ -149,7 +150,9 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   useNav((a, fromKeyboard) => {
     if (menu) { if (a === 'back' || a === 'start') setMenu(false) }
     else if (opened) {
-      if (a === 'back') setOpened(null)
+      // Bande-annonce ou captures ouvertes par-dessus la fiche : la couche du dessus traite l'action d'abord (B la ferme, sans fermer la fiche).
+      if (dispatchToLayer(a)) { /* traité par la couche */ }
+      else if (a === 'back') setOpened(null)
       // X bascule les favoris depuis la fiche sans devoir y amener le focus (cf. Detail.tsx, indice Ⓧ).
       else if (a === 'x') {
         const e = opened.entryId !== undefined ? entries.find((en) => en.id === opened.entryId) : entries.find((en) => en.gameId === opened.gameId)

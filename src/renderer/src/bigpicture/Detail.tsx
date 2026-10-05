@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from '@/i18n'
 import { Badge, Cover, Tag, artStyle } from '@/ui'
 import { useLibrary } from '@/store/library'
@@ -9,6 +9,10 @@ import { emulatorForConsole } from '@shared/emulators'
 import { platformLabel } from '@shared/consoles'
 import { canonicalGenre, genreLabel } from '@shared/genres'
 import { baseViewFrom, resolveView } from '@shared/overrides'
+import { formatMinutes } from '@shared/format'
+import type { GameStats } from '@shared/library'
+import { useGameMedia } from '@/ui/GameMedia'
+import { BpGallery, BpTrailer } from './BpMedia'
 import { useEntryOverrides } from '@/store/overrides'
 import { formatSize } from '@shared/format'
 import { isTorrentSource } from '@shared/uriKind'
@@ -61,6 +65,21 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
 
   // Fiche ouverte depuis la bibliothèque (`entry`) : les modifications de l'utilisateur s'appliquent, comme en mode classique. Depuis le catalogue, la fiche reste celle d'origine.
   const overrides = useEntryOverrides(entry)
+  // Médias (bande-annonce, captures) et statistiques : même contenu que la fiche classique, ouverts en plein écran à la manette.
+  const media = useGameMedia(gameId)
+  const [layer, setLayer] = useState<'trailer' | 'gallery' | null>(null)
+  const opener = useRef<HTMLElement | null>(null)
+  const openLayer = (which: 'trailer' | 'gallery'): void => { opener.current = document.activeElement as HTMLElement | null; setLayer(which) }
+  const closeLayer = (): void => { setLayer(null); setTimeout(() => focusEl(opener.current), 0) }
+  const [stats, setStats] = useState<GameStats | null>(null)
+  const ownedId = owned?.id
+  useEffect(() => {
+    if (ownedId === undefined) { setStats(null); return }
+    let off = false
+    void window.api.invoke('library:stats', ownedId).then((s) => { if (!off) setStats(s) })
+    return () => { off = true }
+  }, [ownedId, owned?.playMinutes])
+  const images = media ? [...media.screenshots, ...media.artworks] : []
   const origTitle = game?.name ?? owned?.title ?? ''
   const view = entry ? resolveView(baseViewFrom(game, details, origTitle), overrides) : null
   const title = view?.title ?? origTitle
@@ -108,6 +127,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
         <div className="bp-detail-body">
           <h2>{title}</h2>
           <div className="muted"><Badge>{label(cons)}</Badge>{owned && ` ${t('bp.played', { n: owned.playMinutes })}`}</div>
+          {stats && stats.playMinutes > 0 && <div className="muted">{[formatMinutes(stats.playMinutes), stats.sessions > 0 && `${stats.sessions} ${t('stats.sessions').toLowerCase()}`, stats.rank !== null && `${t('stats.rank')} ${t('stats.rankValue', { r: stats.rank, n: stats.playedGames })}`].filter(Boolean).join(' \u00b7 ')}</div>}
           <div className="muted">{[year && t('game.released', { d: String(year) }), details?.publisher && t('game.publishedBy', { p: details.publisher }), developer && t('game.developedBy', { p: developer })].filter(Boolean).join(' · ')}</div>
           {genres.length > 0 && <div className="tags">{genres.map((g) => <Tag key={g}>{g}</Tag>)}</div>}
           {/* Pas de data-nav : texte informatif seulement, déjà défilable au stick droit (cf. scrollWithRightStick) sans jamais recevoir le focus. */}
@@ -124,11 +144,15 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
                 </button>
               : <button data-nav className="bp-btn primary" onClick={clickDownload}>⬇ {t('download.button')}{sources.length === 1 && sources[0].sizeBytes ? ` · ${formatSize(sources[0].sizeBytes)}` : ''}</button>)}
             {owned && <button data-nav className="bp-btn" onClick={() => void useLibrary.getState().setFlag(owned.id, { favorite: !owned.favorite })}>{owned.favorite ? '♥' : '♡'} {t(owned.favorite ? 'fav.remove' : 'fav.add')}</button>}
+            {media && media.trailers.length > 0 && <button data-nav className="bp-btn" onClick={() => openLayer('trailer')}>▶ {t('media.title')}</button>}
+            {images.length > 0 && <button data-nav className="bp-btn" onClick={() => openLayer('gallery')}>{t('media.gallery')} ({images.length})</button>}
             <button data-nav className="bp-btn" onClick={onClose}>{t('bp.back')}</button>
           </div>
           {/* B (retour) et X (favoris) agissent tout de suite en plus des boutons ci-dessus, sans devoir y amener le focus : cf. le gestionnaire `opened` dans BigPicture.tsx. Pas d'indice ici (redondant avec les boutons visibles). */}
         </div>
       </div>
+      {layer === 'trailer' && media && <BpTrailer trailers={media.trailers} onClose={closeLayer} />}
+      {layer === 'gallery' && images.length > 0 && <BpGallery images={images} onClose={closeLayer} />}
       {confirmStop && (
         <div className="bp-overlay">
           <div className="bp-menu" data-focus-root>

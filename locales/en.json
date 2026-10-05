@@ -523,5 +523,6 @@
   "stats.size": "Size on disk",
   "stats.never": "Never",
   "stats.none": "Not played yet.",
-  "edit.f.background": "Background"
+  "edit.f.background": "Background",
+  "media.pause": "Pause"
 }
