@@ -11,6 +11,9 @@ import type { CatalogGame, GameDetails } from '@shared/catalog'
 import type { LibraryEntry } from '@shared/library'
 import type { GameSource } from '@shared/sourceList'
 import { useLibrary } from '@/store/library'
+import { useEntryOverrides } from '@/store/overrides'
+import { useDialog } from '@/ui/CollectionDialogs'
+import { baseViewFrom, resolveView } from '@shared/overrides'
 import { useDownloads } from '@/store/downloads'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
 import { OpenEmulatorButton, PlayButton, QuickExitNotice } from '@/ui/PlayButton'
@@ -30,21 +33,28 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
   const lang = useSettings((s) => s.lang)
   useEffect(() => {
     setGame(undefined); setDetails(null); setLoadingDetails(true); setSources([])
-    void window.api.invoke('catalog:get', id).then((g) => { setGame(g); setPageTitle(g?.name ?? null) })
+    void window.api.invoke('catalog:get', id).then(setGame)
     void window.api.invoke('catalog:details', { id }).then(setDetails).finally(() => setLoadingDetails(false))
     void window.api.invoke('sources:forGame', id).then(setSources)
-  }, [id, setPageTitle])
+  }, [id])
+  // Fiche ouverte depuis la bibliothèque (`entry`) : les modifications de l'utilisateur s'appliquent. Depuis le catalogue, la fiche reste celle d'origine.
+  const overrides = useEntryOverrides(entry)
+  useEffect(() => { if (game) setPageTitle(entry ? entry.shownTitle : game.name) }, [game, entry?.shownTitle, setPageTitle])
   if (game === undefined) return null
   if (game === null) return <div className="content"><p className="muted">{t('game.notFound')}</p></div>
   // Les données du catalogue sont propres à la plateforme (année de sortie sur cette console) : elles passent avant celles de la fiche.
-  const year = game.year ?? details?.releaseYear
-  const developer = game.developer ?? details?.developer
+  const view = entry ? resolveView(baseViewFrom(game, details, game.name), overrides) : null
+  const shownName = view?.title ?? game.name
+  const year = view ? view.year ?? undefined : game.year ?? details?.releaseYear
+  const developer = view ? view.developer ?? undefined : game.developer ?? details?.developer
+  const summary = view ? view.description ?? undefined : details?.summary
+  const summaryIsMine = !!entry && overrides.description !== undefined
   // Genre principal du catalogue d'abord, puis ceux de la fiche (dédoublonnés après traduction).
-  const genres = [...new Set([game.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
+  const genres = entry && overrides.genre !== undefined ? [overrides.genre] : [...new Set([game.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
   return (
     <div className="content nopad">
-      <Cover className="hero" kind="hero" gameId={game.id} title={game.name}>
-        <div className="hero-title">{game.name}</div>
+      <Cover className="hero" kind="hero" gameId={game.id} art={entry?.art.banner} title={shownName}>
+        <div className="hero-title">{shownName}</div>
         <div className="hero-bar">
           <strong>{platformLabel(game.console)}</strong>
           <div className="row">
@@ -55,6 +65,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
             {owned && !owned.missing && <OpenEmulatorButton entry={owned} />}
             {owned && !owned.missing && sources.length > 0 && <UninstallButton entry={owned} />}
             {owned && <FlagButtons entry={owned} />}
+            {entry && <Button onClick={() => useDialog.getState().open({ kind: 'edit', entryId: entry.id })}>{t('edit.button')}</Button>}
             {owned && <Button onClick={(e) => openEntryMenuAt(e, owned.id)}>⚙ {t('options')}</Button>}
           </div>
         </div>
@@ -68,7 +79,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
           <div className="tags">{genres.map((x) => <Tag key={x}>{x}</Tag>)}<Tag>{platformLabel(game.console)}</Tag></div>
           {owned && <LibraryFile entry={owned} />}
           {loadingDetails && !details && <><span className="skeleton" style={{ width: '90%' }} /><span className="skeleton" style={{ width: '80%' }} /><span className="skeleton" style={{ width: '55%' }} /></>}
-          {details?.summary && (<><h3>{t('game.about')}</h3><p>{details.summary}</p><p className="muted">{details.summarySource === 'wikipedia' ? t('game.summaryWikipedia') : details.summarySource === 'machine' ? t('game.summaryMachine') : t('game.source', { p: details.provider.split('+')[0].toUpperCase() })}</p></>)}
+          {summary && (<><h3>{t('game.about')}</h3><p>{summary}</p>{!summaryIsMine && details && <p className="muted">{details.summarySource === 'wikipedia' ? t('game.summaryWikipedia') : details.summarySource === 'machine' ? t('game.summaryMachine') : t('game.source', { p: details.provider.split('+')[0].toUpperCase() })}</p>}</>)}
         </div>
         {owned && !owned.missing && <SavesPanel entry={owned} />}
         {owned && <ContentPanel entry={owned} />}

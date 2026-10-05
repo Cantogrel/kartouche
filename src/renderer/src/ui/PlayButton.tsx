@@ -22,7 +22,7 @@ export async function playEntry(entry: LibraryEntry): Promise<void> {
   if (!r.ok && r.error === 'otherRunning') {
     const otherId = useEmulators.getState().running.find((id) => id !== entry.id)
     const other = otherId !== undefined ? useLibrary.getState().entries.find((e) => e.id === otherId) : undefined
-    if (otherId !== undefined && await confirmDialog(t('play.confirmStopOther', { title: other?.title ?? '' }))) {
+    if (otherId !== undefined && await confirmDialog(t('play.confirmStopOther', { title: other?.shownTitle ?? '' }))) {
       await window.api.invoke('game:stopAndWait', otherId)
       await useEmulators.getState().play(entry.id)
     }

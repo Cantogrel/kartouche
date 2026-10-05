@@ -1,6 +1,6 @@
 import { CONSOLES } from './consoles'
 import type { EntryKind } from './launch'
-import type { OverrideField } from './overrides'
+import type { OverrideField, OverrideImageField } from './overrides'
 
 /** Extensions de ROM reconnues → consoles possibles (plusieurs = ambigu, tranché par le hash ou le nom). */
 export const ROM_EXTENSIONS: Record<string, readonly string[]> = {
@@ -69,6 +69,8 @@ export interface LibraryEntry {
   shownTitle: string
   /** Champs modifiés par l'utilisateur sur ce jeu. */
   overridden: OverrideField[]
+  /** Images personnelles (chemins relatifs, servis par `kimg://custom/…`) : jaquette, icône, bannière, fond ; absent = image d'origine. */
+  art: Partial<Record<OverrideImageField, string>>
   /** `rom` (défaut), ou `exe` / `launcher` : entrée non-ROM, sans console du catalogue (`console` vaut alors `pc`) ; ses fichiers ne sont jamais supprimés par Kartouche. */
   kind: EntryKind
   /** D'où vient une entrée non-ROM (`manual`, `steam`…) ; null pour une ROM. */

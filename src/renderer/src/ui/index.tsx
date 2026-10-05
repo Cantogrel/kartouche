@@ -81,25 +81,26 @@ export const GameCard = ({ title, console: cons, hasFile, progress, minutes, onC
  * Format horizontal : l'image remplit le cadre ; une jaquette verticale est affichée entière sur fond flouté.
  * Sans image, le dégradé déterministe reste visible.
  */
-export function Cover({ gameId, title, kind = 'card', className, children }: { gameId: number; title: string; kind?: 'card' | 'tile' | 'hero'; className?: string; children?: ReactNode }) {
-  const src = `kimg://${kind}/${gameId}`
+export function Cover({ gameId, title, kind = 'card', className, children, art }: { gameId: number | null; title: string; kind?: 'card' | 'tile' | 'hero'; className?: string; children?: ReactNode; art?: string }) {
+  // `art` : image personnelle de l'utilisateur (chemin relatif, voir shared/overrides.ts), qui prend la place de celle du catalogue.
+  const src = art ? `kimg://custom/${art}` : gameId !== null ? `kimg://${kind}/${gameId}` : null
   // L'état est rattaché à l'URL : quand la liste est refiltrée et que le composant est réutilisé pour un autre jeu, on repart de « chargement »
   // sans effet différé (un effet remettait « chargement » APRÈS l'événement load d'une image en cache, et l'image restait invisible).
   const [res, setRes] = useState<{ src: string; v: 'wide' | 'tall' | 'none' } | null>(null)
   // Une tuile qui disparaît avant la fin de la résolution (filtres changés vite) annule la tâche côté principal :
   // sinon elle tourne jusqu'au bout (jusqu'à plusieurs x 30 s de repli réseau) en gardant un des 4 emplacements
   // parallèles, ce qui retarde les vraies requêtes suivantes ailleurs dans l'appli (`req.signal` ne s'arme pas ici).
-  useEffect(() => () => void window.api.invoke('images:cancel', { kind, gameId }), [kind, gameId])
-  const state = res && res.src === src ? res.v : 'loading'
+  useEffect(() => () => { if (!art && gameId !== null) void window.api.invoke('images:cancel', { kind, gameId }) }, [kind, gameId, art])
+  const state = src === null ? 'none' : res && res.src === src ? res.v : 'loading'
   const settle = (img: HTMLImageElement | null): void => {
-    if (img && img.complete && img.naturalWidth > 0 && !(res && res.src === src)) setRes({ src, v: img.naturalHeight > img.naturalWidth ? 'tall' : 'wide' })
+    if (src !== null && img && img.complete && img.naturalWidth > 0 && !(res && res.src === src)) setRes({ src, v: img.naturalHeight > img.naturalWidth ? 'tall' : 'wide' })
   }
   return (
     <div className={className} style={artStyle(title)}>
-      {state === 'tall' && <img className="cover-img blur" alt="" src={src} />}
-      {state !== 'none' && (
+      {state === 'tall' && src !== null && <img className="cover-img blur" alt="" src={src} />}
+      {state !== 'none' && src !== null && (
         <img key={src} ref={settle} className={`cover-img${state === 'tall' ? ' tall' : ''}`} style={{ opacity: state === 'loading' ? 0 : undefined }} loading="lazy" alt="" src={src}
-          onLoad={(e) => setRes({ src, v: e.currentTarget.naturalHeight > e.currentTarget.naturalWidth ? 'tall' : 'wide' })} onError={() => setRes({ src, v: 'none' })} />
+          onLoad={(e) => setRes({ src: src!, v: e.currentTarget.naturalHeight > e.currentTarget.naturalWidth ? 'tall' : 'wide' })} onError={() => setRes({ src: src!, v: 'none' })} />
       )}
       {children}
     </div>

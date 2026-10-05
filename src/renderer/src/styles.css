@@ -346,3 +346,21 @@ ul.changelog-notes li strong { color: var(--text-strong); }
 .swatch.accent-white { background: #fff; } .swatch.accent-violet { background: #9a8cff; } .swatch.accent-blue { background: #4aa3ff; }
 .swatch.accent-green { background: #3ecf8e; } .swatch.accent-orange { background: #ff9f43; }
 input[type='range'] { accent-color: var(--accent); max-width: 320px; }
+
+/* Modification d'un jeu (EditGameDialog) */
+.field textarea { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 10px; color: var(--text); font: inherit; resize: vertical; }
+.edit-hint { margin: 0; }
+.edit-body { overflow-y: auto; max-height: 56vh; padding-right: 4px; display: flex; flex-direction: column; }
+.edit-field { margin-bottom: 12px; }
+.edit-label { display: flex; align-items: center; gap: 8px; }
+.edit-badge { font-size: 11px; font-weight: 600; border: 1px solid var(--accent); color: var(--accent); border-radius: 5px; padding: 0 6px; margin-left: 8px; }
+.edit-sub { font-size: 12px; }
+.edit-link { background: none; border: none; padding: 0 0 0 6px; color: var(--accent); cursor: pointer; text-decoration: underline; font: inherit; }
+.edit-section { margin: 4px 0 8px; font-size: 14px; color: var(--text-strong); }
+.edit-image { display: flex; align-items: center; gap: 12px; padding: 8px; margin-bottom: 8px; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
+.edit-thumb { width: 64px; height: 64px; flex: none; display: grid; place-items: center; background: var(--bg); border-radius: 6px; overflow: hidden; }
+.edit-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.edit-image-body { display: flex; flex-direction: column; gap: 6px; }
+.edit-error { margin: 0; color: #ff7b7b; }
+
+.edit-banner { height: 140px; border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; position: relative; }

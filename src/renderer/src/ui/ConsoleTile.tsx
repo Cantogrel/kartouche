@@ -18,17 +18,19 @@ export function ConsoleTile({ id }: { id: string }) {
  * Icône d'un jeu (carrée, entière, sans rognage) comme dans Hydra : icône SteamGridDB mise en cache par le processus principal ;
  * pastille de la console tant qu'elle charge ou si le jeu n'en a pas.
  */
-export function GameIcon({ gameId, console: cons }: { gameId: number | null; console: string }) {
-  const [state, setState] = useState<{ id: number; ok: boolean } | null>(null)
-  const ok = gameId !== null && state?.id === gameId && state.ok
+export function GameIcon({ gameId, console: cons, art }: { gameId: number | null; console: string; art?: string }) {
+  // `art` : icône personnelle de l'utilisateur (chemin relatif), à la place de celle de SteamGridDB.
+  const [state, setState] = useState<{ id: string; ok: boolean } | null>(null)
+  const src = art ? `kimg://custom/${art}` : gameId !== null ? `kimg://icon/${gameId}` : null
+  const ok = src !== null && state?.id === src && state.ok
   // cf. Cover dans ui/index.tsx : annule côté principal une icône abandonnée avant sa résolution.
-  useEffect(() => () => { if (gameId !== null) void window.api.invoke('images:cancel', { kind: 'icon', gameId }) }, [gameId])
+  useEffect(() => () => { if (!art && gameId !== null) void window.api.invoke('images:cancel', { kind: 'icon', gameId }) }, [gameId, art])
   return (
     <span className="game-icon">
       {!ok && <ConsoleTile id={cons} />}
-      {gameId !== null && (!state || state.id !== gameId || state.ok) && (
-        <img key={gameId} className="game-icon-img" alt="" loading="lazy" src={`kimg://icon/${gameId}`} style={{ opacity: ok ? 1 : 0 }}
-          onLoad={() => setState({ id: gameId, ok: true })} onError={() => setState({ id: gameId, ok: false })} />
+      {src !== null && (!state || state.id !== src || state.ok) && (
+        <img key={src} className="game-icon-img" alt="" loading="lazy" src={src} style={{ opacity: ok ? 1 : 0 }}
+          onLoad={() => setState({ id: src, ok: true })} onError={() => setState({ id: src, ok: false })} />
       )}
     </span>
   )
