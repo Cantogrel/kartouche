@@ -6,6 +6,7 @@ import { useApp } from '@/store/app'
 import { useLibrary } from '@/store/library'
 import { useEmulators } from '@/store/emulators'
 import { useDialog } from '@/ui/CollectionDialogs'
+import { useCustomEmulators } from '@/store/customEmulators'
 import { playEntry } from '@/ui/PlayButton'
 import { emulatorForConsole } from '@shared/emulators'
 import type { LibraryEntry } from '@shared/library'
@@ -43,6 +44,10 @@ const pinAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getSta
   ({ key: 'pin', label: `${entry.pinned ? '★' : '☆'} ${t(entry.pinned ? 'pin.remove' : 'pin.add')}`, run: () => lib.setFlag(entry.id, { pinned: !entry.pinned }) })
 const editAction = (entry: LibraryEntry): Action =>
   ({ key: 'edit', label: `✎ ${t('edit.menu')}`, run: () => useDialog.getState().open({ kind: 'edit', entryId: entry.id }) })
+const playWithAction = (entry: LibraryEntry): Action | null =>
+  entry.kind === 'rom' && useCustomEmulators.getState().list.some((e) => e.consoles.includes(entry.console))
+    ? { key: 'playWith', label: `▶ ${t('playWith.title')}`, run: () => useDialog.getState().open({ kind: 'playWith', entryId: entry.id }) }
+    : null
 const collectionAction = (entry: LibraryEntry): Action =>
   ({ key: 'collection', label: `▤ ${t('collection.addTo')}`, run: () => useDialog.getState().open({ kind: 'picker', entryId: entry.id }) })
 /** Même action que `action.deleteFile` dans le menu complet, mais relabellée « Désinstaller » : une liste de
@@ -89,7 +94,7 @@ function fullActionsFor(entry: LibraryEntry, back: () => void): Action[] {
   const lib = useLibrary.getState()
   const hasFile = !entry.missing
   const ask = (key: string): Promise<boolean> => confirmDialog(t(`confirm.${key}`, { title: entry.shownTitle }))
-  const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), editAction(entry), sep('sep1')]
+  const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), editAction(entry), ...(playWithAction(entry) ? [playWithAction(entry)!] : []), sep('sep1')]
   if (!hasFile) list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
   if (hasFile) {
     list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })

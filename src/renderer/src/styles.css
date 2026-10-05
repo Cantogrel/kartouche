@@ -416,3 +416,13 @@ input[type='range'] { accent-color: var(--accent); max-width: 320px; }
 .bp-media-image { max-width: 94vw; max-height: calc(100vh - 130px); object-fit: contain; border-radius: 10px; }
 .bp-media-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
 .bp-media-name { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Émulateurs personnalisés */
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.chip { background: none; border: 1px solid var(--border); border-radius: 14px; padding: 3px 11px; color: var(--text); font-size: 12px; cursor: pointer; }
+.chip:hover, .chip:focus-visible { border-color: var(--accent); outline: none; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg, #fff); }
+.cmd-preview { display: block; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); font-size: 12px; word-break: break-all; user-select: text; }
+.emu-add { display: grid; place-items: center; min-height: 120px; border-style: dashed; color: var(--text-muted); cursor: pointer; background: none; font: inherit; }
+.emu-add:hover, .emu-add:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+.playwith-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px; }

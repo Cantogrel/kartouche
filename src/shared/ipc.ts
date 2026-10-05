@@ -71,6 +71,8 @@ export interface IpcChannels {
   'customEmulators:save': { req: { id?: string; name: string; exe: string; args: string; consoles: string[]; extensions: string[] }; res: SaveEmulatorResult }
   /** Supprime un émulateur ; les jeux qui le choisissaient retombent sur celui par défaut de leur console. */
   'customEmulators:delete': { req: string; res: void }
+  /** Ouvre l'émulateur seul (sans jeu), pour vérifier qu'il démarre ; faux si l'exécutable est introuvable. */
+  'customEmulators:open': { req: string; res: boolean }
   /** Sélecteur de fichier pour l'exécutable ; null si annulé. */
   'customEmulators:pickExe': { req: void; res: string | null }
   /** Ligne de commande qui serait lancée pour ce modèle d'arguments et ce fichier (aperçu, rien n'est lancé). */

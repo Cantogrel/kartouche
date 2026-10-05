@@ -24,7 +24,8 @@ import { addSourceList, rematchSources } from './sources/import'
 import { listSourceLists, refreshAllSourceLists, refreshSourceList, removeAllSourceLists, removeSourceList, sourcesForGame } from './sources/manage'
 import { sourcesDir } from './sources/localCopy'
 import { getStats } from './library/stats'
-import { deleteCustomEmulator, listCustomEmulators, saveCustomEmulator } from './emulators/customStore'
+import { deleteCustomEmulator, getCustomEmulator, listCustomEmulators, saveCustomEmulator } from './emulators/customStore'
+import { spawn } from 'node:child_process'
 import { chooseEmulator, emulatorOptions, resolveEmulatorId } from '@shared/emulatorChoice'
 import { buildCustomCommand, formatCommand } from '@shared/customEmulators'
 import { clearCustomImage, customArtDir, removeEntryArt, setCustomImage } from './library/customArt'
@@ -46,7 +47,7 @@ import { BIOS_SLOTS } from '@shared/bios'
 import { autoInstallFirmware } from './bios/official'
 import { isRunning, launchGame, openEmulator, runningCount, stopAllGames, stopGame, stopGameAndWait } from './emulators/launcher'
 import { dirname, join } from 'node:path'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 
 /** Ordre de la cascade de fiches enrichies. */
@@ -203,6 +204,14 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('customEmulators:list', () => listCustomEmulators(db))
   handle('customEmulators:save', ({ id, ...input }) => saveCustomEmulator(db, input, id))
   handle('customEmulators:delete', (id) => deleteCustomEmulator(db, id))
+  handle('customEmulators:open', (id) => {
+    const emu = getCustomEmulator(db, id)
+    if (!emu || !existsSync(emu.exe)) return false
+    const child = spawn(emu.exe, [], { cwd: dirname(emu.exe), detached: true, stdio: 'ignore' })
+    child.on('error', () => undefined)
+    child.unref()
+    return true
+  })
   handle('customEmulators:pickExe', async () => {
     const win = BrowserWindow.getFocusedWindow()
     const opts = { properties: ['openFile'] as 'openFile'[], filters: [{ name: 'Executable', extensions: ['exe', 'bat', 'cmd'] }, { name: '*', extensions: ['*'] }] }

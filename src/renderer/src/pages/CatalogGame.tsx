@@ -14,6 +14,7 @@ import { useLibrary } from '@/store/library'
 import { useEntryOverrides } from '@/store/overrides'
 import { useDialog } from '@/ui/CollectionDialogs'
 import { MediaSections, useGameMedia } from '@/ui/GameMedia'
+import { PlayWithButton } from '@/ui/PlayWith'
 import { Section } from '@/ui/Section'
 import { StatsPanel } from '@/ui/GameStats'
 import { baseViewFrom, resolveView } from '@shared/overrides'
@@ -67,6 +68,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
             {owned?.missing && <Button variant="primary" onClick={() => void link()}>{t('linkRom')}</Button>}
             {(!owned || owned.missing) && sources.length > 0 && <DownloadButton sources={sources} gameName={game.name} gameId={game.id} />}
             {owned && !owned.missing && <PlayButton entry={owned} />}
+            {owned && !owned.missing && <PlayWithButton entry={owned} />}
             {owned && !owned.missing && <OpenEmulatorButton entry={owned} />}
             {owned && !owned.missing && sources.length > 0 && <UninstallButton entry={owned} />}
             {owned && <FlagButtons entry={owned} />}
