@@ -4,10 +4,11 @@ import { loadSettings } from '../db/settingsStore'
 import { steamConnector } from './steam'
 import { epicConnector } from './epic'
 import { gogConnector } from './gog'
+import { hydraConnector } from './hydra'
 import { connectorStatus, scanConnector, type Connector } from './core'
 
 /** Connecteurs pris en charge (un par launcher ; chacun est ajouté par sa propre étape de la feuille de route). */
-export const CONNECTORS: Connector[] = [steamConnector(), epicConnector(), gogConnector()]
+export const CONNECTORS: Connector[] = [steamConnector(), epicConnector(), gogConnector(), hydraConnector()]
 
 const enabledMap = (db: DatabaseSync): Record<string, boolean> => loadSettings(db).connectors
 
