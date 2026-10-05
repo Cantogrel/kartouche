@@ -77,12 +77,12 @@ export const GameCard = ({ title, console: cons, hasFile, progress, minutes, onC
 )
 
 /**
- * Illustration d'un jeu du catalogue, résolue et mise en cache par le processus principal (rvimg://).
+ * Illustration d'un jeu du catalogue, résolue et mise en cache par le processus principal (kimg://).
  * Format horizontal : l'image remplit le cadre ; une jaquette verticale est affichée entière sur fond flouté.
  * Sans image, le dégradé déterministe reste visible.
  */
 export function Cover({ gameId, title, kind = 'card', className, children }: { gameId: number; title: string; kind?: 'card' | 'tile' | 'hero'; className?: string; children?: ReactNode }) {
-  const src = `rvimg://${kind}/${gameId}`
+  const src = `kimg://${kind}/${gameId}`
   // L'état est rattaché à l'URL : quand la liste est refiltrée et que le composant est réutilisé pour un autre jeu, on repart de « chargement »
   // sans effet différé (un effet remettait « chargement » APRÈS l'événement load d'une image en cache, et l'image restait invisible).
   const [res, setRes] = useState<{ src: string; v: 'wide' | 'tall' | 'none' } | null>(null)

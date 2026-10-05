@@ -268,7 +268,7 @@ function DangerSection() {
   )
 }
 
-/** Exemple du format `romvault.sourcelist/v1`, valeurs volontairement fictives — voir src/shared/sourceList.ts. */
+/** Exemple du format `kartouche.sourcelist/v1`, valeurs volontairement fictives — voir src/shared/sourceList.ts. */
 const SOURCE_FORMAT_EXAMPLE = `{
   "schemaVersion": 1,
   "name": "My personal list",

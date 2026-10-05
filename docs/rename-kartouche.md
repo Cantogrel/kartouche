@@ -37,8 +37,8 @@ Règle : tout ce que l'utilisateur voit devient **Kartouche**. Tout identifiant 
 |---|---|---|---|
 | `romvault.db` (fichier de base) | `src/main/index.ts:72`, `src/main/ipc.ts:101` | **CONSERVER** | Nom interne, jamais montré ; le renommer ne rapporte rien et expose à un échec de migration |
 | `appId` | `electron-builder.yml` | **CONSERVER** | voir §2 |
-| `romvault.sourcelist/v1` (format JSON des listes de sources) | `src/shared/sourceList.ts`, `Settings.tsx:271`, locales, `CLAUDE.md`, validation | **ACCEPTER LES DEUX** ; l'aide et les exemples affichent `kartouche.sourcelist/v1` | Les listes déjà importées ou partagées par les utilisateurs portent l'ancien identifiant |
-| Protocole `rvimg://` | `index.html` (CSP), `index.ts`, `ui/index.tsx`, `ConsoleTile.tsx`, commentaires | **RENOMMER** en `kimg://` | Non persisté (ni base ni réglages) ; aucune compatibilité à garder |
+| `romvault.sourcelist/v1` (nom du format JSON des listes) | `Settings.tsx`, locales, `CLAUDE.md` | **RENOMMÉ** `kartouche.sourcelist/v1` dans l'aide et les exemples | **Correction de l'audit** : ce nom n'est qu'un libellé de documentation. La validation ne lit que `schemaVersion` (=1) et ignore les champs inconnus : une liste qui porte l'un ou l'autre nom, ou aucun, est acceptée (test de non-régression dans `validate.test.ts`). |
+| Protocole `rvimg://` (**fait**) | `index.html` (CSP), `index.ts`, `ui/index.tsx`, `ConsoleTile.tsx`, commentaires | **RENOMMER** en `kimg://` | Non persisté (ni base ni réglages) ; aucune compatibilité à garder |
 | Type `RomVaultApi` | `src/shared/ipc.ts:190`, `preload/index.ts`, `env.d.ts` | **RENOMMER** `KartoucheApi` | Interne |
 | `BiosFound.source: 'romvault'` | `src/shared/bios.ts:106`, `bios.ts:88` | **RENOMMER** (`'app'`) après vérification qu'aucun libellé ne l'utilise comme clé | Valeur calculée à la volée, non persistée |
 | Variables `ROMVAULT_HASH`, `ROMVAULT_REAL_EMU` | `index.ts:35`, `package.json`, tests réels | **RENOMMER** `KARTOUCHE_*` | Développement seulement |
@@ -60,23 +60,32 @@ Tout cela est relu pour reconnaître « un fichier que nous avons écrit » ou r
 
 À faire éventuellement plus tard (hors 0.3.0) : écrire les nouveaux fichiers sous le nom Kartouche en acceptant les deux. Les noms de variables et de fonctions internes (`isRomvaultInput`, `createdByRomVault`) peuvent être renommés sans effet sur les données.
 
-## 5. Données utilisateur et mise à jour → COMPATIBILITÉ OBLIGATOIRE (étape P01-compat)
+## 5. Données utilisateur et mise à jour (étape P01-compat, **fait et testé**)
 
-Deux constats qui changent le plan de la migration :
+Constats de l'audit :
 
-1. **Le dossier de données packagé est à côté de l'exécutable** (`<dossier d'installation>\data`, `paths.ts:11`), pas dans `userData` comme les notes du vault le laissaient croire. Installation par machine (`perMachine: true`), dossier par défaut dérivé de `productName`.
-2. **L'installateur met `data/` de côté sous le nom `RomVault-data.keep`** pendant la désinstallation de l'ancienne version, puis le remet. Si le script de la nouvelle version cherche `Kartouche-data.keep`, il ne retrouve rien : la base resterait orpheline dans `RomVault-data.keep` et l'app démarrerait vide. **`build/installer.nsh` doit continuer à utiliser `RomVault-data.keep`** (ou chercher les deux noms). Le test d'une mise à jour réelle 0.2.5 → 0.3.0 est indispensable.
+1. **Le dossier de données packagé est à côté de l'exécutable** (`<dossier d'installation>\data`, `paths.ts`), pas dans `userData`. Les chemins de la bibliothèque et des émulateurs y sont enregistrés en absolu : **le dossier d'installation ne doit pas être déplacé** (une installation existante dans `C:\Games\RomVault` y reste, le dossier garde son ancien nom ; une installation neuve ira dans `…\Kartouche`).
+2. **La mise à jour se fait sur place** (même `appId`) : le nouvel installateur lance l'ancien désinstalleur, qui met `data` de côté sous `RomVault-data.keep` ; le nouvel installateur le remet en place. Il cherche donc `Kartouche-data.keep` (posé par le désinstalleur de cette version) **et** `RomVault-data.keep` (posé par l'ancien).
 
-Autres points :
+Ce qui est en place :
 
-| Sujet | Décision |
+| Sujet | Mécanisme |
 |---|---|
-| Dossier d'installation | Avec le même `appId`, la mise à jour reste dans l'ancien dossier (`…\RomVault`) : l'exécutable devient `Kartouche.exe` dans un dossier encore nommé RomVault. Une installation neuve ira dans `…\Kartouche`. Documenté, accepté. |
-| `userData` (`%APPDATA%\<nom>`) | Le nom change avec `productName` : `bootstrap.json` (chemin de données choisi par l'utilisateur) et le stockage local de Chromium ne seront plus retrouvés. Migration au 1er lancement : si l'ancien dossier `%APPDATA%\RomVault` existe et pas le nouveau, copier `bootstrap.json` et `Local Storage`. |
-| Raccourcis | Le désinstalleur de l'ancienne version retire le raccourci `RomVault`, le nouvel installateur crée `Kartouche`. À vérifier. |
-| Proxy Cloudflare `romvault-proxy.mathc83.workers.dev` (`src/shared/proxy.ts`, `server/`) | **CONSERVER l'URL** : les versions 0.2.x installées l'appellent encore, et un nouveau worker demanderait de recréer les secrets (clés). Renommer les commentaires seulement. Un `kartouche-proxy` pourra venir plus tard avec les deux en service. |
-| Mise à jour automatique | Les installations 0.2.x pointent vers `Cantogrel/romvault` ; GitHub redirige vers le dépôt renommé. À tester avant publication. |
-| Dossier du projet local `E:\dev\RomVault` | **CONSERVER** (renommer casserait worktrees, mémoire de Claude Code et scripts) |
+| `data/` | `build/installer.nsh` : restauration depuis les deux noms ; les désinstallations posent `Kartouche-data.keep` |
+| `userData` (`%APPDATA%\RomVault` → `%APPDATA%\Kartouche`) | `src/main/legacy.ts` : `migrateLegacyUserData` copie `bootstrap.json` et `Local Storage` (jamais écrasés, idempotent) avant `whenReady` |
+| Restes de l'ancien produit | `retireLegacyUserData` supprime l'ancien `userData` : caches Chromium (liste fermée) et éléments repris dont la copie existe ; **tout élément inconnu est laissé** (par exemple un dossier `data`). `removeLegacyUpdaterCache` supprime `%LOCALAPPDATA%omvault-updater` (installateur téléchargé, ~120 Mo). **Application installée seulement** : en développement, l'ancien dossier peut servir à une RomVault installée à côté |
+| Raccourcis, registre, ancien exécutable | gérés par electron-builder (`RomVault.exe` et ses raccourcis retirés, `Kartouche.exe` et les siens créés, clé de désinstallation renommée) |
+| Proxy Cloudflare `romvault-proxy…` | **conservé** (les 0.2.x l'appellent encore) |
+
+**Test de bout en bout** (bac à sable : `appId` et noms de test, installation par utilisateur, aucun contact avec une installation réelle), scénario joué avec les vrais installateurs :
+1. ancienne version installée, données factices créées (base, ROM, config d'émulateur) ;
+2. mise à jour silencieuse comme le fait l'updater (`--updated`) : données **identiques octet pour octet** (SHA-256), ancien exécutable remplacé, raccourcis Bureau et Menu Démarrer basculés, aucun dossier `*.keep` ni autre reste à côté ;
+3. vraie désinstallation : raccourcis et clé de registre retirés, données mises à l'abri dans `Kartouche-data.keep` ;
+4. réinstallation neuve : données restaurées à l'identique ;
+5. nettoyage complet du test.
+Limite : l'installation « par machine » (UAC, `C:\Games\RomVault`) n'a pas été rejouée ; elle ne diffère que par la ruche de registre et l'élévation. À confirmer une dernière fois à la recette (P08) avec la vraie mise à jour.
+
+À noter : `%APPDATA%omvault\data` (~2,6 Go : `romvault.db`, `roms`, `emulators`, `bios`, dernière modification le 27/09) est un reliquat d'une ancienne disposition du dossier de données. Il n'est **pas** utilisé par la version actuelle et n'est jamais supprimé automatiquement ; à vérifier puis supprimer à la main.
 
 ## 6. Écosystème interne (étape P01-ecosystem)
 

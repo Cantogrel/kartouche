@@ -77,7 +77,7 @@ export interface GameDetails {
   /** Langue et origine de `summary` (traduit, Wikipédia…) ; absent = texte source en anglais. */
   summaryLang?: string
   summarySource?: 'wikipedia' | 'machine'
-  /** URL distante d'une bannière (SteamGridDB) ; l'affichage passe par le cache local rvimg://hero/<id>. */
+  /** URL distante d'une bannière (SteamGridDB) ; l'affichage passe par le cache local kimg://hero/<id>. */
   heroUrl?: string
 }
 
