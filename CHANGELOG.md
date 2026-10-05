@@ -3,6 +3,35 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.3.0
+
+- **RomVault devient Kartouche** : nouveau nom et nouvelle icône (cartouche isométrique). Vos données sont reprises
+  telles quelles : bibliothèque, sauvegardes, émulateurs, réglages et listes de sources. L'installateur retrouve votre
+  dossier d'installation actuel ; les listes de sources au format `romvault.sourcelist/v1` restent acceptées.
+- **Modifier un jeu** : titre, description, genre, année, développeur, jaquette, icône et bannière peuvent être changés
+  depuis la bibliothèque (clic droit → Modifier, ou ✎ sur la fiche). Vos changements ne touchent jamais
+  l'identification : le jeu reste reconnu, téléchargeable et rattaché à sa fiche du catalogue, et « rétablir » remet
+  l'origine. Ils apparaissent aussi en Big Picture.
+- **Fiche de jeu enrichie** : deux colonnes avec sections repliables, bande-annonce lue dans l'app, captures et
+  artworks (galerie avec visionneuse au clavier), descriptions plus complètes, statistiques de jeu (temps total,
+  sessions, moyenne, rang), fond personnalisable. Big Picture : bande-annonce plein écran et captures à la manette.
+- **Exécutables et émulateurs personnalisés** : ajoutez un `.exe`, `.bat`, `.cmd` ou `.lnk` comme jeu (glisser-déposer
+  ou bouton), et déclarez vos propres émulateurs (Émulateurs → Mes émulateurs) avec leurs arguments. « Jouer avec… »
+  choisit l'émulateur pour un jeu ou pour une console.
+- **Launchers** (Paramètres → Launchers, désactivés par défaut) : importez les jeux installés de Steam, Epic, GOG, Hydra,
+  Xbox / Microsoft Store, EA app, Ubisoft Connect, Battle.net et itch.io. Kartouche ne lit que ce qui est installé,
+  aucun identifiant de compte, aucun accès réseau. Jouer lance le jeu par son launcher d'origine et compte le temps de
+  jeu. Les jeux PC sont identifiés via IGDB (jaquette, description, médias) et séparés des jeux d'émulation.
+- **Bibliothèque** : jeux PC regroupés à part dans la liste latérale, étiquette du launcher sur la tuile, tri.
+- **Accueil personnalisable** : ordre et visibilité des blocs (statistiques, continuer, favoris, récents, collections),
+  en classique comme en Big Picture.
+- **Apparence** : couleur d'accent au choix, arrondi des angles, contraste renforcé, export et import de thème.
+- **Langues** : l'interface est disponible en français, anglais, espagnol, allemand, italien, portugais (Portugal),
+  chinois simplifié et japonais. Vous pouvez ajouter votre propre langue avec un fichier JSON (Paramètres → Langue).
+  Les traductions n'ont pas été relues par des locuteurs natifs.
+- Big Picture : bouton Médias sur la fiche, trailers triés par titre, mêmes modifications d'affichage qu'en classique.
+- Le tag torrent est affiché au-dessus du bouton Télécharger sans décaler la rangée de boutons.
+
 ## 0.2.5
 
 - Téléchargements : la fiche d'un jeu (classique et Big Picture) garde le bouton bloqué avec l'avancement quand on la
