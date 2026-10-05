@@ -1,3 +1,4 @@
+import { isHexColor, RADII, type Radius } from './appearance'
 import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeLayout } from './homeLayout'
 
 export type LanguageSetting = 'auto' | 'en' | 'fr'
@@ -31,6 +32,11 @@ export interface Settings {
   uiScale: number
   accent: Accent
   reduceMotion: boolean
+  /** Accent personnel #rrggbb ; vide = l'accent prédéfini. */
+  accentColor: string
+  /** Arrondi des coins, contraste renforcé du texte et des bordures. */
+  radius: Radius
+  highContrast: boolean
   /** Émulateur par défaut de chaque console (id de console → id d'émulateur, intégré ou `custom-<n>`) ; absent = l'émulateur intégré de la console. */
   emulatorDefaults: Record<string, string>
   /** Launchers dont la bibliothèque est lue (id de connecteur → activé) ; absent = désactivé : rien n'est lu sans que l'utilisateur l'ait demandé. */
@@ -62,6 +68,9 @@ export const DEFAULT_SETTINGS: Settings = {
   uiScale: 1,
   accent: 'violet',
   reduceMotion: false,
+  accentColor: '',
+  radius: 'normal',
+  highContrast: false,
   emulatorDefaults: {},
   connectors: {},
   homeLayout: DEFAULT_HOME_LAYOUT
@@ -90,6 +99,9 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (typeof p.uiScale === 'number' && (UI_SCALES as readonly number[]).includes(p.uiScale)) out.uiScale = p.uiScale
   if (typeof p.accent === 'string' && (ACCENTS as readonly string[]).includes(p.accent)) out.accent = p.accent as Accent
   if (typeof p.reduceMotion === 'boolean') out.reduceMotion = p.reduceMotion
+  if (p.accentColor === '' || isHexColor(p.accentColor)) out.accentColor = (p.accentColor as string).toLowerCase()
+  if (typeof p.radius === 'string' && (RADII as readonly string[]).includes(p.radius)) out.radius = p.radius as Radius
+  if (typeof p.highContrast === 'boolean') out.highContrast = p.highContrast
   if (typeof p.emulatorDefaults === 'object' && p.emulatorDefaults !== null && !Array.isArray(p.emulatorDefaults)) {
     out.emulatorDefaults = Object.fromEntries(Object.entries(p.emulatorDefaults as Record<string, unknown>).filter(([k, v]) => /^[a-z0-9]+$/.test(k) && typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v)) as [string, string][])
   }
