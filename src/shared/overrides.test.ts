@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeOverride, resolveView, type BaseView } from './overrides'
+import { baseViewFrom, normalizeOverride, resolveView, splitGenres, type BaseView } from './overrides'
 
 const base: BaseView = { title: 'Super Mario World', description: 'Plateforme.', genre: 'Plateforme', year: 1990, developer: 'Nintendo' }
 
@@ -43,5 +43,20 @@ describe('resolveView', () => {
 
   it('ignore une année illisible stockée dans la base', () => {
     expect(resolveView(base, { year: 'n/a' }).year).toBe(1990)
+  })
+})
+
+describe('genres multiples', () => {
+  it('splitGenres : séparateurs variés, sans doublon ni vide', () => {
+    expect(splitGenres('RPG, Action ; rpg / ')).toEqual(['RPG', 'Action', 'rpg'])
+    expect(splitGenres(null)).toEqual([])
+    expect(splitGenres(Array.from({ length: 12 }, (_, i) => `g${i}`).join(','))).toHaveLength(8)
+  })
+  it('l’origine garde tous les genres du catalogue et de la fiche', () => {
+    const v = baseViewFrom({ name: 'X', year: null, genre: 'rpg', developer: null }, { genres: ['Role-playing (RPG)', 'Adventure'] } as never, 'X')
+    expect(splitGenres(v.genre)).toEqual(['rpg', 'adventure'])
+  })
+  it('une valeur à plusieurs genres est conservée', () => {
+    expect(normalizeOverride('genre', 'RPG, Aventure')).toBe('RPG, Aventure')
   })
 })

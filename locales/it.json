@@ -83,7 +83,6 @@
   "game.noFile": "Nessuna ROM collegata a questo gioco",
   "home.continue": "Continua a giocare",
   "home.recent": "Aggiunti di recente",
-  "home.sec.stats": "Statistiche della libreria",
   "home.sec.continue": "Continua a giocare",
   "home.sec.favorites": "Preferiti",
   "home.sec.recent": "Aggiunti di recente",
@@ -623,5 +622,8 @@
   "settings.langError.name": "Il nome della lingua è mancante o troppo lungo.",
   "settings.langError.strings": "Il file non contiene alcun testo tradotto.",
   "settings.langError.builtin": "Questa lingua è già integrata.",
-  "settings.homeDrag": "Trascina per riordinare (o usa le frecce su e giù)"
+  "settings.homeDrag": "Trascina per riordinare (o usa le frecce su e giù)",
+  "home.statsRoms": "{n} giochi · {r} ROM · {h} h giocate",
+  "bp.media": "Media",
+  "edit.genreHint": "Separa i generi con virgole"
 }

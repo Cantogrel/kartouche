@@ -8,12 +8,12 @@ import { useSettings } from '@/store/settings'
 import { emulatorForConsole } from '@shared/emulators'
 import { platformLabel } from '@shared/consoles'
 import { canonicalGenre, genreLabel } from '@shared/genres'
-import { baseViewFrom, resolveView } from '@shared/overrides'
+import { baseViewFrom, resolveView, splitGenres } from '@shared/overrides'
 import { formatMinutes } from '@shared/format'
 import type { GameStats } from '@shared/library'
 import { useGameMedia } from '@/ui/GameMedia'
 import { usePcMeta } from '@/store/pcMeta'
-import { BpGallery, BpTrailer } from './BpMedia'
+import { BpMediaViewer } from './BpMedia'
 import { pushLayer } from './layers'
 import { useEntryEmulators } from '@/store/customEmulators'
 import { isCustomEmulatorId } from '@shared/customEmulators'
@@ -73,9 +73,9 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   const pcMeta = usePcMeta(owned)
   const catalogMedia = useGameMedia(gameId)
   const media = catalogMedia ?? pcMeta?.media ?? null
-  const [layer, setLayer] = useState<'trailer' | 'gallery' | null>(null)
+  const [layer, setLayer] = useState<'media' | null>(null)
   const opener = useRef<HTMLElement | null>(null)
-  const openLayer = (which: 'trailer' | 'gallery'): void => { opener.current = document.activeElement as HTMLElement | null; setLayer(which) }
+  const openLayer = (): void => { opener.current = document.activeElement as HTMLElement | null; setLayer('media') }
   const closeLayer = (): void => { setLayer(null); setTimeout(() => focusEl(opener.current), 0) }
   const [stats, setStats] = useState<GameStats | null>(null)
   const ownedId = owned?.id
@@ -85,7 +85,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
     void window.api.invoke('library:stats', ownedId).then((s) => { if (!off) setStats(s) })
     return () => { off = true }
   }, [ownedId, owned?.playMinutes])
-  const images = media ? [...media.screenshots, ...media.artworks] : []
+  const hasMedia = !!media && media.trailers.length + media.screenshots.length + media.artworks.length > 0
   // Choix de l'émulateur à la manette (seulement quand un émulateur personnalisé sait lancer ce jeu) : fenêtre de boutons, B la ferme sans fermer la fiche.
   const emus = useEntryEmulators(owned)
   const customChosen = isCustomEmulatorId(emus?.effective)
@@ -105,7 +105,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   const year = view ? view.year ?? undefined : game?.year ?? details?.releaseYear
   const developer = view ? view.developer ?? undefined : game?.developer ?? details?.developer
   const summary = view ? view.description ?? undefined : details?.summary
-  const genres = entry && overrides.genre !== undefined ? [overrides.genre] : [...new Set([game?.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
+  const genres = entry && overrides.genre !== undefined ? splitGenres(overrides.genre).map((g) => genreLabel(g, lang)) : [...new Set([game?.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
   const launch = async (): Promise<void> => {
     if (!owned) return
     if (def && installed === false && !customChosen) { setError(t('play.notInstalled')); return }
@@ -163,8 +163,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
               : <button data-nav className="bp-btn primary" onClick={clickDownload}>⬇ {t('download.button')}{sources.length === 1 && sources[0].sizeBytes ? ` · ${formatSize(sources[0].sizeBytes)}` : ''}</button>)}
             {owned && <button data-nav className="bp-btn" onClick={() => void useLibrary.getState().setFlag(owned.id, { favorite: !owned.favorite })}>{owned.favorite ? '♥' : '♡'} {t(owned.favorite ? 'fav.remove' : 'fav.add')}</button>}
             {emus && emus.options.length > 1 && <button data-nav className="bp-btn" onClick={() => setChoosing(true)}>{t('bp.emulator')}</button>}
-            {media && media.trailers.length > 0 && <button data-nav className="bp-btn" onClick={() => openLayer('trailer')}>▶ {t('media.title')}</button>}
-            {images.length > 0 && <button data-nav className="bp-btn" onClick={() => openLayer('gallery')}>{t('media.gallery')} ({images.length})</button>}
+            {hasMedia && <button data-nav className="bp-btn" onClick={openLayer}>▶ {t('bp.media')}</button>}
             <button data-nav className="bp-btn" onClick={onClose}>{t('bp.back')}</button>
           </div>
           {/* B (retour) et X (favoris) agissent tout de suite en plus des boutons ci-dessus, sans devoir y amener le focus : cf. le gestionnaire `opened` dans BigPicture.tsx. Pas d'indice ici (redondant avec les boutons visibles). */}
@@ -180,8 +179,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
           </div>
         </div>
       )}
-      {layer === 'trailer' && media && <BpTrailer trailers={media.trailers} onClose={closeLayer} />}
-      {layer === 'gallery' && images.length > 0 && <BpGallery images={images} onClose={closeLayer} />}
+      {layer === 'media' && media && hasMedia && <BpMediaViewer media={media} onClose={closeLayer} />}
       {confirmStop && (
         <div className="bp-overlay">
           <div className="bp-menu" data-focus-root>

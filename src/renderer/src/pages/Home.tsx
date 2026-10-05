@@ -5,7 +5,7 @@ import { t } from '@/i18n'
 import { useApp } from '@/store/app'
 import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
-import { visibleHomeSections } from '@shared/homeLayout'
+import { homeStats, visibleHomeSections } from '@shared/homeLayout'
 import type { LibraryEntry } from '@shared/library'
 
 const ROW = 6
@@ -18,11 +18,11 @@ export function Home() {
   const layout = useSettings((s) => s.settings.homeLayout)
   const { entries, collections, loaded, refresh } = useLibrary()
   useEffect(() => { void refresh() }, [refresh])
-  const { played, favorites, recent, minutes } = useMemo(() => ({
+  const stats = useMemo(() => homeStats(entries), [entries])
+  const { played, favorites, recent } = useMemo(() => ({
     played: entries.filter((e) => e.lastPlayed && !e.missing).sort((a, b) => b.lastPlayed! - a.lastPlayed!),
     favorites: entries.filter((e) => e.favorite),
-    recent: [...entries].sort((a, b) => b.addedAt - a.addedAt),
-    minutes: entries.reduce((n, e) => n + e.playMinutes, 0)
+    recent: [...entries].sort((a, b) => b.addedAt - a.addedAt)
   }), [entries])
 
   if (loaded && entries.length === 0) {
@@ -30,9 +30,9 @@ export function Home() {
   }
   return (
     <div className="content">
+      <p className="muted home-stats">{t(stats.hasOther ? 'home.statsRoms' : 'home.stats', { n: stats.games, r: stats.roms, h: stats.hours })}</p>
       {visibleHomeSections(layout).map((s) => {
         switch (s) {
-          case 'stats': return <p key={s} className="muted home-stats">{t('home.stats', { n: entries.length, h: Math.round(minutes / 60) })}</p>
           case 'continue': return played.length > 0 ? <Section key={s} title={t('home.continue')}>{row(played.slice(0, ROW))}</Section> : null
           case 'favorites': return favorites.length > 0 ? <Section key={s} title={t('home.favorites')}>{row(favorites.slice(0, ROW))}</Section> : null
           case 'recent': return recent.length > 0 ? <Section key={s} title={t('home.recent')}>{row(recent.slice(0, ROW))}</Section> : null
