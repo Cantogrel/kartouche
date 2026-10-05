@@ -18,11 +18,11 @@ import type { InstallEnv } from './types'
 import { guard, launchUntil } from './real.testutil'
 
 // TESTS RÉELS : ils lancent le VRAI émulateur installé dans data/emulators/ avec de VRAIS jeux, sur la machine de développement. Désactivés par défaut (ils ouvrent des fenêtres, modifient
-// puis RESTAURENT la configuration de l'émulateur) : `ROMVAULT_REAL_EMU=1 npx vitest run src/main/emulators/content/real-emulators.test.ts`.
+// puis RESTAURENT la configuration de l'émulateur) : `KARTOUCHE_REAL_EMU=1 npx vitest run src/main/emulators/content/real-emulators.test.ts`.
 // Ce qu'ils valident est écrit dans chaque test — et seulement cela. Une plateforme absente de ce fichier (3DS, PS3) n'a PAS été validée en réel : aucun .cia/.pkg de mise à jour disponible.
 // Pour la valider, voir « Valider une plateforme dès qu'un fichier réel existe » dans docs/content-support.md.
 
-const REAL = process.env['ROMVAULT_REAL_EMU'] === '1'
+const REAL = process.env['KARTOUCHE_REAL_EMU'] === '1'
 const D = String.raw`E:\dev\RomVault\data`
 const run = REAL ? describe : describe.skip
 
@@ -118,7 +118,7 @@ run('Vita3K (réel) — DLC et mise à jour installés par le CLI de Vita3K, sui
   it('mise à jour (archive gp synthétique) : fusionnée dans le jeu par Vita3K ; l’original de chaque fichier écrasé est sauvegardé puis remis à la désinstallation (hash identique)', async () => {
     const pref = await vita3kPrefPath(vitaDir)
     const appDir = join(pref, 'ux0', 'app', T)
-    if (!existsSync(appDir) || process.env['ROMVAULT_REAL_EMU_VITA_PATCH'] !== '1') return // modifie le dossier du jeu (restauré) : opt-in explicite en plus
+    if (!existsSync(appDir) || process.env['KARTOUCHE_REAL_EMU_VITA_PATCH'] !== '1') return // modifie le dossier du jeu (restauré) : opt-in explicite en plus
     const before = new Map<string, string>()
     const walk = (d: string): void => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else before.set(p, sha(p)) } }
     walk(appDir)

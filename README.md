@@ -6,7 +6,7 @@ Kartouche **ne télécharge jamais de ROMs**. Les BIOS et firmwares protégés s
 
 ## Installation
 
-Téléchargez `RomVault-Setup-<version>.exe` depuis les [releases](https://github.com/Cantogrel/romvault/releases) et lancez-le. L'application se met à jour d'elle-même (Paramètres → À propos). Vos données (bibliothèque, sauvegardes, émulateurs) sont conservées lors d'une mise à jour ou d'une désinstallation.
+Téléchargez `Kartouche-Setup-<version>.exe` depuis les [releases](https://github.com/Cantogrel/kartouche/releases) et lancez-le. L'application se met à jour d'elle-même (Paramètres → À propos). Vos données (bibliothèque, sauvegardes, émulateurs) sont conservées lors d'une mise à jour ou d'une désinstallation.
 
 ## Utilisation
 
@@ -74,7 +74,7 @@ npm run dist         # installateur dans release/
 - `src/renderer/` : interface React (pages, Big Picture, i18n dans `locales/`).
 - `src/shared/` : types et données communs (IPC, consoles, émulateurs, BIOS).
 - `server/` : proxy Cloudflare Worker qui porte les clés de catalogue (voir `server/README.md`).
-- `tools/` : lanceur de développement `RomVault-Dev.exe` (`tools\build-dev-exe.cmd`) et générateur d'icône (`tools\make-icon.py`).
+- `tools/` : lanceur de développement `Kartouche-Dev.exe` (`tools\build-dev-exe.cmd`) et générateur d'icône (`tools\make-icon.py`).
 - Les migrations SQLite livrées (`src/main/db/migrations.ts`) ne se modifient jamais : on en ajoute une.
 - Données en développement : `data/` (ignoré par git, contient la base réelle et les clés).
 

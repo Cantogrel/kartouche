@@ -1,10 +1,10 @@
 // Lanceur de développement : exécute « npm run dev » à la racine du projet (le dossier de l'exe, ou son parent s'il est dans tools\).
-// Compilation : tools\build-dev-exe.cmd  ->  RomVault-Dev.exe à la racine.
+// Compilation : tools\build-dev-exe.cmd  ->  Kartouche-Dev.exe à la racine.
 using System;
 using System.Diagnostics;
 using System.IO;
 
-static class RomVaultDev
+static class KartoucheDev
 {
     static int Main()
     {
@@ -18,7 +18,7 @@ static class RomVaultDev
             int rc = Run(dir, "npm install");
             if (rc != 0) return rc;
         }
-        Console.WriteLine("RomVault (dev) : npm run dev - ferme cette fenetre pour tout arreter.");
+        Console.WriteLine("Kartouche (dev) : npm run dev - ferme cette fenetre pour tout arreter.");
         return Run(dir, "npm run dev");
     }
 
