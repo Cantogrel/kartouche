@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MIGRATIONS, migrate } from '../db/migrations'
+import { loadSettings, saveSettings } from '../db/settingsStore'
 import { listEmulators } from './emulatorStore'
 import { customEmulatorsForConsole, deleteCustomEmulator, getCustomEmulator, listCustomEmulators, saveCustomEmulator } from './customStore'
 
@@ -70,6 +71,15 @@ describe('émulateurs personnalisés', () => {
     deleteCustomEmulator(db, 'custom-1')
     const choice = (id: number): unknown => (db.prepare('SELECT emulator_id FROM library WHERE id = ?').get(id) as { emulator_id: string | null }).emulator_id
     expect([choice(a), choice(b), choice(c)]).toEqual([null, 'custom-2', 'retroarch'])
+  })
+
+  it('supprimer un émulateur retire aussi son défaut de console : l’identifiant réutilisé ne le ressuscite pas', () => {
+    saveCustomEmulator(db, input())
+    saveSettings(db, { emulatorDefaults: { snes: 'custom-1', nes: 'retroarch' } })
+    deleteCustomEmulator(db, 'custom-1')
+    expect(loadSettings(db).emulatorDefaults).toEqual({ nes: 'retroarch' })
+    expect(saveCustomEmulator(db, input({ name: 'Nouveau' }))).toEqual({ ok: true, id: 'custom-1' })
+    expect(loadSettings(db).emulatorDefaults.snes).toBeUndefined()
   })
 
   it('liste ceux qui savent lancer une console', () => {
