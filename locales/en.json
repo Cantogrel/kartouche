@@ -588,5 +588,12 @@
   "identify.notFound": "Not matched yet. Enter the game's name to search again.",
   "identify.search": "Search",
   "identify.searching": "Searching…",
-  "identify.none": "No matching game found."
+  "identify.none": "No matching game found.",
+  "filter.allSources": "All sources",
+  "filter.rom": "Emulation",
+  "sort.label": "Sort by",
+  "sort.title": "Title",
+  "sort.recent": "Last played",
+  "sort.added": "Recently added",
+  "sort.time": "Play time"
 }

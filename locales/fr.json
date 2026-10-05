@@ -588,5 +588,12 @@
   "identify.notFound": "Pas encore reconnu. Indiquez le nom du jeu pour relancer la recherche.",
   "identify.search": "Rechercher",
   "identify.searching": "Recherche…",
-  "identify.none": "Aucun jeu correspondant trouvé."
+  "identify.none": "Aucun jeu correspondant trouvé.",
+  "filter.allSources": "Toutes les sources",
+  "filter.rom": "Émulation",
+  "sort.label": "Trier par",
+  "sort.title": "Titre",
+  "sort.recent": "Dernière partie",
+  "sort.added": "Ajout récent",
+  "sort.time": "Temps de jeu"
 }
