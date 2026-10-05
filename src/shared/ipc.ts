@@ -1,5 +1,6 @@
 import type { Settings } from './settings'
 import type { Collection, ImportRequest, ImportResult, LibraryContentItem, LibraryEntry, LibraryProgress, SbiImportResult } from './library'
+import type { EntryOverrides, OverrideField, OverrideImageField, OverrideTextField, SetImageResult } from './overrides'
 import type { AchievementsResult } from './achievements'
 import type { BackupInfo, SaveInfo } from './saves'
 import type { BiosImportResult, BiosSlotStatus } from './bios'
@@ -50,6 +51,16 @@ export interface IpcChannels {
   /** Une tuile (`Cover`/`GameIcon`) qui disparaît avant la résolution de son image annule la tâche en cours côté principal, voir images.ts. */
   'images:cancel': { req: { kind: 'card' | 'tile' | 'hero' | 'icon'; gameId: number }; res: void }
   'library:list': { req: void; res: LibraryEntry[] }
+  /** Valeurs modifiées par l'utilisateur sur un jeu de la bibliothèque (voir shared/overrides.ts) ; vide si rien n'est modifié. */
+  'library:overrides': { req: number; res: EntryOverrides }
+  /** Modifie un champ texte (titre, description, genre, année, éditeur) ; une valeur vide ou invalide rétablit l'origine. Les images passent par `library:setImage`. Renvoie les surcharges à jour. */
+  'library:setOverride': { req: { id: number; field: OverrideTextField; value: string }; res: EntryOverrides }
+  /** Rétablit l'origine d'un champ (supprime aussi le fichier d'une image personnelle). */
+  'library:clearOverride': { req: { id: number; field: OverrideField }; res: EntryOverrides }
+  /** Rétablit tout : champs texte et images personnelles. */
+  'library:resetOverrides': { req: number; res: EntryOverrides }
+  /** Image personnelle (jaquette, icône, bannière, fond) : `path` fourni (glisser-déposer), sinon sélecteur de fichier. */
+  'library:setImage': { req: { id: number; field: OverrideImageField; path?: string }; res: SetImageResult }
   /** Importe des fichiers/dossiers (glisser-déposer : chemins fournis par le renderer). */
   'library:import': { req: ImportRequest; res: ImportResult }
   /** Ouvre le sélecteur de fichiers ou de dossier ; renvoie les chemins choisis (vide si annulé). */
