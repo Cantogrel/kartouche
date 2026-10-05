@@ -1,10 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { ConnectorStatus, ScanReport } from '@shared/connectors'
 import { loadSettings } from '../db/settingsStore'
+import { steamConnector } from './steam'
 import { connectorStatus, scanConnector, type Connector } from './core'
 
 /** Connecteurs pris en charge (un par launcher ; chacun est ajouté par sa propre étape de la feuille de route). */
-export const CONNECTORS: Connector[] = []
+export const CONNECTORS: Connector[] = [steamConnector()]
 
 const enabledMap = (db: DatabaseSync): Record<string, boolean> => loadSettings(db).connectors
 
