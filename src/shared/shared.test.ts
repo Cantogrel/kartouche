@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, mergeSettings, resolveLanguage, resolveTheme } from './settings'
-import { missingKeys, setLanguage, t } from '../renderer/src/i18n'
+import { builtin, localeReport, setLanguage, t } from '../renderer/src/i18n'
+import { BUILTIN_LANGS } from './lang'
 
 describe('resolveLanguage', () => {
   it("suit la langue de l'OS en mode auto", () => {
@@ -43,8 +44,12 @@ describe('resolveTheme', () => {
 })
 
 describe('i18n', () => {
-  it('a les mêmes clés en EN et FR', () => {
-    expect(missingKeys()).toEqual({ fr: [], en: [] })
+  it('toutes les langues intégrées ont exactement les clés et les variables de l’anglais', () => {
+    expect(Object.keys(builtin).sort()).toEqual(Object.keys(BUILTIN_LANGS).sort())
+    for (const [code, r] of Object.entries(localeReport())) expect({ code, ...r }).toEqual({ code, missing: [], extra: [], placeholders: [] })
+  })
+  it('aucune traduction vide', () => {
+    for (const [code, d] of Object.entries(builtin)) expect({ code, empty: Object.entries(d).filter(([, v]) => v.trim() === '').map(([k]) => k) }).toEqual({ code, empty: [] })
   })
   it('interpole les paramètres et se replie sur la clé', () => {
     setLanguage('en')

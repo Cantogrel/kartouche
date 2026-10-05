@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { langTemplate, parseLangFile, pickLanguage, translate, untranslatedKeys } from './lang'
 import { DEFAULT_SETTINGS, mergeSettings, resolveLanguage } from './settings'
 
-const file = (o: Record<string, unknown>): string => JSON.stringify({ format: 'kartouche.lang/v1', code: 'es', name: 'Español', strings: { play: 'Jugar' }, ...o })
+const file = (o: Record<string, unknown>): string => JSON.stringify({ format: 'kartouche.lang/v1', code: 'sv', name: 'Español', strings: { play: 'Jugar' }, ...o })
 
 describe('parseLangFile', () => {
   it('accepte un fichier valide et normalise le code', () => {
@@ -23,12 +23,12 @@ describe('parseLangFile', () => {
   })
   it('le modèle exporté est lisible une fois le code changé', () => {
     const tpl = JSON.parse(langTemplate({ play: 'Play' })) as Record<string, unknown>
-    expect(parseLangFile(JSON.stringify({ ...tpl, code: 'es' })).ok).toBe(true)
+    expect(parseLangFile(JSON.stringify({ ...tpl, code: 'sv' })).ok).toBe(true)
   })
 })
 
 describe('choix de la langue', () => {
-  const avail = ['en', 'fr', 'es', 'pt-br']
+  const avail = ['en', 'fr', 'es', 'pt-br', 'pt-pt']
   it('réglage explicite disponible', () => expect(pickLanguage('es', 'fr-FR', avail)).toBe('es'))
   it('auto : code exact, puis code de base, sinon anglais', () => {
     expect(pickLanguage('auto', 'pt-BR', avail)).toBe('pt-br')

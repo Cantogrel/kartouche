@@ -8,7 +8,7 @@ export const LANG_CODE_RE = /^[a-z]{2,3}(-[a-z0-9]{2,8}){0,2}$/
 export const isLangCode = (s: unknown): s is string => typeof s === 'string' && LANG_CODE_RE.test(s)
 
 /** Langues livrées avec l'app (le fichier de référence est l'anglais). */
-export const BUILTIN_LANGS: Record<string, string> = { en: 'English', fr: 'Français' }
+export const BUILTIN_LANGS: Record<string, string> = { en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch', it: 'Italiano', 'pt-pt': 'Português (Portugal)' }
 
 export interface LangFile {
   code: string
@@ -57,13 +57,22 @@ export function pickLanguage(setting: string, osLocale: string, available: reado
   const os = osLocale.toLowerCase().replace('_', '-')
   if (available.includes(os)) return os
   const base = os.split('-')[0]
-  return available.includes(base) ? base : 'en'
+  if (available.includes(base)) return base
+  // Variante régionale seule disponible (pt-BR du système → pt-pt) : mieux que l'anglais.
+  return available.find((a) => a.startsWith(`${base}-`)) ?? 'en'
 }
 
 /** Clés de l'anglais absentes d'une langue (elles s'afficheront en anglais). */
 export const untranslatedKeys = (en: Record<string, string>, lang: Record<string, string>): string[] => Object.keys(en).filter((k) => !(k in lang))
 
 export type Dicts = Record<string, Record<string, string>>
+
+/** Variables `{x}` d'un texte (une traduction doit garder exactement les mêmes). */
+export const placeholdersOf = (s: string): string[] => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort()
+
+/** Clés d'une langue dont les variables `{x}` diffèrent de l'anglais. */
+export const placeholderMismatches = (en: Record<string, string>, lang: Record<string, string>): string[] =>
+  Object.keys(lang).filter((k) => k in en && placeholdersOf(en[k]).join() !== placeholdersOf(lang[k]).join())
 
 /** Traduit une clé : langue courante, puis anglais, puis la clé elle-même ; `{name}` est remplacé par params.name. */
 export function translate(dicts: Dicts, lang: string, key: string, params?: Record<string, string | number>): string {
