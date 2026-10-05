@@ -598,8 +598,6 @@
   "identify.search": "Search",
   "identify.searching": "Searching…",
   "identify.none": "No matching game found.",
-  "filter.allSources": "All sources",
-  "filter.rom": "Emulation",
   "sort.label": "Sort by",
   "sort.recent": "Last played",
   "sort.added": "Recently added",

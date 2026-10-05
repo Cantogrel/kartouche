@@ -11,6 +11,7 @@ import { useDownloads } from '@/store/downloads'
 import { useUpdate } from '@/store/update'
 import { useChangelog } from '@/store/changelog'
 import { GameIcon } from '@/ui/ConsoleTile'
+import { platformLabel } from '@shared/consoles'
 import { EntryMenu, onEntryContext } from '@/ui/EntryMenu'
 import { DownloadVeil } from '@/ui/EntryCard'
 import { StatusBar } from '@/ui/StatusBar'
@@ -69,6 +70,18 @@ export default function App() {
     el.style.setProperty('--radius-lg', `${RADIUS_PX[radius][1]}px`)
   }, [uiScale, accent, theme, reduceMotion, accentColor, radius, highContrast, lang])
 
+  // Liste latérale : jeux Kartouche (ROM) puis jeux PC (exécutables, launchers), séparés par un filet ; les épinglés remontent en tête de chaque groupe.
+  const sideEntries = libEntries.filter((g) => !librarySearch || g.shownTitle.toLowerCase().includes(librarySearch.toLowerCase())).sort((a, b) => Number(b.pinned) - Number(a.pinned))
+  const sideGroups = { rom: sideEntries.filter((g) => g.kind === 'rom'), pc: sideEntries.filter((g) => g.kind !== 'rom') }
+  const sideItem = (g: (typeof libEntries)[number]) => (
+
+              <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} aria-current={gameId === `lib:${g.id}` && route === 'game' ? 'page' : undefined} onClick={() => go('game', `lib:${g.id}`)} onContextMenu={onEntryContext(g.id)}>
+                <DownloadVeil gameId={g.gameId} />
+                <GameIcon gameId={g.gameId} console={g.console} art={g.art.icon ?? (g.kind !== 'rom' ? g.art.cover : undefined)} />
+                <span className="side-name">{g.shownTitle}</span>{g.pinned && <span className="side-pin">★</span>}
+              </button>
+  )
+
   if (!ready) return null
   if (bigPicture) return <BigPicture onExit={() => setBigPicture(false)} />
   const title = route === 'game' && pageTitle ? pageTitle : t(`nav.${route === 'game' ? 'catalog' : route}`)
@@ -100,13 +113,9 @@ export default function App() {
           <div className="side-lib">
           <SearchBox className="side" placeholder={t('searchLibrary')} value={librarySearch} onChange={setLibrarySearch} clearLabel={t('search.clear')} />
           <div className="side-games" role="group" aria-label={t('a11y.games')}>
-            {libEntries.filter((g) => !librarySearch || g.shownTitle.toLowerCase().includes(librarySearch.toLowerCase())).sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((g) => (
-              <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} aria-current={gameId === `lib:${g.id}` && route === 'game' ? 'page' : undefined} onClick={() => go('game', `lib:${g.id}`)} onContextMenu={onEntryContext(g.id)}>
-                <DownloadVeil gameId={g.gameId} />
-                <GameIcon gameId={g.gameId} console={g.console} art={g.art.icon} />
-                <span className="side-name">{g.shownTitle}</span>{g.pinned && <span className="side-pin">★</span>}
-              </button>
-            ))}
+            {sideGroups.rom.map(sideItem)}
+            {sideGroups.pc.length > 0 && sideGroups.rom.length > 0 && <div className="side-sep" role="separator">{platformLabel('pc')}</div>}
+            {sideGroups.pc.map(sideItem)}
           </div>
           </div>
         </nav>

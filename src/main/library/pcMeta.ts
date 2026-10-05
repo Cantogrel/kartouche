@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { Settings } from '@shared/settings'
 import { igdbImageUrl, pickImages, pickTrailers, type GameMedia } from '@shared/media'
 import { pcSearchTerm, type PcMetaView } from '@shared/pcMeta'
@@ -87,6 +87,23 @@ export const realDeps = (settings: Settings, dataDir: string): IdentifyDeps => (
   }
 })
 
+/** Télécharge une image dans `dir` sous `<name>-<ts>.<ext>` ; renvoie le chemin relatif servi par `kimg://custom/`, ou null. */
+async function saveImage(deps: IdentifyDeps, dir: string, name: string, url: string, now: number): Promise<string | null> {
+  const img = await deps.download(url)
+  const kind = img ? sniffImage(img) : null
+  if (!img || !kind) return null
+  await mkdir(dir, { recursive: true })
+  const file = `${name}-${now}.${kind}`
+  await writeFile(join(dir, file), img)
+  return `pc/${basename(dir)}/${file}`
+}
+
+/** Bannière d'un jeu : première illustration IGDB, à défaut première capture d'écran. */
+async function saveBanner(deps: IdentifyDeps, dir: string, media: GameMedia, now: number): Promise<string | null> {
+  const id = media.artworks[0] ?? media.screenshots[0]
+  return id ? saveImage(deps, dir, 'banner', igdbImageUrl(id, 't_1080p'), now) : null
+}
+
 interface EntryRow { id: number; title: string; source: string | null; native_id: string | null }
 
 /** Identifie une entrée non-ROM et enregistre la fiche (et la jaquette). Renvoie la fiche, ou null si le jeu n'a pas été reconnu ; l'échec est mémorisé. */
@@ -101,23 +118,14 @@ export async function identifyEntry(db: DatabaseSync, entryId: number, deps: Ide
     await rm(join(pcArtDir(deps.dataDir), String(entryId)), { recursive: true, force: true })
     return null
   }
-  let cover: string | null = null
-  if (found.coverId) {
-    const img = await deps.download(igdbImageUrl(found.coverId, 't_cover_big'))
-    const kind = img ? sniffImage(img) : null
-    if (img && kind) {
-      const dir = join(pcArtDir(deps.dataDir), String(entryId))
-      await rm(dir, { recursive: true, force: true })
-      await mkdir(dir, { recursive: true })
-      const file = `cover-${now}.${kind}`
-      await writeFile(join(dir, file), img)
-      cover = `pc/${entryId}/${file}`
-    }
-  }
-  db.prepare(`INSERT INTO pc_meta (entry_id, matched, name, summary, genres, year, developer, media, cover, fetched_at) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+  const dir = join(pcArtDir(deps.dataDir), String(entryId))
+  await rm(dir, { recursive: true, force: true })
+  const cover = found.coverId ? await saveImage(deps, dir, 'cover', igdbImageUrl(found.coverId, 't_cover_big'), now) : null
+  const banner = await saveBanner(deps, dir, found.media, now)
+  db.prepare(`INSERT INTO pc_meta (entry_id, matched, name, summary, genres, year, developer, media, cover, banner, fetched_at) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(entry_id) DO UPDATE SET matched = 1, name = excluded.name, summary = excluded.summary, genres = excluded.genres, year = excluded.year, developer = excluded.developer,
-      media = excluded.media, cover = excluded.cover, fetched_at = excluded.fetched_at`)
-    .run(entryId, found.name, found.summary, JSON.stringify(found.genres), found.year, found.developer, JSON.stringify(found.media), cover, now)
+      media = excluded.media, cover = excluded.cover, banner = excluded.banner, fetched_at = excluded.fetched_at`)
+    .run(entryId, found.name, found.summary, JSON.stringify(found.genres), found.year, found.developer, JSON.stringify(found.media), cover, banner ?? '', now)
   return getPcMeta(db, entryId)
 }
 
@@ -127,6 +135,21 @@ export function pendingEntries(db: DatabaseSync, now = Date.now()): number[] {
     WHERE l.kind <> 'rom' AND (m.entry_id IS NULL OR (m.matched = 0 AND m.fetched_at < ?)) ORDER BY l.id`).all(now - RETRY_MISS_MS) as { id: number }[]).map((r) => r.id)
 }
 
+/** Entrées déjà identifiées avant l'existence des bannières : on télécharge leur bannière à partir des images déjà connues (sans nouvelle requête IGDB). */
+export async function backfillBanners(db: DatabaseSync, deps: IdentifyDeps, onProgress?: () => void): Promise<number> {
+  let done = 0
+  const rows = db.prepare('SELECT entry_id, media FROM pc_meta WHERE matched = 1 AND banner IS NULL').all() as { entry_id: number; media: string | null }[]
+  for (const r of rows) {
+    let media: GameMedia | null = null
+    try { media = r.media ? JSON.parse(r.media) as GameMedia : null } catch { /* fiche illisible : pas de bannière */ }
+    const now = deps.now ?? Date.now()
+    const banner = media ? await saveBanner(deps, join(pcArtDir(deps.dataDir), String(r.entry_id)), media, now) : null
+    db.prepare('UPDATE pc_meta SET banner = ? WHERE entry_id = ?').run(banner ?? '', r.entry_id)
+    if (banner) { done++; onProgress?.() }
+  }
+  return done
+}
+
 /** Identifie toutes les entrées en attente, une par une (IGDB espace déjà ses appels) ; appelle `onProgress` après chaque entrée reconnue. */
 export async function identifyPending(db: DatabaseSync, deps: IdentifyDeps, onProgress?: () => void): Promise<number> {
   let found = 0
@@ -134,6 +157,7 @@ export async function identifyPending(db: DatabaseSync, deps: IdentifyDeps, onPr
     const r = await identifyEntry(db, id, deps)
     if (r) { found++; onProgress?.() }
   }
+  await backfillBanners(db, deps, onProgress)
   return found
 }
 
@@ -150,10 +174,11 @@ export function getPcMeta(db: DatabaseSync, entryId: number): PcMetaView | null 
   }
 }
 
-/** Jaquette de chaque entrée identifiée (id → chemin relatif servi par `kimg://custom/pc/…`). */
-export function loadPcCovers(db: DatabaseSync): Map<number, string> {
-  const out = new Map<number, string>()
-  for (const r of db.prepare('SELECT entry_id, cover FROM pc_meta WHERE cover IS NOT NULL').all() as { entry_id: number; cover: string }[]) out.set(r.entry_id, r.cover)
+/** Jaquette et bannière de chaque entrée identifiée (id → chemins relatifs servis par `kimg://custom/pc/…`). */
+export function loadPcArt(db: DatabaseSync): Map<number, { cover?: string; banner?: string }> {
+  const out = new Map<number, { cover?: string; banner?: string }>()
+  for (const r of db.prepare("SELECT entry_id, cover, banner FROM pc_meta WHERE cover IS NOT NULL OR (banner IS NOT NULL AND banner <> '')").all() as { entry_id: number; cover: string | null; banner: string | null }[])
+    out.set(r.entry_id, { ...(r.cover ? { cover: r.cover } : {}), ...(r.banner ? { banner: r.banner } : {}) })
   return out
 }
 

@@ -598,8 +598,6 @@
   "identify.search": "検索",
   "identify.searching": "検索中…",
   "identify.none": "一致するゲームが見つかりません。",
-  "filter.allSources": "すべてのソース",
-  "filter.rom": "エミュレーション",
   "sort.label": "並べ替え",
   "sort.recent": "最近プレイ",
   "sort.added": "最近追加",
