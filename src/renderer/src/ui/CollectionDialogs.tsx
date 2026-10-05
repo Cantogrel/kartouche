@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { Button } from '@/ui'
 import { t } from '@/i18n'
 import { useLibrary } from '@/store/library'
-import { consoleById } from '@shared/consoles'
+import { platformLabel } from '@shared/consoles'
 
 type Dialog =
   /** Création (collectionId = null) ou modification d'une collection : nom + jeux. */
@@ -78,7 +78,7 @@ function CollectionEditor({ collectionId, onClose }: { collectionId: number | nu
       <div className="modal-list">
         {shown.map((e) => (
           <label key={e.id} className="check modal-item">
-            <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} /> <span className="modal-title">{e.title}</span> <span className="muted">{consoleById(e.console)?.label ?? e.console}</span>
+            <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} /> <span className="modal-title">{e.title}</span> <span className="muted">{platformLabel(e.console)}</span>
           </label>
         ))}
         {shown.length === 0 && <p className="muted">{t('library.noMatch')}</p>}

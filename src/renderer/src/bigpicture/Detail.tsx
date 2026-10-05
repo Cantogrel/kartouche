@@ -6,7 +6,7 @@ import { useEmulators } from '@/store/emulators'
 import { useDownloads } from '@/store/downloads'
 import { useSettings } from '@/store/settings'
 import { emulatorForConsole } from '@shared/emulators'
-import { consoleById } from '@shared/consoles'
+import { platformLabel } from '@shared/consoles'
 import { canonicalGenre, genreLabel } from '@shared/genres'
 import { formatSize } from '@shared/format'
 import { isTorrentSource } from '@shared/uriKind'
@@ -15,7 +15,7 @@ import type { LibraryEntry } from '@shared/library'
 import type { GameSource } from '@shared/sourceList'
 import { focusEl, navItems } from './useNav'
 
-const label = (c: string): string => consoleById(c)?.label ?? c
+const label = (c: string): string => platformLabel(c)
 
 /** Fiche d'un jeu (catalogue ou bibliothèque) : mêmes données que la fiche classique, actions à la manette. */
 export function Detail({ gameId, entry, onClose }: { gameId: number | null; entry?: LibraryEntry; onClose: () => void }) {

@@ -6,7 +6,7 @@ import { useDownloads } from '@/store/downloads'
 import { DownloadVeil } from '@/ui/EntryCard'
 import { useEmulators } from '@/store/emulators'
 import { useSettings } from '@/store/settings'
-import { CONSOLES, consoleById } from '@shared/consoles'
+import { CONSOLES, platformLabel } from '@shared/consoles'
 import { EMULATORS } from '@shared/emulators'
 import type { CatalogPage } from '@shared/catalog'
 import type { LanguageSetting } from '@shared/settings'
@@ -16,7 +16,7 @@ import type { CatalogGame } from '@shared/catalog'
 import { VirtualKeyboard } from './VirtualKeyboard'
 import { Detail } from './Detail'
 
-const label = (c: string): string => consoleById(c)?.label ?? c
+const label = (c: string): string => platformLabel(c)
 type Section = 'home' | 'library' | 'collections' | 'catalog' | 'settings'
 const SECTIONS: Section[] = ['home', 'library', 'collections', 'catalog', 'settings']
 const PAGE = 60

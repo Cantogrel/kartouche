@@ -2,7 +2,7 @@ import { Badge, Cover, GameCard } from '@/ui'
 import { useApp } from '@/store/app'
 import { useGameDownloadPercent } from '@/store/downloads'
 import { onEntryContext } from '@/ui/EntryMenu'
-import { consoleById } from '@shared/consoles'
+import { platformLabel } from '@shared/consoles'
 import type { LibraryEntry } from '@shared/library'
 
 /** Voile clair qui se remplit sur toute la hauteur/largeur de l'élément parent (positionné) selon l'avancement du téléchargement. */
@@ -15,7 +15,7 @@ export function DownloadVeil({ gameId }: { gameId: number | null }) {
 /** Carte d'un jeu de la bibliothèque : ouvre sa fiche, menu au clic droit, cœur si favori, étoile si épinglé, grisée sans fichier. */
 export function EntryCard({ entry: g }: { entry: LibraryEntry }) {
   const go = useApp((s) => s.go)
-  const label = consoleById(g.console)?.label ?? g.console
+  const label = platformLabel(g.console)
   const open = (): void => go('game', `lib:${g.id}`)
   return g.gameId === null ? (
     <div className="fav-wrap" onContextMenu={onEntryContext(g.id)}>

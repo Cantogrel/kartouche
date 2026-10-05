@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { consoleById } from '@shared/consoles'
+import { platformLabel } from '@shared/consoles'
 
 /** Pastille de console : sigle court sur la couleur de la marque (Nintendo en rouge/violet selon la famille, Sony en bleu). */
 const TILES: Record<string, { s: string; c: string }> = {
@@ -11,7 +11,7 @@ const TILES: Record<string, { s: string; c: string }> = {
 
 export function ConsoleTile({ id }: { id: string }) {
   const tile = TILES[id]
-  return <span className="console-tile" style={{ background: tile?.c ?? '#444' }} title={consoleById(id)?.label ?? id}>{tile?.s ?? id.slice(0, 3).toUpperCase()}</span>
+  return <span className="console-tile" style={{ background: tile?.c ?? '#444' }} title={platformLabel(id)}>{tile?.s ?? id.slice(0, 3).toUpperCase()}</span>
 }
 
 /**
