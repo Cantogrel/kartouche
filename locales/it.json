@@ -606,7 +606,6 @@
   "sort.time": "Tempo di gioco",
   "settings.accentCustom": "Colore di accento personalizzato",
   "settings.accentCustomClear": "Usa l'accento predefinito",
-  "settings.accentLowContrast": "Questo colore si distingue poco dallo sfondo attuale; testo ed elementi evidenziati potrebbero essere difficili da leggere.",
   "settings.radius": "Forma degli angoli",
   "radius.sharp": "Netti",
   "radius.normal": "Normali",
@@ -626,6 +625,5 @@
   "settings.langError.name": "Il nome della lingua è mancante o troppo lungo.",
   "settings.langError.strings": "Il file non contiene alcun testo tradotto.",
   "settings.langError.builtin": "Questa lingua è già integrata.",
-  "action.catalogPage": "Pagina del catalogo",
   "settings.homeDrag": "Trascina per riordinare (o usa le frecce su e giù)"
 }

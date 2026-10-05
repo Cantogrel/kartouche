@@ -606,7 +606,6 @@
   "sort.time": "プレイ時間",
   "settings.accentCustom": "アクセントカラーを指定",
   "settings.accentCustomClear": "プリセットのアクセントを使う",
-  "settings.accentLowContrast": "この色は現在の背景とのコントラストが低く、文字やハイライトが読みづらい場合があります。",
   "settings.radius": "角の形",
   "radius.sharp": "角ばった",
   "radius.normal": "標準",
@@ -626,6 +625,5 @@
   "settings.langError.name": "言語名がないか長すぎます。",
   "settings.langError.strings": "ファイルに翻訳されたテキストが含まれていません。",
   "settings.langError.builtin": "この言語はすでに組み込まれています。",
-  "action.catalogPage": "カタログのページ",
   "settings.homeDrag": "ドラッグして並べ替え（または上下の矢印キー）"
 }

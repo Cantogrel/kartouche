@@ -23,9 +23,3 @@ export function contrastRatio(a: string, b: string): number {
 
 /** Texte lisible (noir ou blanc) sur un fond d'accent. */
 export const readableOn = (bg: string): string => (contrastRatio(bg, '#ffffff') >= contrastRatio(bg, '#0e0e0e') ? '#ffffff' : '#0e0e0e')
-
-/** Fonds de l'interface, par thème : sert à vérifier qu'un accent personnel reste visible. */
-export const SURFACE: Record<'light' | 'dark', string> = { dark: '#161616', light: '#ffffff' }
-
-/** Un accent personnel doit se détacher du fond (≥ 3:1, seuil WCAG des éléments graphiques). */
-export const accentReadable = (hex: string, theme: 'light' | 'dark'): boolean => contrastRatio(hex, SURFACE[theme]) >= 3
