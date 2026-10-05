@@ -20,6 +20,10 @@ export interface Connector {
 export const gamesOf = (db: DatabaseSync, source: GameSource): number =>
   (db.prepare("SELECT COUNT(*) AS n FROM library WHERE source = ? AND kind = 'launcher'").get(source) as { n: number }).n
 
+/** Identifiants des entrées de la bibliothèque venues de ce launcher (retirées quand l'utilisateur désactive le connecteur). */
+export const launcherEntryIds = (db: DatabaseSync, source: GameSource): number[] =>
+  (db.prepare("SELECT id FROM library WHERE source = ? AND kind = 'launcher'").all(source) as { id: number }[]).map((r) => r.id)
+
 export async function connectorStatus(db: DatabaseSync, connector: Connector, enabled: boolean): Promise<ConnectorStatus> {
   let detected = false
   try { detected = await connector.detect() } catch { /* launcher illisible = absent */ }

@@ -34,6 +34,15 @@ export function moveHomeSection(l: HomeLayout, s: HomeSection, delta: -1 | 1): H
   return { ...l, order }
 }
 
+/** Place un bloc à une position donnée de la liste (glisser-déposer) ; inchangé si la position est celle d'origine ou hors liste. */
+export function reorderHomeSection(l: HomeLayout, s: HomeSection, to: number): HomeLayout {
+  const from = l.order.indexOf(s)
+  if (from < 0 || to < 0 || to >= l.order.length || to === from) return l
+  const order = l.order.filter((x) => x !== s)
+  order.splice(to, 0, s)
+  return { ...l, order }
+}
+
 export function toggleHomeSection(l: HomeLayout, s: HomeSection): HomeLayout {
   return { ...l, hidden: l.hidden.includes(s) ? l.hidden.filter((x) => x !== s) : [...l.hidden, s] }
 }

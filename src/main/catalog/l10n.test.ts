@@ -19,6 +19,11 @@ describe('Wikipédia', () => {
       : { query: { pages: { 1: { extract: url.includes(encodeURIComponent('The Wind Waker (jeu')) ? 'Remake, jeu vidéo.' : 'The Wind Waker est un jeu d’action-aventure.' } } } }
     expect(await wikipediaSummary('The Wind Waker', 'fr', get)).toBe('The Wind Waker est un jeu d’action-aventure.')
   })
+  it('accepte un titre d’article plus court que celui des DAT (Pokémon Jaune), jamais un fragment ni un autre jeu', async () => {
+    const name = 'Pokemon - Version Jaune - Edition Speciale Pikachu'
+    expect(await wikipediaSummary(name, 'fr', wiki('Pokémon Jaune', 'Pokémon Jaune est un jeu vidéo de rôle.'))).toContain('jeu vidéo')
+    expect(await wikipediaSummary(name, 'fr', wiki('Pokémon Rouge et Bleu', 'Pokémon Rouge et Bleu sont des jeux vidéo.'))).toBeNull()
+  })
   it('refuse un article au titre différent ou qui n’est pas un jeu', async () => {
     expect(await wikipediaSummary('The Witcher 3: Wild Hunt', 'fr', wiki('Wild Hunt', 'Chasse sauvage, jeu vidéo.'))).toBeNull()
     expect(await wikipediaSummary('The Witcher 3: Wild Hunt', 'fr', wiki('The Witcher 3 : Wild Hunt', 'Page d’homonymie.'))).toBeNull()

@@ -7,7 +7,8 @@ import { listLibrary } from '../library/libraryStore'
 import { setOverride } from '../library/overrides'
 import { getLaunchSpec, upsertExternalEntry } from '../library/external'
 import { listConnectors, scanConnectors } from './index'
-import { scanConnector, type Connector } from './core'
+import { launcherEntryIds, scanConnector, type Connector } from './core'
+import { removeEntry } from '../library/libraryStore'
 
 let db: DatabaseSync
 beforeEach(() => { db = new DatabaseSync(':memory:'); db.exec('PRAGMA foreign_keys = ON'); migrate(db) })
@@ -91,5 +92,16 @@ describe('activation par launcher', () => {
     saveSettings(db, { connectors: { steam: true } })
     expect(await scanConnectors(db, undefined, [c])).toHaveLength(1)
     expect((await listConnectors(db, [c]))[0]).toMatchObject({ enabled: true, games: 1 })
+  })
+})
+
+describe("désactivation d'un launcher", () => {
+  it('retire seulement les jeux de ce launcher', async () => {
+    await scanConnector(db, fake([game(1), game(2)]))
+    await scanConnector(db, fake([game(3)], { id: 'epic' }))
+    expect(launcherEntryIds(db, 'steam')).toHaveLength(2)
+    for (const id of launcherEntryIds(db, 'steam')) await removeEntry(db, id, 'entry', 'saves-inexistant')
+    expect(listLibrary(db).map((e) => e.source)).toEqual(['epic'])
+    expect(launcherEntryIds(db, 'steam')).toEqual([])
   })
 })

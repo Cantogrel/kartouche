@@ -73,7 +73,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
             {owned && !owned.missing && sources.length > 0 && <UninstallButton entry={owned} />}
             {owned && <FlagButtons entry={owned} />}
             {entry && <Button onClick={() => useDialog.getState().open({ kind: 'edit', entryId: entry.id })}>{t('edit.button')}</Button>}
-            {owned && <Button onClick={(e) => openEntryMenuAt(e, owned.id)}>⚙ {t('options')}</Button>}
+            {owned && <Button onClick={(e) => openEntryMenuAt(e, owned.id, { edit: !!entry })}>⚙ {t('options')}</Button>}
           </div>
         </div>
       </Cover>

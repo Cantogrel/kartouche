@@ -1,5 +1,3 @@
-import { ACCENTS, UI_SCALES, type Accent, type Settings, type ThemeSetting } from './settings'
-
 export const RADII = ['sharp', 'normal', 'round'] as const
 export type Radius = (typeof RADII)[number]
 
@@ -31,39 +29,3 @@ export const SURFACE: Record<'light' | 'dark', string> = { dark: '#161616', ligh
 
 /** Un accent personnel doit se détacher du fond (≥ 3:1, seuil WCAG des éléments graphiques). */
 export const accentReadable = (hex: string, theme: 'light' | 'dark'): boolean => contrastRatio(hex, SURFACE[theme]) >= 3
-
-export interface ThemeFile {
-  format: 'kartouche.theme/v1'
-  theme: ThemeSetting
-  accent: Accent
-  accentColor: string
-  uiScale: number
-  radius: Radius
-  highContrast: boolean
-  reduceMotion: boolean
-}
-
-export type ThemeFields = Pick<Settings, 'theme' | 'accent' | 'accentColor' | 'uiScale' | 'radius' | 'highContrast' | 'reduceMotion'>
-
-export function exportTheme(s: ThemeFields): string {
-  const f: ThemeFile = { format: 'kartouche.theme/v1', theme: s.theme, accent: s.accent, accentColor: s.accentColor, uiScale: s.uiScale, radius: s.radius, highContrast: s.highContrast, reduceMotion: s.reduceMotion }
-  return JSON.stringify(f, null, 2)
-}
-
-/** Lit un thème exporté : renvoie les seuls champs valides (le reste est ignoré), ou null si ce n'est pas un thème Kartouche. */
-export function parseTheme(text: string): Partial<ThemeFields> | null {
-  let raw: unknown
-  try { raw = JSON.parse(text) } catch { return null }
-  if (typeof raw !== 'object' || raw === null) return null
-  const r = raw as Record<string, unknown>
-  if (r.format !== 'kartouche.theme/v1') return null
-  const out: Partial<ThemeFields> = {}
-  if (r.theme === 'auto' || r.theme === 'light' || r.theme === 'dark') out.theme = r.theme
-  if (typeof r.accent === 'string' && (ACCENTS as readonly string[]).includes(r.accent)) out.accent = r.accent as Accent
-  if (r.accentColor === '' || isHexColor(r.accentColor)) out.accentColor = (r.accentColor as string).toLowerCase()
-  if (typeof r.uiScale === 'number' && (UI_SCALES as readonly number[]).includes(r.uiScale)) out.uiScale = r.uiScale
-  if (typeof r.radius === 'string' && (RADII as readonly string[]).includes(r.radius)) out.radius = r.radius as Radius
-  if (typeof r.highContrast === 'boolean') out.highContrast = r.highContrast
-  if (typeof r.reduceMotion === 'boolean') out.reduceMotion = r.reduceMotion
-  return out
-}
