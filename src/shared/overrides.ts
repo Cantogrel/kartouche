@@ -74,3 +74,8 @@ export function resolveView(base: BaseView, overrides: EntryOverrides = {}): Ent
     overridden: OVERRIDE_FIELDS.filter((f) => overrides[f] !== undefined)
   }
 }
+
+/** Résultat de l'ajout d'une image personnelle (`library:setImage`) : le chemin enregistré, ou la raison du refus (`cancelled` = sélecteur fermé sans choix). */
+export type SetImageResult =
+  | { ok: true; path: string }
+  | { ok: false; reason: 'entry' | 'field' | 'missing' | 'tooLarge' | 'notImage' | 'unreadable' | 'cancelled' }
