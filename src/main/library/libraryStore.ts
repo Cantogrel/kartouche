@@ -9,14 +9,17 @@ import { deleteGameSaves } from '../saves/saves'
 import { contentDir, parkContent } from './content/store'
 import { uninstallContent } from '../emulators/content'
 import type { LibraryContentItem, LibraryEntry, MatchKind, SbiImportResult } from '@shared/library'
+import { OVERRIDE_FIELDS, type EntryOverrides } from '@shared/overrides'
+import { loadOverrides } from './overrides'
 
 interface Row {
   id: number; game_id: number | null; console: string; title: string; path: string; size: number; match: string
   missing: number; added_at: number; play_minutes: number; last_played: number | null; favorite: number; pinned: number
 }
 
-const toEntry = (r: Row, collections: number[] = [], hasSources = false): LibraryEntry => ({
-  id: r.id, gameId: r.game_id, console: r.console, title: r.title, path: r.path, size: r.size, match: r.match as MatchKind,
+const toEntry = (r: Row, collections: number[] = [], hasSources = false, overrides: EntryOverrides = {}): LibraryEntry => ({
+  id: r.id, gameId: r.game_id, console: r.console, title: r.title, shownTitle: overrides.title ?? r.title,
+  overridden: OVERRIDE_FIELDS.filter((f) => overrides[f] !== undefined), path: r.path, size: r.size, match: r.match as MatchKind,
   missing: r.missing === 1, addedAt: r.added_at, playMinutes: r.play_minutes, lastPlayed: r.last_played,
   favorite: r.favorite === 1, pinned: r.pinned === 1, collections, hasSources
 })
@@ -53,9 +56,16 @@ export function listLibrary(db: DatabaseSync): LibraryEntry[] {
   refreshMissing(db)
   const mem = membership(db)
   const withSources = gamesWithSources(db)
-  return (db.prepare('SELECT * FROM library ORDER BY title COLLATE NOCASE').all() as unknown as Row[])
-    .map((r) => toEntry(r, mem.get(r.id), r.game_id !== null && withSources.has(r.game_id)))
+  const overrides = loadOverrides(db)
+  const entries = (db.prepare('SELECT * FROM library ORDER BY title COLLATE NOCASE').all() as unknown as Row[])
+    .map((r) => toEntry(r, mem.get(r.id), r.game_id !== null && withSources.has(r.game_id), overrides.get(r.id)))
+  // Liste triée par titre affiché : seulement quand un titre a été modifié (sinon l'ordre SQL d'origine est déjà le bon).
+  if (entries.some((e) => e.shownTitle !== e.title)) entries.sort((a, b) => a.shownTitle.toLowerCase().localeCompare(b.shownTitle.toLowerCase()))
+  return entries
 }
+
+const entryById = (db: DatabaseSync, id: number): LibraryEntry =>
+  toEntry(db.prepare('SELECT * FROM library WHERE id = ?').get(id) as unknown as Row, undefined, undefined, loadOverrides(db, [id]).get(id))
 
 /**
  * Retente l'identification des entrées sans fiche VALIDE : `game_id` NULL (jeu absent du catalogue au moment de
@@ -81,12 +91,12 @@ const NO_FILE = 'nofile:'
 /** Ajoute un jeu du catalogue sans fichier (la ROM s'y rattachera à l'import) ; renvoie l'entrée existante s'il y en a déjà une. */
 export function addCatalogGame(db: DatabaseSync, gameId: number): LibraryEntry | null {
   const existing = db.prepare('SELECT * FROM library WHERE game_id = ?').get(gameId) as Row | undefined
-  if (existing) return toEntry(existing)
+  if (existing) return entryById(db, existing.id)
   const g = db.prepare('SELECT console, name, title FROM catalog_games WHERE id = ?').get(gameId) as { console: string; name: string | null; title: string } | undefined
   if (!g) return null
   const id = Number(db.prepare('INSERT INTO library (game_id, console, title, path, size, match, missing, added_at) VALUES (?, ?, ?, ?, 0, \'none\', 1, ?)')
     .run(gameId, g.console, g.name ?? g.title, `${NO_FILE}${gameId}`, Date.now()).lastInsertRowid)
-  return toEntry(db.prepare('SELECT * FROM library WHERE id = ?').get(id) as unknown as Row)
+  return entryById(db, id)
 }
 
 /** Dossier de sauvegardes d'un jeu : <saves>/<console>/<titre> (les émulateurs y seront configurés en Phase 5). */

@@ -1,4 +1,5 @@
 import { CONSOLES } from './consoles'
+import type { OverrideField } from './overrides'
 
 /** Extensions de ROM reconnues → consoles possibles (plusieurs = ambigu, tranché par le hash ou le nom). */
 export const ROM_EXTENSIONS: Record<string, readonly string[]> = {
@@ -61,7 +62,12 @@ export interface LibraryEntry {
   /** Jeu du catalogue reconnu ; null si le fichier n'a pas pu être identifié. */
   gameId: number | null
   console: string
+  /** Titre d'origine (reconnaissance, sauvegardes, téléchargements) : ne JAMAIS l'afficher à la place de `shownTitle`, ni utiliser `shownTitle` pour identifier. */
   title: string
+  /** Titre à afficher : celui de l'utilisateur s'il l'a modifié (voir shared/overrides.ts), sinon `title`. */
+  shownTitle: string
+  /** Champs modifiés par l'utilisateur sur ce jeu. */
+  overridden: OverrideField[]
   path: string
   size: number
   match: MatchKind
