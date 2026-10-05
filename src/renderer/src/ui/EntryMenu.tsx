@@ -41,18 +41,20 @@ const favAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getSta
   ({ key: 'fav', label: `${entry.favorite ? '♥' : '♡'} ${t(entry.favorite ? 'fav.remove' : 'fav.add')}`, run: () => lib.setFlag(entry.id, { favorite: !entry.favorite }) })
 const pinAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>): Action =>
   ({ key: 'pin', label: `${entry.pinned ? '★' : '☆'} ${t(entry.pinned ? 'pin.remove' : 'pin.add')}`, run: () => lib.setFlag(entry.id, { pinned: !entry.pinned }) })
+const editAction = (entry: LibraryEntry): Action =>
+  ({ key: 'edit', label: `✎ ${t('edit.menu')}`, run: () => useDialog.getState().open({ kind: 'edit', entryId: entry.id }) })
 const collectionAction = (entry: LibraryEntry): Action =>
   ({ key: 'collection', label: `▤ ${t('collection.addTo')}`, run: () => useDialog.getState().open({ kind: 'picker', entryId: entry.id }) })
 /** Même action que `action.deleteFile` dans le menu complet, mais relabellée « Désinstaller » : une liste de
  * sources permet de retélécharger ce jeu, donc ce n'est pas un aller simple comme pour une ROM importée à la main. */
 const uninstallAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>): Action =>
-  ({ key: 'uninstall', label: t('action.uninstall'), danger: true, run: async () => { if (await confirmDialog(t('confirm.uninstall', { title: entry.title }))) await lib.removeEntry(entry.id, 'file') } })
+  ({ key: 'uninstall', label: t('action.uninstall'), danger: true, run: async () => { if (await confirmDialog(t('confirm.uninstall', { title: entry.shownTitle }))) await lib.removeEntry(entry.id, 'file') } })
 
 const deleteFileAction = (entry: LibraryEntry): Action =>
-  ({ key: 'file', label: t('action.deleteFile'), danger: true, run: async () => { if (await confirmDialog(t('confirm.file', { title: entry.title }))) await useLibrary.getState().removeEntry(entry.id, 'file') } })
+  ({ key: 'file', label: t('action.deleteFile'), danger: true, run: async () => { if (await confirmDialog(t('confirm.file', { title: entry.shownTitle }))) await useLibrary.getState().removeEntry(entry.id, 'file') } })
 /** Retire la fiche de la bibliothèque (le jeu n'a plus de fichier : rien d'autre à supprimer). */
 const removeEntryAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>, back: () => void): Action =>
-  ({ key: 'entry', label: t('action.removeEntry'), run: async () => { if (await confirmDialog(t('confirm.entry', { title: entry.title }))) { await lib.removeEntry(entry.id, 'entry'); leaveIfOpen(entry.id, back) } } })
+  ({ key: 'entry', label: t('action.removeEntry'), run: async () => { if (await confirmDialog(t('confirm.entry', { title: entry.shownTitle }))) { await lib.removeEntry(entry.id, 'entry'); leaveIfOpen(entry.id, back) } } })
 
 /**
  * Menu rapide (clic droit sur une tuile ou dans la liste latérale) : seulement les actions les plus courantes, pas
@@ -74,7 +76,7 @@ function quickActionsFor(entry: LibraryEntry): Action[] {
     list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
   }
   if (list.length) list.push(sep('sep1'))
-  list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry))
+  list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), editAction(entry))
   // Avec une source de téléchargement : « Désinstaller » (le jeu se retélécharge) ; sinon « Supprimer le fichier » (aller simple). Jamais les deux.
   if (hasFile) list.push(sep('sep2'), entry.hasSources ? uninstallAction(entry, lib) : deleteFileAction(entry))
   // Dans la bibliothèque mais pas installé (sans fichier) : on peut retirer la fiche.
@@ -86,8 +88,8 @@ function quickActionsFor(entry: LibraryEntry): Action[] {
 function fullActionsFor(entry: LibraryEntry, back: () => void): Action[] {
   const lib = useLibrary.getState()
   const hasFile = !entry.missing
-  const ask = (key: string): Promise<boolean> => confirmDialog(t(`confirm.${key}`, { title: entry.title }))
-  const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), sep('sep1')]
+  const ask = (key: string): Promise<boolean> => confirmDialog(t(`confirm.${key}`, { title: entry.shownTitle }))
+  const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), editAction(entry), sep('sep1')]
   if (!hasFile) list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
   if (hasFile) {
     list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })
@@ -111,7 +113,7 @@ async function deleteSaves(entry: LibraryEntry, ask: (key: string) => Promise<bo
     return
   }
   if (!info || info.files === 0) { await alertDialog(t('action.noSave')); return }
-  if (await ask('save')) { await useLibrary.getState().removeEntry(entry.id, 'save'); await alertDialog(t('action.saveDeleted', { title: entry.title })) }
+  if (await ask('save')) { await useLibrary.getState().removeEntry(entry.id, 'save'); await alertDialog(t('action.saveDeleted', { title: entry.shownTitle })) }
 }
 
 /** Si la fiche du jeu retiré est affichée, on revient à la page précédente. */
@@ -151,7 +153,7 @@ export function EntryMenu() {
   const { x, y } = pos ?? at
   return (
     <div ref={ref} className="ctx" style={{ left: x, top: y }} onClick={(e) => e.stopPropagation()}>
-      <div className="ctx-title">{entry.title}</div>
+      <div className="ctx-title">{entry.shownTitle}</div>
       {actions.map((a) => (a.separator
         ? <div key={a.key} className="ctx-sep" />
         : <button key={a.key} className={a.danger ? 'danger' : ''} onClick={() => { hide(); void a.run?.() }}>{a.label}</button>))}

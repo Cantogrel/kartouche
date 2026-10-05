@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { Button } from '@/ui'
+import { Modal } from './Modal'
+import { EditGameDialog } from './EditGameDialog'
 import { t } from '@/i18n'
 import { useLibrary } from '@/store/library'
 import { platformLabel } from '@shared/consoles'
@@ -10,37 +12,19 @@ type Dialog =
   | { kind: 'editor'; collectionId: number | null }
   /** Choix des collections d'un jeu. */
   | { kind: 'picker'; entryId: number }
+  /** Modification d'un jeu de la bibliothèque : titre, description, images… (surcouche, voir shared/overrides.ts). */
+  | { kind: 'edit'; entryId: number }
 
 interface DialogState { dialog: Dialog | null; open: (d: Dialog) => void; close: () => void }
 export const useDialog = create<DialogState>((set) => ({ dialog: null, open: (dialog) => set({ dialog }), close: () => set({ dialog: null }) }))
 
-export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
-  useEffect(() => {
-    const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', key)
-    return () => window.removeEventListener('keydown', key)
-  }, [onClose])
-  const box = useRef<HTMLDivElement>(null)
-  // Le focus entre dans la fenetre (premier champ, sinon la fenetre elle-meme) et revient au declencheur a la fermeture.
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null
-    ;(box.current?.querySelector<HTMLElement>('input, button') ?? box.current)?.focus()
-    return () => before?.focus?.()
-  }, [])
-  return (
-    <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="modal" ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}>
-        <h2>{title}</h2>
-        {children}
-      </div>
-    </div>
-  )
-}
+export { Modal } from './Modal'
 
 /** Fenêtres partagées (rendues une fois, dans App). */
 export function Dialogs() {
   const { dialog, close } = useDialog()
   if (!dialog) return null
+  if (dialog.kind === 'edit') return <EditGameDialog entryId={dialog.entryId} onClose={close} />
   return dialog.kind === 'editor' ? <CollectionEditor collectionId={dialog.collectionId} onClose={close} /> : <CollectionPicker entryId={dialog.entryId} onClose={close} />
 }
 
@@ -52,7 +36,7 @@ function CollectionEditor({ collectionId, onClose }: { collectionId: number | nu
   const [filter, setFilter] = useState('')
   const [taken, setTaken] = useState(false)
   const q = filter.trim().toLowerCase()
-  const shown = useMemo(() => entries.filter((e) => !q || e.title.toLowerCase().includes(q)), [entries, q])
+  const shown = useMemo(() => entries.filter((e) => !q || e.shownTitle.toLowerCase().includes(q)), [entries, q])
   const toggle = (id: number): void => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const save = async (): Promise<void> => {
     const n = name.trim()
@@ -78,7 +62,7 @@ function CollectionEditor({ collectionId, onClose }: { collectionId: number | nu
       <div className="modal-list">
         {shown.map((e) => (
           <label key={e.id} className="check modal-item">
-            <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} /> <span className="modal-title">{e.title}</span> <span className="muted">{platformLabel(e.console)}</span>
+            <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} /> <span className="modal-title">{e.shownTitle}</span> <span className="muted">{platformLabel(e.console)}</span>
           </label>
         ))}
         {shown.length === 0 && <p className="muted">{t('library.noMatch')}</p>}
@@ -108,7 +92,7 @@ function CollectionPicker({ entryId, onClose }: { entryId: number; onClose: () =
   }
   return (
     <Modal title={t('collection.pickTitle')} onClose={onClose}>
-      <div className="muted modal-title">{entry.title}</div>
+      <div className="muted modal-title">{entry.shownTitle}</div>
       <div className="modal-list">
         {collections.length === 0 && <p className="muted">{t('collection.none')}</p>}
         {collections.map((c) => (

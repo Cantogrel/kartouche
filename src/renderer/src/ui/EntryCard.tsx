@@ -17,15 +17,15 @@ export function EntryCard({ entry: g }: { entry: LibraryEntry }) {
   const go = useApp((s) => s.go)
   const label = platformLabel(g.console)
   const open = (): void => go('game', `lib:${g.id}`)
-  return g.gameId === null ? (
+  return g.gameId === null && !g.art.cover ? (
     <div className="fav-wrap" onContextMenu={onEntryContext(g.id)}>
-      <GameCard title={g.title} console={label} hasFile={!g.missing} onClick={open} />
+      <GameCard title={g.shownTitle} console={label} hasFile={!g.missing} onClick={open} />
       {g.favorite && <span className="fav-mark">♥</span>}
       {g.pinned && <span className="pin-mark">★</span>}
     </div>
   ) : (
-    <div className={`card${g.missing ? ' nofile' : ''}`} role="button" tabIndex={0} aria-label={`${g.title} (${label})`} onClick={open} onContextMenu={onEntryContext(g.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() } }}>
-      <Cover className="cover-fill" gameId={g.gameId} title={g.title} kind="tile"><span className="card-title">{g.title}</span><Badge>{label}</Badge></Cover>
+    <div className={`card${g.missing ? ' nofile' : ''}`} role="button" tabIndex={0} aria-label={`${g.shownTitle} (${label})`} onClick={open} onContextMenu={onEntryContext(g.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() } }}>
+      <Cover className="cover-fill" gameId={g.gameId} art={g.art.cover} title={g.shownTitle} kind="tile"><span className="card-title">{g.shownTitle}</span><Badge>{label}</Badge></Cover>
       <DownloadVeil gameId={g.gameId} />
       {g.favorite && <span className="fav-mark">♥</span>}
       {g.pinned && <span className="pin-mark">★</span>}

@@ -31,7 +31,7 @@ export function FlagButtons({ entry }: { entry: LibraryEntry }) {
 export function UninstallButton({ entry }: { entry: LibraryEntry }) {
   const removeEntry = useLibrary((s) => s.removeEntry)
   return (
-    <Button onClick={async () => { if (await confirmDialog(t('confirm.uninstall', { title: entry.title }))) void removeEntry(entry.id, 'file') }}>
+    <Button onClick={async () => { if (await confirmDialog(t('confirm.uninstall', { title: entry.shownTitle }))) void removeEntry(entry.id, 'file') }}>
       {t('action.uninstall')}
     </Button>
   )

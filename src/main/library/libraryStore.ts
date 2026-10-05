@@ -9,7 +9,7 @@ import { deleteGameSaves } from '../saves/saves'
 import { contentDir, parkContent } from './content/store'
 import { uninstallContent } from '../emulators/content'
 import type { LibraryContentItem, LibraryEntry, MatchKind, SbiImportResult } from '@shared/library'
-import { OVERRIDE_FIELDS, type EntryOverrides } from '@shared/overrides'
+import { OVERRIDE_FIELDS, OVERRIDE_IMAGE_FIELDS, type EntryOverrides, type OverrideImageField } from '@shared/overrides'
 import { launchCheckPath, parseLaunchSpec, type EntryKind } from '@shared/launch'
 import { loadOverrides } from './overrides'
 import { customArtDir, removeEntryArt } from './customArt'
@@ -22,7 +22,8 @@ interface Row {
 
 const toEntry = (r: Row, collections: number[] = [], hasSources = false, overrides: EntryOverrides = {}): LibraryEntry => ({
   id: r.id, gameId: r.game_id, console: r.console, title: r.title, shownTitle: overrides.title ?? r.title,
-  overridden: OVERRIDE_FIELDS.filter((f) => overrides[f] !== undefined), kind: r.kind as EntryKind, source: r.source, path: r.path, size: r.size, match: r.match as MatchKind,
+  overridden: OVERRIDE_FIELDS.filter((f) => overrides[f] !== undefined),
+  art: Object.fromEntries(OVERRIDE_IMAGE_FIELDS.filter((f) => overrides[f] !== undefined).map((f) => [f, overrides[f]])) as Partial<Record<OverrideImageField, string>>, kind: r.kind as EntryKind, source: r.source, path: r.path, size: r.size, match: r.match as MatchKind,
   missing: r.missing === 1, addedAt: r.added_at, playMinutes: r.play_minutes, lastPlayed: r.last_played,
   favorite: r.favorite === 1, pinned: r.pinned === 1, collections, hasSources
 })

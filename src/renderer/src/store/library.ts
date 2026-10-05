@@ -8,6 +8,8 @@ interface LibraryState {
   collections: Collection[]
   /** Incrémenté quand les sauvegardes d'un jeu changent hors du panneau (suppression) : le panneau se recharge. */
   savesRev: number
+  /** Incrémenté à chaque rechargement de la liste : les vues qui lisent les modifications d'un jeu (titre, description…) se rechargent. */
+  rev: number
   loaded: boolean
   busy: boolean
   progress: LibraryProgress | null
@@ -51,10 +53,10 @@ export const useLibrary = create<LibraryState>((set, get) => {
     } finally { off(); set({ busy: false, progress: null }) }
   }
   return {
-    entries: [], collections: [], savesRev: 0, loaded: false, busy: false, progress: null, result: null,
+    entries: [], collections: [], savesRev: 0, rev: 0, loaded: false, busy: false, progress: null, result: null,
     refresh: async () => {
       const [entries, collections] = await Promise.all([window.api.invoke('library:list'), window.api.invoke('collections:list')])
-      set({ entries, collections, loaded: true })
+      set({ entries, collections, loaded: true, rev: get().rev + 1 })
     },
     importPaths: (paths) => (paths.length ? run(() => window.api.invoke('library:import', { paths })) : Promise.resolve()),
     link: async () => { await get().importPaths(await window.api.invoke('library:pick', 'files')) },

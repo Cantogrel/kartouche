@@ -89,11 +89,11 @@ export default function App() {
           <div className="side-lib">
           <SearchBox className="side" placeholder={t('searchLibrary')} value={librarySearch} onChange={setLibrarySearch} clearLabel={t('search.clear')} />
           <div className="side-games" role="group" aria-label={t('a11y.games')}>
-            {libEntries.filter((g) => !librarySearch || g.title.toLowerCase().includes(librarySearch.toLowerCase())).sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((g) => (
+            {libEntries.filter((g) => !librarySearch || g.shownTitle.toLowerCase().includes(librarySearch.toLowerCase())).sort((a, b) => Number(b.pinned) - Number(a.pinned)).map((g) => (
               <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} aria-current={gameId === `lib:${g.id}` && route === 'game' ? 'page' : undefined} onClick={() => go('game', `lib:${g.id}`)} onContextMenu={onEntryContext(g.id)}>
                 <DownloadVeil gameId={g.gameId} />
-                <GameIcon gameId={g.gameId} console={g.console} />
-                <span className="side-name">{g.title}</span>{g.pinned && <span className="side-pin">★</span>}
+                <GameIcon gameId={g.gameId} console={g.console} art={g.art.icon} />
+                <span className="side-name">{g.shownTitle}</span>{g.pinned && <span className="side-pin">★</span>}
               </button>
             ))}
           </div>

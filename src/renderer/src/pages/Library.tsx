@@ -54,7 +54,7 @@ export function Library() {
   const games = entries
     .filter((g) => (tab === 'ready' ? !g.missing : tab === 'missing' ? g.missing : tab === 'favorites' ? g.favorite : collectionId !== null ? g.collections.includes(collectionId) : true))
     .filter((g) => !consoleFilter || g.console === consoleFilter)
-    .filter((g) => !q || g.title.toLowerCase().includes(q))
+    .filter((g) => !q || g.shownTitle.toLowerCase().includes(q))
     // Épinglé : remonte en tête de la grille (pas seulement de la liste latérale), sans changer l'ordre du reste.
     .sort((a, b) => Number(b.pinned) - Number(a.pinned))
   const pick = async (kind: 'files' | 'folder'): Promise<void> => { setMenu(false); await importPaths(await window.api.invoke('library:pick', kind)) }
