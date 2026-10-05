@@ -16,19 +16,19 @@ import { placeContent } from './store'
 import { guard, launchUntil } from '../../emulators/content/real.testutil'
 
 // VRAIS FICHIERS DE MISE À JOUR / DLC. Ce fichier est l'outil à utiliser dès qu'on dispose d'un vrai contenu : déposer les fichiers dans un dossier (variable d'environnement
-// `ROMVAULT_REAL_CONTENT_DIR`, par défaut `E:\dev\RomVault\test-content`), un sous-dossier par plateforme :
+// `KARTOUCHE_REAL_CONTENT_DIR`, par défaut `E:\dev\RomVault\test-content`), un sous-dossier par plateforme :
 //
 //   3ds/    *.cia  (mise à jour 0004000E… ou DLC 0004008C…)          →  Azahar
 //   ps3/    *.pkg  (patch ou DLC)                                      →  RPCS3
 //   vita/   *.vpk / *.zip (archive avec sce_sys/param.sfo) ou *.pkg (+ *.pkg.zrif fourni par l'utilisateur)  →  Vita3K
 //   wiiu/   dossiers NUS (title.tmd + title.tik + *.app) ou extraits (code/content/meta), ou *.wua  →  Cemu
 //
-// Puis : `npm run test:real` (variable ROMVAULT_REAL_EMU=1 : lance le VRAI émulateur, modifie puis restaure son espace). Sans fichier pour une plateforme, son test est SAUTÉ avec un message :
-// cette plateforme n'est alors PAS validée avec un vrai contenu (voir docs/content-support.md). Sans ROMVAULT_REAL_EMU, seule l'IDENTIFICATION est vérifiée.
+// Puis : `npm run test:real` (variable KARTOUCHE_REAL_EMU=1 : lance le VRAI émulateur, modifie puis restaure son espace). Sans fichier pour une plateforme, son test est SAUTÉ avec un message :
+// cette plateforme n'est alors PAS validée avec un vrai contenu (voir docs/content-support.md). Sans KARTOUCHE_REAL_EMU, seule l'IDENTIFICATION est vérifiée.
 // L'émulateur doit être installé dans RomVault et, pour Vita3K, le jeu parent déjà installé dans Vita3K (il l'est au premier lancement du jeu depuis RomVault).
 
-const ROOT = process.env['ROMVAULT_REAL_CONTENT_DIR'] ?? String.raw`E:\dev\RomVault\test-content`
-const WITH_EMU = process.env['ROMVAULT_REAL_EMU'] === '1'
+const ROOT = process.env['KARTOUCHE_REAL_CONTENT_DIR'] ?? String.raw`E:\dev\RomVault\test-content`
+const WITH_EMU = process.env['KARTOUCHE_REAL_EMU'] === '1'
 const EMU = String.raw`E:\dev\RomVault\data\emulators`
 
 const list = (sub: string, ext: RegExp): string[] => { const d = join(ROOT, sub); return existsSync(d) ? readdirSync(d).filter((n) => ext.test(n)).map((n) => join(d, n)) : [] }
@@ -69,7 +69,7 @@ const skipMsg = (p: string): string => `aucun fichier réel dans ${join(ROOT, p)
 
 describe('contenu réel — 3DS / Azahar', () => {
   const files = list('3ds', /\.cia$/i)
-  it.skipIf(files.length === 0)('chaque .cia : identifié puis (ROMVAULT_REAL_EMU=1) installé par `azahar -i`, suivi exactement, désinstallé', async () => {
+  it.skipIf(files.length === 0)('chaque .cia : identifié puis (KARTOUCHE_REAL_EMU=1) installé par `azahar -i`, suivi exactement, désinstallé', async () => {
     for (const f of files) {
       const info = await probeFile(f)
       identified(info)
@@ -120,7 +120,7 @@ describe('contenu réel — Vita / Vita3K', () => {
 
 describe('contenu réel — Wii U / Cemu', () => {
   const folders = [...dirs('wiiu'), ...list('wiiu', /\.wua$/i)]
-  it.skipIf(folders.length === 0)('chaque titre : identifié, prérequis vérifiés, déclaré à Cemu par ses chemins de jeux (et, avec ROMVAULT_REAL_WIIU_BASE, découvert par le VRAI Cemu)', async () => {
+  it.skipIf(folders.length === 0)('chaque titre : identifié, prérequis vérifiés, déclaré à Cemu par ses chemins de jeux (et, avec KARTOUCHE_REAL_WIIU_BASE, découvert par le VRAI Cemu)', async () => {
     for (const f of folders) {
       const info = statSync(f).isDirectory() ? await probeWiiUFolder(f) : await probeFile(f)
       identified(info)
@@ -135,7 +135,7 @@ describe('contenu réel — Wii U / Cemu', () => {
         const out = await cemuInstaller.install(env, { id: 9101, kind: info.kind as 'update' | 'dlc', path: stored, titleId: info.titleId, version: info.version, needs: null }, { id: 1, console: 'wiiu', title: 'réel', path: 'x', baseKey: info.baseKey }, 'launch')
         expect(out, JSON.stringify(out)).toMatchObject({ state: 'installed' })
         expect(cemuGamePaths(readFileSync(cemuSettingsFile(cd), 'utf8')).length).toBeGreaterThan(0)
-        const base = process.env['ROMVAULT_REAL_WIIU_BASE']
+        const base = process.env['KARTOUCHE_REAL_WIIU_BASE']
         if (base) {
           // Découverte par le VRAI Cemu : le journal doit citer le titre rangé (« Update: » ou « DLC: »).
           const g = guard([join(cd, 'log.txt')])

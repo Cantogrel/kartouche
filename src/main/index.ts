@@ -32,7 +32,7 @@ function createWindow(db: DatabaseSync): BrowserWindow {
   })
   win.once('ready-to-show', () => { if (saved?.maximized) win.maximize(); win.show() })
   if (process.env['ELECTRON_RENDERER_URL']) win.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  else win.loadFile(join(__dirname, '../renderer/index.html'), { hash: process.env['ROMVAULT_HASH'] ?? (process.argv.includes('--bigpicture') ? 'bigpicture' : undefined) })
+  else win.loadFile(join(__dirname, '../renderer/index.html'), { hash: process.env['KARTOUCHE_HASH'] ?? (process.argv.includes('--bigpicture') ? 'bigpicture' : undefined) })
 
   // Bornes hors plein écran seulement (sinon on perdrait la taille normale à laquelle revenir) ; écrites au changement, avec un délai pour ne pas spammer pendant un redimensionnement à la souris.
   let pending: WindowState | null = null
