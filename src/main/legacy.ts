@@ -1,4 +1,4 @@
-import { cpSync, existsSync, readdirSync, rmSync, rmdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, rmdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** Éléments du dossier userData de RomVault (ancien nom du produit) à reprendre : chemin des données choisi par l'utilisateur, stockage local de Chromium. */
@@ -17,6 +17,19 @@ const DISPOSABLE = [
   'SingletonLock', 'SingletonCookie', 'SingletonSocket', '.updaterId'
 ] as const
 
+/**
+ * Copie récursive, sans écraser. Écrite à la main : `fs.cpSync` récursif fait planter le processus (0xC0000409, sans message) sur un chemin
+ * non ASCII sous Node 22 / Windows (profil utilisateur « Léo », etc.) — vérifié, voir `legacy.test.ts`.
+ */
+function copyTree(from: string, to: string): void {
+  if (statSync(from).isDirectory()) {
+    mkdirSync(to, { recursive: true })
+    for (const name of readdirSync(from)) copyTree(join(from, name), join(to, name))
+  } else if (!existsSync(to)) {
+    copyFileSync(from, to)
+  }
+}
+
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase() // Windows : insensible à la casse
 
 /**
@@ -34,7 +47,7 @@ export function migrateLegacyUserData(userDataDir: string, legacyDirs: readonly 
       const to = join(userDataDir, name)
       if (carried.includes(name) || !existsSync(from) || existsSync(to)) continue
       try {
-        cpSync(from, to, { recursive: true, errorOnExist: false, force: false })
+        copyTree(from, to)
         carried.push(name)
       } catch { /* élément verrouillé ou illisible : on repart de zéro pour celui-là, sans bloquer le démarrage */ }
     }

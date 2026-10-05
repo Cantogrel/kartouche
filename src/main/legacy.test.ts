@@ -28,6 +28,17 @@ describe('migrateLegacyUserData', () => {
     expect(existsSync(join(legacy, 'bootstrap.json'))).toBe(true)
   })
 
+  it('copie sans planter quand le chemin contient des caractères non ASCII (profil « Léo Étienne »)', () => {
+    const accentLegacy = join(root, 'Léo Étienne', 'RomVault')
+    const accentCurrent = join(root, 'Léo Étienne', 'Kartouche')
+    mkdirSync(join(accentLegacy, 'Local Storage', 'leveldb'), { recursive: true })
+    mkdirSync(accentCurrent, { recursive: true })
+    writeFileSync(join(accentLegacy, 'Local Storage', 'leveldb', '000003.log'), 'x')
+    writeFileSync(join(accentLegacy, 'bootstrap.json'), '{}')
+    expect(migrateLegacyUserData(accentCurrent, [accentLegacy])).toEqual(['bootstrap.json', 'Local Storage'])
+    expect(readFileSync(join(accentCurrent, 'Local Storage', 'leveldb', '000003.log'), 'utf8')).toBe('x')
+  })
+
   it('n’écrase jamais un élément déjà présent côté Kartouche', () => {
     writeFileSync(join(legacy, 'bootstrap.json'), '{"dataDir":"ancien"}')
     writeFileSync(join(current, 'bootstrap.json'), '{"dataDir":"nouveau"}')
