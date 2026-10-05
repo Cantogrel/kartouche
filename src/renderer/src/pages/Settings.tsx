@@ -14,7 +14,7 @@ import { useChangelog } from '@/store/changelog'
 import { useEmulators } from '@/store/emulators'
 import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSetting } from '@shared/settings'
 import { formatSize } from '@shared/format'
-import { AppearanceAdvanced } from '@/ui/AppearanceAdvanced'
+import { AccentCustom, AppearanceOptions } from '@/ui/AppearanceOptions'
 import { LaunchersSection } from '@/ui/LaunchersSection'
 import { LanguageFiles } from '@/ui/LanguageFiles'
 import { HomeLayoutEditor } from '@/ui/HomeLayoutEditor'
@@ -163,8 +163,9 @@ export function Settings() {
               {t('settings.accent')}
               <div className="row" role="radiogroup" aria-label={t('settings.accent')}>
                 {ACCENTS.map((a) => (
-                  <button key={a} role="radio" aria-checked={settings.accent === a} aria-label={t(`accent.${a}`)} title={t(`accent.${a}`)} className={`swatch accent-${a}${settings.accent === a ? ' on' : ''}`} onClick={() => void update({ accent: a as Accent })} />
+                  <button key={a} role="radio" aria-checked={settings.accent === a && !settings.accentColor} aria-label={t(`accent.${a}`)} title={t(`accent.${a}`)} className={`swatch accent-${a}${settings.accent === a && !settings.accentColor ? ' on' : ''}`} onClick={() => void update({ accent: a as Accent, accentColor: '' })} />
                 ))}
+                <AccentCustom />
               </div>
             </div>
             <label className="field">
@@ -177,7 +178,7 @@ export function Settings() {
               <input type="checkbox" checked={settings.reduceMotion} onChange={(e) => void update({ reduceMotion: e.target.checked })} /> {t('settings.reduceMotion')}
             </label>
             <p className="muted">{t('settings.reduceMotionHint')}</p>
-            <AppearanceAdvanced />
+            <AppearanceOptions />
             <HomeLayoutEditor />
           </>
         )}

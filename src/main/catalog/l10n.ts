@@ -29,6 +29,19 @@ export function capAtSentence(text: string, max = MAX_SUMMARY): string {
   return end > max * 0.5 ? cut.slice(0, end + 1) : cut.trimEnd() + '…'
 }
 
+const TITLE_STOPWORDS = new Set(['version', 'edition', 'the', 'a', 'an', 'of', 'and', 'et', 'de', 'la', 'le', 'les', 'du', 'des', 'el', 'der', 'die', 'das', 'il'])
+const titleWords = (title: string): string[] => title.replace(/\s*[([][^)\]]*[)\]]/g, '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter((w) => w && !TITLE_STOPWORDS.has(w))
+
+/**
+ * Titre d'article qui désigne le jeu sous un nom plus court que celui des DAT (« Pokémon Jaune » pour « Pokemon - Version Jaune - Edition Speciale
+ * Pikachu ») : au moins deux mots, tous présents dans le nom du jeu, dont son premier mot. Un article plus long ou sur la série seule (« Pokémon ») ne passe pas.
+ */
+export const isShortenedTitle = (articleTitle: string, gameName: string): boolean => {
+  const words = titleWords(articleTitle)
+  const game = titleWords(gameName)
+  return words.length >= 2 && words.every((w) => game.includes(w)) && words.includes(game[0])
+}
+
 /** Introduction de l'article Wikipédia consacré au jeu (jusqu'à 10 phrases), dans la langue demandée ; null s'il n'y en a pas de sûr. */
 export async function wikipediaSummary(name: string, lang: string, get: Json = getJson): Promise<string | null> {
   const api = `https://${lang}.wikipedia.org/w/api.php`
@@ -36,10 +49,14 @@ export async function wikipediaSummary(name: string, lang: string, get: Json = g
     { query?: { search?: { title: string }[] } } | null
   const want = matchKey(name)
   // Le titre de l'article doit correspondre au jeu (« The Witcher 3 : Wild Hunt » ≈ « The Witcher 3: Wild Hunt »), pas seulement lui ressembler.
-  const ok = (r: { title: string }): boolean => { const k = matchKey(r.title); return k === want || k.startsWith(want) || want.startsWith(k) && k.length >= 6 }
+  const found = search?.query?.search ?? []
+  const key = (r: { title: string }): string => matchKey(r.title)
+  const strong = found.filter((r) => key(r) === want || key(r).startsWith(want))
+  // Titre plus court que celui des DAT (« Pokémon Jaune »), avant l'article de la série seule (« Pokémon »), toléré en dernier recours.
+  const weak = found.filter((r) => want.startsWith(key(r)) && key(r).length >= 6)
   // L'article principal (« … Ocarina of Time ») passe avant une variante entre parenthèses (« … (jeu vidéo, 2026) »).
-  const hits = (search?.query?.search ?? []).filter(ok)
-  const hit = hits.find((r) => !/[([]/.test(r.title)) ?? hits[0]
+  const pick = (hits: { title: string }[]): { title: string } | undefined => hits.find((r) => !/[([]/.test(r.title)) ?? hits[0]
+  const hit = pick(strong) ?? found.find((r) => isShortenedTitle(r.title, name)) ?? pick(weak)
   if (!hit) return null
   const page = await get(`${api}?action=query&prop=extracts&exintro=1&explaintext=1&exsentences=10&redirects=1&titles=${encodeURIComponent(hit.title)}&format=json`) as
     { query?: { pages?: Record<string, { extract?: string }> } } | null

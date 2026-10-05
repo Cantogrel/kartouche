@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, mergeSettings } from './settings'
-import { DEFAULT_HOME_LAYOUT, HOME_SECTIONS, moveHomeSection, normalizeHomeLayout, toggleHomeSection, visibleHomeSections } from './homeLayout'
+import { DEFAULT_HOME_LAYOUT, HOME_SECTIONS, moveHomeSection, normalizeHomeLayout, reorderHomeSection, toggleHomeSection, visibleHomeSections } from './homeLayout'
 
 describe('homeLayout', () => {
   it('normalise : doublons/inconnus ignorés, blocs manquants ajoutés', () => {
@@ -16,6 +16,13 @@ describe('homeLayout', () => {
     l = toggleHomeSection(l, 'favorites')
     expect(visibleHomeSections(l)).not.toContain('favorites')
     expect(visibleHomeSections(toggleHomeSection(l, 'favorites'))).toContain('favorites')
+  })
+  it('réordonne par glisser-déposer', () => {
+    const l = reorderHomeSection(DEFAULT_HOME_LAYOUT, 'collections', 0)
+    expect(l.order).toEqual(['collections', 'stats', 'continue', 'favorites', 'recent'])
+    expect(reorderHomeSection(l, 'collections', 4).order).toEqual(['stats', 'continue', 'favorites', 'recent', 'collections'])
+    expect(reorderHomeSection(l, 'stats', 1)).toBe(l)
+    expect(reorderHomeSection(l, 'stats', 9)).toBe(l)
   })
   it('réglages : persistance via mergeSettings, valeur invalide rétablie', () => {
     const s = mergeSettings(DEFAULT_SETTINGS, { homeLayout: { order: ['collections'], hidden: ['recent'] } })

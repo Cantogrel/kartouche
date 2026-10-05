@@ -14,12 +14,12 @@ import type { LibraryEntry } from '@shared/library'
 type MenuMode = 'quick' | 'full'
 
 interface MenuState {
-  at: { x: number; y: number; entryId: number; mode: MenuMode } | null
-  show: (x: number, y: number, entryId: number, mode: MenuMode) => void
+  at: { x: number; y: number; entryId: number; mode: MenuMode; edit: boolean } | null
+  show: (x: number, y: number, entryId: number, mode: MenuMode, edit?: boolean) => void
   hide: () => void
 }
 export const useEntryMenu = create<MenuState>((set) => ({
-  at: null, show: (x, y, entryId, mode) => set({ at: { x, y, entryId, mode } }), hide: () => set({ at: null })
+  at: null, show: (x, y, entryId, mode, edit = true) => set({ at: { x, y, entryId, mode, edit } }), hide: () => set({ at: null })
 }))
 
 /** Ouvre le menu rapide (jouer, favoris, collections, désinstaller…) d'un jeu au clic droit — tuiles et liste latérale. */
@@ -29,10 +29,10 @@ export const onEntryContext = (entryId: number) => (e: MouseEvent): void => {
 }
 
 /** Ouvre le menu complet (toutes les actions) sous le bouton ⚙ Options de la fiche du jeu. */
-export const openEntryMenuAt = (e: MouseEvent<HTMLElement>, entryId: number): void => {
+export const openEntryMenuAt = (e: MouseEvent<HTMLElement>, entryId: number, opts: { edit?: boolean } = {}): void => {
   const r = e.currentTarget.getBoundingClientRect()
   e.stopPropagation()
-  useEntryMenu.getState().show(r.left, r.bottom + 4, entryId, 'full')
+  useEntryMenu.getState().show(r.left, r.bottom + 4, entryId, 'full', opts.edit ?? true)
 }
 
 interface Action { key: string; label?: string; danger?: boolean; separator?: boolean; run?: () => Promise<void> | void }
@@ -44,6 +44,13 @@ const pinAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getSta
   ({ key: 'pin', label: `${entry.pinned ? '★' : '☆'} ${t(entry.pinned ? 'pin.remove' : 'pin.add')}`, run: () => lib.setFlag(entry.id, { pinned: !entry.pinned }) })
 const editAction = (entry: LibraryEntry): Action =>
   ({ key: 'edit', label: `✎ ${t('edit.menu')}`, run: () => useDialog.getState().open({ kind: 'edit', entryId: entry.id }) })
+/** Va à la fiche du catalogue du jeu ; absent si le jeu n'en a pas (exécutable, jeu de launcher, ROM non reconnue) ou si on y est déjà. */
+const catalogPageAction = (entry: LibraryEntry): Action | null => {
+  if (entry.gameId === null) return null
+  const { route, gameId, go } = useApp.getState()
+  if (route === 'game' && gameId === String(entry.gameId)) return null
+  return { key: 'catalog', label: `▦ ${t('action.catalogPage')}`, run: () => go('game', String(entry.gameId)) }
+}
 const playWithAction = (entry: LibraryEntry): Action | null =>
   entry.kind === 'rom' && useCustomEmulators.getState().list.some((e) => e.consoles.includes(entry.console))
     ? { key: 'playWith', label: `▶ ${t('playWith.title')}`, run: () => useDialog.getState().open({ kind: 'playWith', entryId: entry.id }) }
@@ -76,7 +83,7 @@ function quickActionsFor(entry: LibraryEntry): Action[] {
   if (entry.kind !== 'rom') {
     // Exécutable ou jeu de launcher : lancement direct, et seule l'entrée peut être retirée (jamais ses fichiers).
     if (hasFile) list.push(running ? { key: 'stop', label: `■ ${t('play.stop')}`, run: () => window.api.invoke('game:stop', entry.id) } : { key: 'play', label: `▶ ${t('play')}`, run: () => playEntry(entry) }, sep('sep1'))
-    list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), editAction(entry), sep('sep2'), removeEntryAction(entry, lib, useApp.getState().back))
+    list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), sep('sep2'), removeEntryAction(entry, lib, useApp.getState().back))
     return list
   }
   if (hasFile && emulatorInstalled) {
@@ -87,7 +94,7 @@ function quickActionsFor(entry: LibraryEntry): Action[] {
     list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
   }
   if (list.length) list.push(sep('sep1'))
-  list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), editAction(entry))
+  list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry))
   // Avec une source de téléchargement : « Désinstaller » (le jeu se retélécharge) ; sinon « Supprimer le fichier » (aller simple). Jamais les deux.
   if (hasFile) list.push(sep('sep2'), entry.hasSources ? uninstallAction(entry, lib) : deleteFileAction(entry))
   // Dans la bibliothèque mais pas installé (sans fichier) : on peut retirer la fiche.
@@ -96,11 +103,11 @@ function quickActionsFor(entry: LibraryEntry): Action[] {
 }
 
 /** Menu complet (bouton ⚙ Options de la fiche) : toutes les actions, groupées par nature et séparées par des barres. */
-function fullActionsFor(entry: LibraryEntry, back: () => void): Action[] {
+function fullActionsFor(entry: LibraryEntry, back: () => void, withEdit: boolean): Action[] {
   const lib = useLibrary.getState()
   const hasFile = !entry.missing
   const ask = (key: string): Promise<boolean> => confirmDialog(t(`confirm.${key}`, { title: entry.shownTitle }))
-  const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), editAction(entry), ...(playWithAction(entry) ? [playWithAction(entry)!] : []), sep('sep1')]
+  const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), ...(withEdit ? [editAction(entry)] : []), ...(playWithAction(entry) ? [playWithAction(entry)!] : []), ...(catalogPageAction(entry) ? [catalogPageAction(entry)!] : []), sep('sep1')]
   if (entry.kind !== 'rom') {
     if (hasFile) list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })
     list.push(sep('sep2'), removeEntryAction(entry, lib, back))
@@ -165,7 +172,7 @@ export function EntryMenu() {
     setPos({ x: Math.max(8, Math.min(at.x, window.innerWidth - w - 8)), y: Math.max(8, Math.min(at.y, window.innerHeight - h - 8)) })
   }, [at, entry])
   if (!at || !entry) return null
-  const actions = at.mode === 'quick' ? quickActionsFor(entry) : fullActionsFor(entry, back)
+  const actions = at.mode === 'quick' ? quickActionsFor(entry) : fullActionsFor(entry, back, at.edit)
   const { x, y } = pos ?? at
   return (
     <div ref={ref} className="ctx" style={{ left: x, top: y }} onClick={(e) => e.stopPropagation()}>

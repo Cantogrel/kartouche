@@ -29,6 +29,7 @@ import { spawn } from 'node:child_process'
 import { chooseEmulator, emulatorOptions, resolveEmulatorId } from '@shared/emulatorChoice'
 import { buildCustomCommand, formatCommand } from '@shared/customEmulators'
 import { listConnectors, scanConnectors } from './connectors'
+import { launcherEntryIds } from './connectors/core'
 import { getPcMeta, identifyEntry, identifyPending, realDeps as pcDeps } from './library/pcMeta'
 import { isConnectorId } from '@shared/connectors'
 import { addExecutables, updateExeLaunch } from './library/addExe'
@@ -269,9 +270,11 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     return r
   })
   handle('connectors:list', () => listConnectors(db))
-  handle('connectors:setEnabled', ({ id, enabled }) => {
+  handle('connectors:setEnabled', async ({ id, enabled }) => {
     if (!isConnectorId(id)) return
     saveSettings(db, { connectors: { ...loadUserSettings(db).connectors, [id]: enabled } })
+    // Désactiver un launcher retire ses jeux de la bibliothèque (jamais leurs fichiers : ils appartiennent au launcher) ; réactivé, un scan les remet.
+    if (!enabled) for (const entryId of launcherEntryIds(db, id)) await removeEntry(db, entryId, 'entry', paths.saves, paths.roms, paths.dataDir)
   })
   handle('connectors:scan', async (id) => { const r = await scanConnectors(db, id); if (r.some((x) => x.added > 0)) identifyInBackground(); return r })
   handle('library:launchSpec', (id) => getLaunchSpec(db, id))

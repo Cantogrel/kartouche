@@ -25,7 +25,8 @@ export function LaunchersSection() {
   const toggle = async (c: ConnectorStatus): Promise<void> => {
     await window.api.invoke('connectors:setEnabled', { id: c.id, enabled: !c.enabled })
     await useSettings.getState().load()
-    if (!c.enabled) await scan(c.id); else refresh()
+    if (!c.enabled) await scan(c.id)
+    else { await useLibrary.getState().refresh(); setReports((x) => { const { [c.id]: _gone, ...rest } = x; return rest }); refresh() }
   }
   const summary = (r: ScanReport): string => (r.ok
     ? t('launchers.report', { found: String(r.found), added: String(r.added), dup: String(r.duplicates) })
