@@ -25,6 +25,8 @@ export interface DetectedGame {
 export const LAUNCH_URI_SCHEMES = ['steam', 'com.epicgames.launcher', 'goggalaxy', 'uplay', 'battlenet', 'origin2', 'origin', 'eadesktop', 'itch', 'ms-xbl-', 'msxbox'] as const
 
 export function isLaunchUri(uri: string): boolean {
+  // Application du menu Démarrer d'un jeu Xbox / Microsoft Store : `shell:AppsFolder\<paquet>!<application>`, rien d'autre sous `shell:`.
+  if (/^shell:AppsFolder\\[A-Za-z0-9._-]+![A-Za-z0-9._-]+$/i.test(uri.trim())) return true
   const m = /^([a-z][a-z0-9+.-]*):/i.exec(uri.trim())
   if (!m) return false
   const scheme = m[1].toLowerCase()
