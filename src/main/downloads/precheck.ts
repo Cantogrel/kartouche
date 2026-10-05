@@ -19,7 +19,7 @@ const WUA_URL = /\.wua(?:[?#]|$)/i
 export async function remoteWuaProblem(uri: string, signal: AbortSignal, httpFetch: HttpFetch): Promise<string | null> {
   if (!WUA_URL.test(uri)) return null
   const range = async (spec: string): Promise<Response | null> => {
-    const res = await httpFetch(uri, { headers: { 'user-agent': 'RomVault', range: spec }, signal }).catch(() => null)
+    const res = await httpFetch(uri, { headers: { 'user-agent': 'Kartouche', range: spec }, signal }).catch(() => null)
     if (res && res.status !== 206) { await res.body?.cancel().catch(() => undefined); return null }
     return res
   }

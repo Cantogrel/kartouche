@@ -94,7 +94,7 @@ export interface EmulatorState {
   /** Dossier d'installation (ou dossier de l'exécutable indiqué à la main). */
   dir: string | null
   exe: string | null
-  /** Exécutable choisi à la main plutôt qu'installé par RomVault. */
+  /** Exécutable choisi à la main plutôt qu'installé par Kartouche. */
   custom: boolean
   installedAt: number | null
   /** Le fichier exécutable n'existe plus. */

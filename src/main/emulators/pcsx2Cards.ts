@@ -9,7 +9,7 @@ import type { Ps2Game } from './pcsx2'
 // PCSX2 n'associe pas de carte à un jeu de lui-même : par défaut deux cartes partagées (Mcd001.ps2, Mcd002.ps2) servent tous les jeux. Il lit en revanche des réglages
 // par jeu (`gamesettings/<SERIE>_<CRC>.ini`, ou le fichier donné par `-gamecfg`) qui peuvent redéfinir `[MemoryCards] Slot1_Filename` / `Slot2_Filename`
 // (Pcsx2Config::LoadSaveMemcards, appliqué sur les réglages superposés ; vérifié : le journal de PCSX2 affiche « McdSlot 0: [Folder] …\memcards\<nom> »).
-// Un nom qui désigne un dossier (FileMcd_SetType) devient une carte « dossier » ; un nom absent est créé tel quel. RomVault crée des cartes dossier
+// Un nom qui désigne un dossier (FileMcd_SetType) devient une carte « dossier » ; un nom absent est créé tel quel. Kartouche crée des cartes dossier
 // (un dossier + le fichier `_pcsx2_superblock`, comme FileMcd_CreateNewCard), faciles à sauvegarder, à restaurer et à lire d'un jeu à l'autre sans les mélanger.
 
 export const pcsx2CardNames = (serial: string): [string, string] => [`RomVault-${serial}`, `RomVault-${serial}-2`]

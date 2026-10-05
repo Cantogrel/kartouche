@@ -44,7 +44,7 @@ export function rpcs3ConfigYaml(gpu: Gpu, displayHeight: number, fr: boolean): Y
 
 export type PadKind = 'xinput' | 'dualshock4' | 'dualsense'
 
-/** Première ligne des profils écrits par RomVault : RPCS3 réécrit le fichier (sans ce commentaire) dès que l'utilisateur modifie ses manettes ; RomVault n'y touche alors plus. */
+/** Première ligne des profils écrits par Kartouche : RPCS3 réécrit le fichier (sans ce commentaire) dès que l'utilisateur modifie ses manettes ; Kartouche n'y touche alors plus. */
 export const RPCS3_INPUT_MARKER = '# romvault:rpcs3-input'
 
 /** Disposition Xbox → PlayStation positionnelle : A = Croix, B = Rond, X = Carré, Y = Triangle, gâchettes LT/RT = L2/R2, LB/RB = L1/R1, Back = Select. */
@@ -70,7 +70,7 @@ export function rpcs3InputYaml(kind: PadKind, slot = 0): Yaml {
   return [...head, `  Handler: ${kind === 'dualsense' ? 'DualSense' : 'DualShock 4'}`, `  Device: ${q(kind === 'dualsense' ? 'DualSense Pad #1' : 'DS4 Pad #1')}`, '  Config: {}', '  Buddy Device: ""'].join('\n') + '\n'
 }
 
-/** Vrai si le profil global est absent ou encore celui de RomVault (marqueur présent) : on peut alors le réécrire ou le retirer (retour au clavier de RPCS3). */
+/** Vrai si le profil global est absent ou encore celui de Kartouche (marqueur présent) : on peut alors le réécrire ou le retirer (retour au clavier de RPCS3). */
 export const isRomvaultInput = (text: string | null): boolean => text === null || text.startsWith(RPCS3_INPUT_MARKER)
 
 // --- Exceptions par jeu -------------------------------------------------------------------------------------------------

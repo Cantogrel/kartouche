@@ -185,7 +185,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   return (
     <div className={`bpv${idleMouse ? ' mouse-idle' : ''}`} data-focus-root>
       <header className="bp-head">
-        <h1>RomVault</h1>
+        <h1>Kartouche</h1>
         <div className="bp-tabs">
           <span className="bp-key">LB</span>
           {/* Sections : LB/RB seulement, jamais le focus du stick (déjà accessibles à la gachette). */}

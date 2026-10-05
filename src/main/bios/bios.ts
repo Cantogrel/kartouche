@@ -83,9 +83,9 @@ export async function biosStatus(ctx: Ctx): Promise<BiosSlotStatus[]> {
     const dir = row?.dir ?? null
     if (slot.kind === 'bios') {
       const mine = await findBiosFile([join(ctx.paths.bios, slot.emulator)], slot)
-      // Sinon : BIOS configuré directement dans l'émulateur, hors du dossier de RomVault.
+      // Sinon : BIOS configuré directement dans l'émulateur, hors du dossier de Kartouche.
       const found = mine ?? (row ? await findInEmulator(slot, row.dir, row.custom === 1) : null)
-      out.push(found ? { ...base, state: 'ok', unverified: !found.verified, detail: found.label ?? found.name, source: mine ? 'romvault' : 'emulator' } : { ...base, state: 'missing' })
+      out.push(found ? { ...base, state: 'ok', unverified: !found.verified, detail: found.label ?? found.name, source: mine ? 'app' : 'emulator' } : { ...base, state: 'missing' })
       continue
     }
     if (!dir) { out.push({ ...base, state: 'unavailable' }); continue }
@@ -161,7 +161,7 @@ async function findInEmulator(slot: BiosSlot, dir: string, custom: boolean): Pro
   return findBiosFile(dirs, slot)
 }
 
-/** Retire un BIOS / firmware installé par RomVault (ou par l'émulateur, pour le firmware) ; un BIOS que l'utilisateur a rangé lui-même n'est jamais supprimé. */
+/** Retire un BIOS / firmware installé par Kartouche (ou par l'émulateur, pour le firmware) ; un BIOS que l'utilisateur a rangé lui-même n'est jamais supprimé. */
 export async function removeBios(ctx: Ctx, slotId: string): Promise<boolean> {
   const slot = BIOS_SLOTS.find((s) => s.id === slotId)
   if (!slot) return false

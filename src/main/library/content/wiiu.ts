@@ -7,7 +7,7 @@ import type { ContentInfo, ContentKind } from './types'
 // Contenu Wii U : Title ID 0005xxxx-LLLLLLLL — 00050000 jeu, 0005000E mise à jour, 0005000C DLC, tous trois avec le même identifiant bas.
 // Un titre additionnel se présente en DOSSIER : format NUS/WUP (`title.tmd` + `title.tik` + fichiers `.app`, chiffré) ou dossier « loadiine »
 // (`meta/meta.xml` + `code/` + `content/`, déjà déchiffré). Seuls les dossiers de mise à jour et de DLC sont traités ici : un dossier de jeu de base
-// n'est pas un format que RomVault importe (ses fichiers restent ignorés comme avant).
+// n'est pas un format que Kartouche importe (ses fichiers restent ignorés comme avant).
 
 const KIND_OF_HIGH: Record<string, ContentKind> = { '00050000': 'base', '0005000E': 'update', '0005000C': 'dlc' }
 

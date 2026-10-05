@@ -2,7 +2,7 @@ import { copyFile, mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 
 // Suivi exact de ce qu'une installation écrit dans l'espace d'un émulateur : photographie des dossiers concernés avant, puis après, et différence. Seul ce qui est NOUVEAU
-// est « à RomVault » : un fichier déjà là (installé à la main, par un autre outil, ou par un autre contenu) n'est jamais compté, même si l'installation l'a réécrit.
+// est « à Kartouche » : un fichier déjà là (installé à la main, par un autre outil, ou par un autre contenu) n'est jamais compté, même si l'installation l'a réécrit.
 
 export interface TreeSnapshot {
   /** Clé (chemin en minuscules) → chemin réel et « taille:date de modification » de chaque fichier. */
@@ -41,7 +41,7 @@ const inside = (child: string, parent: string): boolean => child.startsWith(pare
 export interface TreeDiff {
   /** Ce que l'installation a CRÉÉ : une racine entière si elle n'existait pas, sinon dossiers nouveaux (le plus haut seulement) et fichiers nouveaux. Chemins absolus. */
   created: string[]
-  /** Fichiers qui existaient déjà et que l'installation a réécrits : jamais comptés comme appartenant à RomVault. */
+  /** Fichiers qui existaient déjà et que l'installation a réécrits : jamais comptés comme appartenant à Kartouche. */
   modified: string[]
 }
 

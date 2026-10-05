@@ -6,9 +6,9 @@ import { parseSelectOnly, planTorrent } from './torrentPlan'
 import { wuaPrecheck } from './precheck'
 
 /**
- * Support BitTorrent du téléchargeur (client WebTorrent embarqué, MIT, aucun logiciel externe). RomVault ne fournit
+ * Support BitTorrent du téléchargeur (client WebTorrent embarqué, MIT, aucun logiciel externe). Kartouche ne fournit
  * ni magnet, ni tracker, ni .torrent : seules les URI des listes ajoutées par l'utilisateur sont utilisées, et seuls
- * les trackers/pairs qu'elles portent (le DHT public fait partie du protocole, pas d'une source fournie par RomVault).
+ * les trackers/pairs qu'elles portent (le DHT public fait partie du protocole, pas d'une source fournie par Kartouche).
  */
 
 export { uriKind, type UriKind } from '@shared/uriKind'
@@ -337,7 +337,7 @@ export async function fetchTorrentFile(
   uri: string, signal: AbortSignal,
   httpFetch: (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<Response>
 ): Promise<Buffer> {
-  const res = await httpFetch(uri, { headers: { 'user-agent': 'RomVault' }, signal })
+  const res = await httpFetch(uri, { headers: { 'user-agent': 'Kartouche' }, signal })
   if (res.status !== 200) throw new Error(`HTTP ${res.status}`)
   const buf = Buffer.from(await res.arrayBuffer())
   if (buf.length === 0 || buf.length > 10 * 1024 * 1024) throw new Error('fichier .torrent invalide')

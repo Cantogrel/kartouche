@@ -172,7 +172,7 @@ async function runOnceUntil(exe: string, cwd: string, ready: () => boolean): Pro
 // --- Dolphin -------------------------------------------------------------------------------------------------------------
 
 /**
- * Vrai si le fichier de manette GameCube est absent, celui de RomVault (bouton A = touche X, éventuellement suivie de la manette) ou un
+ * Vrai si le fichier de manette GameCube est absent, celui de Kartouche (bouton A = touche X, éventuellement suivie de la manette) ou un
  * état inutilisable (« Button A » sans périphérique alors que le périphérique par défaut est le clavier) : on peut alors le réécrire.
  */
 export function isUntouchedPadFile(text: string): boolean {
@@ -185,7 +185,7 @@ export function isUntouchedPadFile(text: string): boolean {
 /**
  * Écrit les liaisons clavier + manette de Dolphin. Appelé au lancement d'un jeu avec la manette XInput branchée (ou null) : les
  * réglages faits à la main par l'utilisateur ne sont pas touchés (on ne réécrit un fichier que s'il porte encore la touche A écrite
- * par RomVault). `game` : console du jeu lancé (seul le fichier de CETTE console est écrit : manette GameCube pour un jeu GameCube,
+ * par Kartouche). `game` : console du jeu lancé (seul le fichier de CETTE console est écrit : manette GameCube pour un jeu GameCube,
  * Wiimote pour un jeu Wii, jamais l'un pour l'autre) et identifiant disque (extension de la Wiimote, voir `wiimoteKindFor`) ; sans
  * lui (installation), les deux fichiers sont écrits au clavier seul.
  */
@@ -390,7 +390,7 @@ const AZAHAR_CONTROLLER_HOTKEYS: Record<string, string> = {
 
 /**
  * Profil actif d'Azahar selon ce qui est branché, à chaque lancement : profil 2 (manette, `profile=1`) si une manette XInput est connectée, sinon
- * profil 1 (clavier, `profile=0`). Seulement tant que le profil 2 est encore celui de RomVault et que le profil actif est l'un des deux : si
+ * profil 1 (clavier, `profile=0`). Seulement tant que le profil 2 est encore celui de Kartouche et que le profil actif est l'un des deux : si
  * l'utilisateur a créé ou choisi un autre profil dans Azahar, rien n'est touché.
  */
 export async function applyAzaharPad(dir: string, controllerConnected: boolean): Promise<void> {
@@ -402,7 +402,7 @@ export async function applyAzaharPad(dir: string, controllerConnected: boolean):
   const current = Number(/^profile=(\d+)\s*$/m.exec(text)?.[1] ?? 0)
   if (current > 1) return
   const wanted = controllerConnected ? 1 : 0
-  // Profil écrit par une ancienne version de RomVault (liaisons sans `api:controller` : aucune manette ne répondait) : remplacé par le profil actuel.
+  // Profil écrit par une ancienne version de Kartouche (liaisons sans `api:controller` : aucune manette ne répondait) : remplacé par le profil actuel.
   // Seulement tant qu'il porte encore le GUID supposé : un profil refait dans Azahar par l'utilisateur n'est jamais touché.
   // (ou L encore sur le bouton LB d'avant : seule valeur précise remplacée, une autre liaison de L choisie par l'utilisateur reste intacte).
   const outdated = !buttonA.includes('api:controller') || /^profiles\\2\\button_l="api:controller,button:9,/m.test(text)
@@ -433,7 +433,7 @@ export async function applyAzaharGameConfig(dir: string, titleId: string | null 
 export async function applyDuckstationGame(dir: string, serial: string | null | undefined, table: Record<string, IniPatch> = DUCKSTATION_GAME_OVERRIDES): Promise<void> {
   if (!serial) return
   const patch: IniPatch = { ...table[serial.toUpperCase()] }
-  // Carte mémoire : par défaut DuckStation en donne une à chaque jeu (« PerGameTitle », nommée d'après son titre) et RomVault la retrouve à son contenu (voir saves.ts).
+  // Carte mémoire : par défaut DuckStation en donne une à chaque jeu (« PerGameTitle », nommée d'après son titre) et Kartouche la retrouve à son contenu (voir saves.ts).
   // Si l'utilisateur a choisi une carte PARTAGÉE entre tous les jeux, ce jeu reçoit la sienne (« PerGame », `<SERIE>_<slot>.mcd`) : sinon ses sauvegardes seraient mêlées à celles des autres.
   const settings = await readText(join(dir, 'settings.ini'))
   const shared = (slot: number): boolean => new RegExp(`^\\s*Card${slot}Type\\s*=\\s*Shared\\b`, 'mi').test(settings)
@@ -470,8 +470,8 @@ export async function applyPcsx2Game(dir: string, game: Ps2Game | null, table: R
 
 /**
  * Profil de manette global de RPCS3 selon ce qui est branché, à chaque lancement : manette XInput (emplacement réel de la manette connectée, donc aussi le pad virtuel de
- * Sunshine/Moonlight), sinon manette Sony native, sinon clavier — le profil de RomVault est alors retiré et RPCS3 retombe sur son pad clavier par défaut. Sans profil, RPCS3
- * n'utilise AUCUNE manette. Seulement tant que le fichier est absent ou porte le marqueur de RomVault : un profil réglé dans RPCS3 par l'utilisateur n'est jamais touché.
+ * Sunshine/Moonlight), sinon manette Sony native, sinon clavier — le profil de Kartouche est alors retiré et RPCS3 retombe sur son pad clavier par défaut. Sans profil, RPCS3
+ * n'utilise AUCUNE manette. Seulement tant que le fichier est absent ou porte le marqueur de Kartouche : un profil réglé dans RPCS3 par l'utilisateur n'est jamais touché.
  */
 export async function applyRpcs3Pad(dir: string, pad: { kind: PadKind; slot?: number } | null): Promise<void> {
   const file = join(dir, 'config', 'input_configs', 'global', 'Default.yml')
@@ -500,9 +500,9 @@ export async function applyRpcs3Game(dir: string, serial: string | null | undefi
 const edenConfig = (dir: string): string => join(dir, 'user', 'config', 'qt-config.ini')
 
 /**
- * Vrai si les touches du joueur 1 sont celles d'Eden (défaut) ou celles écrites par RomVault : on peut alors les changer. Dès que
+ * Vrai si les touches du joueur 1 sont celles d'Eden (défaut) ou celles écrites par Kartouche : on peut alors les changer. Dès que
  * l'utilisateur a configuré une manette à sa façon dans Eden (autre GUID, ou bouton A déplacé), elles ne sont plus jamais touchées.
- * Les anciennes liaisons de RomVault (GUID XInput générique, jamais reconnu par Eden) comptent comme les siennes.
+ * Les anciennes liaisons de Kartouche (GUID XInput générique, jamais reconnu par Eden) comptent comme les siennes.
  */
 export function isUntouchedEdenControls(text: string): boolean {
   if (/^player_0_button_a\\default=true\s*$/m.test(text)) return true
@@ -584,7 +584,7 @@ async function configureDolphin(dir: string, ctx: ConfigContext): Promise<void> 
       // Simule une vitesse de lecture de disque irréaliste : réduit nettement le temps de lancement et les temps de
       // chargement (plus sensible sur Wii, dont les disques transportent plus de données que la GameCube). Quelques
       // jeux dépendent du vrai timing du lecteur pour démarrer (voir DOLPHIN_FAST_DISC_EXCLUSIONS, désactivé au cas
-      // par cas via un fichier GameSettings) — connu de la communauté Dolphin, pas une hypothèse RomVault.
+      // par cas via un fichier GameSettings) — connu de la communauté Dolphin, pas une hypothèse Kartouche.
       FastDiscSpeed: true,
       GFXBackend: graphics.backend
     },
@@ -715,7 +715,7 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
     }
     case 'melonds': {
       // Fusion (pas createOnce) : un melonDS.toml partiel peut déjà exister (lancement manuel de l'utilisateur avant
-      // installation via RomVault), sinon rendu/langue/manette ne seraient jamais écrits. Réglages et choix : voir melonds.ts.
+      // installation via Kartouche), sinon rendu/langue/manette ne seraient jamais écrits. Réglages et choix : voir melonds.ts.
       const file = join(dir, 'melonDS.toml')
       let text = await readText(file)
       const render = melondsRendering(gpu, ctx.displayHeight)
@@ -740,7 +740,7 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
     }
     case 'azahar': {
       // La langue de la console (pas celle de l'appli, ci-dessous) vit dans le NAND émulé : voir `azaharCfgPath`.
-      // confirmClose : sans ça, une fermeture demandée par RomVault (bouton, manette) ouvre la boîte de confirmation
+      // confirmClose : sans ça, une fermeture demandée par Kartouche (bouton, manette) ouvre la boîte de confirmation
       // d'Azahar au lieu de fermer — comme ConfirmStop/ConfirmPowerOff/ConfirmShutdown pour Dolphin/DuckStation/PCSX2.
       // Rendu, disposition et audio : voir azahar.ts. Contrôles : profil 1 (index 0) = clavier d'Azahar, profil 2 = manette ; lequel est actif
       // dépend de ce qui est branché, choisi au lancement (voir `applyAzaharPad`). La souris (tactile) et le mouvement sont dans les deux profils.
@@ -769,7 +769,7 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
       return writeCemuProfiles(dir)
     }
     case 'eden':
-      // confirmStop=2 (ConfirmStop::Ask_Never) : sans ça, un « Fermer le jeu » de RomVault (ou le raccourci manette
+      // confirmStop=2 (ConfirmStop::Ask_Never) : sans ça, un « Fermer le jeu » de Kartouche (ou le raccourci manette
       // Retour+Start) ouvre la boîte de confirmation d'Eden au lieu de fermer — comme confirmClose pour Azahar.
       // Valeur et section (« UI », catégorie UiGeneral) vérifiées contre le code source réel d'Eden
       // (src/qt_common/config/uisettings.h, src/common/settings_enums.h, src/common/settings.cpp TranslateCategory).
@@ -803,7 +803,7 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
       }, '=')
     case 'vita3k': {
       // confirmExitApp à false (réglage Qt, fichier ini indépendant de config.yml, fusion sans besoin que Vita3K
-      // ait déjà tourné) : sans ça, une fermeture demandée par RomVault (bouton, Retour+Start) ouvre « Exit App? / Do
+      // ait déjà tourné) : sans ça, une fermeture demandée par Kartouche (bouton, Retour+Start) ouvre « Exit App? / Do
       // you really want to exit the app? » au lieu de fermer — vérifié en vrai (la clé n'est PAS
       // `mw_confirmExitApp` : avec ce nom la boîte s'ouvrait toujours, sans préfixe elle disparaît).
       await writeIni(join(dir, 'gui-configs', 'CurrentSettings.ini'), { MainWindow: { confirmExitApp: false } }, '=')

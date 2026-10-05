@@ -130,7 +130,7 @@ export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAc
     }
   }
   if (action === 'all') {
-    // Ses mises à jour/DLC rangés par RomVault (voir library/content/store.ts) : <roms>/<console>/.content/<identifiant du jeu>/. Les contenus laissés où ils
+    // Ses mises à jour/DLC rangés par Kartouche (voir library/content/store.ts) : <roms>/<console>/.content/<identifiant du jeu>/. Les contenus laissés où ils
     // étaient (mode « ne pas copier ») ne sont jamais supprimés.
     if (r.title_id) {
       if (romsDir) await rm(contentDir(romsDir, r.console, r.title_id), { recursive: true, force: true }).catch(() => undefined)
@@ -147,9 +147,9 @@ export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAc
 }
 
 /**
- * Désinstalle les mises à jour et DLC d'un jeu (un par un, voir `uninstallContent` : l'émulateur d'abord, puis le rangement de RomVault, puis la ligne). Un contenu
+ * Désinstalle les mises à jour et DLC d'un jeu (un par un, voir `uninstallContent` : l'émulateur d'abord, puis le rangement de Kartouche, puis la ligne). Un contenu
  * que l'émulateur refuse de retirer (ouvert…) est conservé tel quel, avec son état, pour pouvoir être retiré ensuite ; les suivants ne sont pas bloqués.
- * Sans dossier de ROM connu, rien n'est supprimé (on ne sait pas distinguer ce que RomVault a rangé).
+ * Sans dossier de ROM connu, rien n'est supprimé (on ne sait pas distinguer ce que Kartouche a rangé).
  */
 async function uninstallAllContent(db: DatabaseSync, libraryId: number, romsDir: string | undefined): Promise<void> {
   if (!romsDir) return

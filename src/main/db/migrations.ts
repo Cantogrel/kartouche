@@ -80,7 +80,7 @@ export const MIGRATIONS: readonly string[] = [
   // v13 : un .vpk Vita3K ne boote jamais tout seul après un install par chemin de contenu (constaté en vrai) ; on
   // installe une fois, on garde le Title ID annoncé par Vita3K, puis on relance toujours par ce Title ID (`-r`).
   `ALTER TABLE library ADD COLUMN vita_title_id TEXT`,
-  // v14 : sources de téléchargement apportées par l'utilisateur (v0.2.0). RomVault ne fournit, ne scrape ni n'agrège
+  // v14 : sources de téléchargement apportées par l'utilisateur (v0.2.0). Kartouche ne fournit, ne scrape ni n'agrège
   // aucune liste — chacune est une URL JSON ajoutée à la main dans Paramètres. list_id porte le cycle de vie (cascade
   // à la suppression d'une liste) ; ces deux tables ne doivent jamais être touchées par une resynchro du catalogue
   // (replaceConsole/pruneUnknownConsoles, catalogStore.ts) au même titre que `library`.

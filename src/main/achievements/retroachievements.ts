@@ -10,7 +10,7 @@ const PROGRESS_TTL = 10 * 60_000
 export type Fetcher = (url: string) => Promise<unknown>
 
 const defaultFetch: Fetcher = async (url) => {
-  const res = await fetch(url, { headers: { 'user-agent': 'RomVault' }, signal: AbortSignal.timeout(60_000) })
+  const res = await fetch(url, { headers: { 'user-agent': 'Kartouche' }, signal: AbortSignal.timeout(60_000) })
   if (res.status === 401 || res.status === 403) throw new Error('auth')
   if (!res.ok) throw new Error(`RetroAchievements HTTP ${res.status}`)
   return res.json()

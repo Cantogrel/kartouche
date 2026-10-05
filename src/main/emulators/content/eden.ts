@@ -8,7 +8,7 @@ import type { ContentInstaller } from './types'
 // (core/file_sys/registered_cache.cpp, `ExternalContentProvider`) ET dans le binaire installé (v0.2.1 : « External Content », `external_content_dirs`) :
 // Eden parcourt récursivement chaque dossier listé, ouvre chaque .nsp/.xci, y lit tickets et métadonnées (les clés de titre des tickets sont enregistrées
 // par le chargeur de NSP lui-même) et propose les mises à jour (plusieurs versions possibles) et DLC au jeu concerné — SANS rien installer dans le NAND.
-// RomVault n'a donc rien à écrire dans le NAND ni à déchiffrer : il range les contenus sous <roms>/switch/.content/ et déclare ce dossier à Eden
+// Kartouche n'a donc rien à écrire dans le NAND ni à déchiffrer : il range les contenus sous <roms>/switch/.content/ et déclare ce dossier à Eden
 // (qt-config.ini, `Paths\external_content_dirs`). Rien n'est copié dans le NAND, donc rien à défaire : retirer le fichier suffit à retirer le contenu.
 
 export const edenConfigFile = (dir: string): string => join(dir, 'user', 'config', 'qt-config.ini')
@@ -51,7 +51,7 @@ export const edenInstaller: ContentInstaller = {
     const file = edenConfigFile(env.emulator.dir)
     const current = existsSync(file) ? await readFile(file, 'utf8') : ''
     const { text, changed } = registerExternalDir(current, edenContentDir(env.romsDir))
-    // RomVault ne possède rien dans l'espace d'Eden (il lit nos fichiers en place) : `[]`, pour ne jamais être pris pour un contenu « sans suivi ».
+    // Kartouche ne possède rien dans l'espace d'Eden (il lit nos fichiers en place) : `[]`, pour ne jamais être pris pour un contenu « sans suivi ».
     if (!changed) return { state: 'installed', emuFiles: [] }
     // Eden réécrit son qt-config.ini à sa fermeture : un fichier modifié pendant qu'il tourne serait écrasé.
     if (await env.isRunning('eden.exe')) return { state: 'pending', reason: 'emulatorRunning' }

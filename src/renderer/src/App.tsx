@@ -66,7 +66,7 @@ export default function App() {
     <div className="app" lang={lang}>
       <a className="skip" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById('main')?.focus() }}>{t('a11y.skip')}</a>
       <div className="titlebar">
-        <span>RomVault</span>
+        <span>Kartouche</span>
         <div className="right">
           {(updateStatus === 'available' || updateStatus === 'downloading' || updateStatus === 'ready') && (
             <button className="update-badge" onClick={() => go('settings', 'about')}>

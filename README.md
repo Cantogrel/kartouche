@@ -1,8 +1,8 @@
-# RomVault
+# Kartouche
 
 Bibliothèque de jeux d'émulation pour Windows : elle installe et configure les émulateurs, identifie vos ROMs, garde vos sauvegardes et se pilote à la souris comme à la manette (mode Big Picture).
 
-RomVault **ne télécharge jamais de ROMs**. Les BIOS et firmwares protégés sont importés par vous, via un assistant guidé ; seule exception : le firmware PS3 et PS Vita, téléchargé sur demande depuis les serveurs officiels de Sony.
+Kartouche **ne télécharge jamais de ROMs**. Les BIOS et firmwares protégés sont importés par vous, via un assistant guidé ; seule exception : le firmware PS3 et PS Vita, téléchargé sur demande depuis les serveurs officiels de Sony.
 
 ## Installation
 
@@ -74,12 +74,12 @@ npm run dist         # installateur dans release/
 - `src/renderer/` : interface React (pages, Big Picture, i18n dans `locales/`).
 - `src/shared/` : types et données communs (IPC, consoles, émulateurs, BIOS).
 - `server/` : proxy Cloudflare Worker qui porte les clés de catalogue (voir `server/README.md`).
-- `tools/` : lanceur de développement `RomVault-Dev.exe` (`tools\build-dev-exe.cmd`) et générateur d'icône (`tools\make-icon.ps1`).
+- `tools/` : lanceur de développement `RomVault-Dev.exe` (`tools\build-dev-exe.cmd`) et générateur d'icône (`tools\make-icon.py`).
 - Les migrations SQLite livrées (`src/main/db/migrations.ts`) ne se modifient jamais : on en ajoute une.
 - Données en développement : `data/` (ignoré par git, contient la base réelle et les clés).
 
 ## Licence et crédits
 
-Les métadonnées viennent des DAT Libretro, d'IGDB, de TheGamesDB, de SteamGridDB et de Wikipédia ; les succès de RetroAchievements. RomVault s'inspire de l'ergonomie de Hydra Launcher sans en reprendre d'assets.
+Les métadonnées viennent des DAT Libretro, d'IGDB, de TheGamesDB, de SteamGridDB et de Wikipédia ; les succès de RetroAchievements. Kartouche s'inspire de l'ergonomie de Hydra Launcher sans en reprendre d'assets.
 
 Extraction `.7z`/`.rar` : [7z-wasm](https://github.com/use-strict/7z-wasm) (7-Zip compilé en WebAssembly, LGPL-2.1 ou ultérieure avec la restriction unRAR — le moteur sert uniquement à extraire, jamais à créer d'archives RAR). Livré comme fichiers séparés et remplaçables (`resources/app.asar.unpacked/node_modules/7z-wasm/`, avec `License.txt` et `unRarLicense.txt`).

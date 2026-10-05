@@ -8,8 +8,8 @@ import type { ContentInstaller } from './types'
 // (CafeTitleList.cpp, `RefreshWorkerThread`/`ScanGamePath`, et GameInfo/`GetGameInfo`) : Cemu parcourt récursivement chaque chemin de jeux et y découvre TOUT titre — jeu, mise à jour
 // (0005000E-<même id bas>) ou DLC (0005000C-<même id bas>) — qu'il soit extrait (`code/` + `content/` + `meta/`) ou au format NUS/WUP (`title.tmd` + `title.tik` + `.app`,
 // déchiffré par Cemu lui-même avec la clé commune qu'il embarque). Au lancement d'un jeu il associe lui-même la mise à jour et le DLC de même identifiant (journal : « Update: <chemin> »,
-// « DLC: <chemin> »). RomVault n'installe donc rien dans `mlc01` et ne déchiffre rien : il range le titre sous <roms>/wiiu/.content/ et déclare ce dossier à Cemu. Désinstaller =
-// supprimer ce que RomVault a rangé ; rien n'est écrit dans l'espace de Cemu, donc rien à y défaire (et les titres que l'utilisateur a installés dans `mlc01` ne sont jamais touchés).
+// « DLC: <chemin> »). Kartouche n'installe donc rien dans `mlc01` et ne déchiffre rien : il range le titre sous <roms>/wiiu/.content/ et déclare ce dossier à Cemu. Désinstaller =
+// supprimer ce que Kartouche a rangé ; rien n'est écrit dans l'espace de Cemu, donc rien à y défaire (et les titres que l'utilisateur a installés dans `mlc01` ne sont jamais touchés).
 
 export const cemuSettingsFile = (dir: string): string => join(dir, 'settings.xml')
 export const cemuContentDir = (romsDir: string): string => join(romsDir, 'wiiu', '.content')
@@ -57,7 +57,7 @@ export const cemuInstaller: ContentInstaller = {
     const current = await readFile(file, 'utf8')
     const { text, changed, missing } = registerCemuGamePath(current, cemuContentDir(env.romsDir))
     if (missing) return { state: 'failed', reason: 'error', detail: 'settings.xml de Cemu sans section <GamePaths> : configuration non modifiée' }
-    // RomVault ne possède rien côté Cemu : `[]` (déclarer un dossier dans sa configuration n'est pas un fichier à retirer avec le contenu).
+    // Kartouche ne possède rien côté Cemu : `[]` (déclarer un dossier dans sa configuration n'est pas un fichier à retirer avec le contenu).
     if (!changed) return { state: 'installed', emuFiles: [] }
     // Cemu réécrit settings.xml à sa fermeture : un fichier modifié pendant qu'il tourne serait écrasé.
     if (await env.isRunning('Cemu.exe')) return { state: 'pending', reason: 'emulatorRunning' }

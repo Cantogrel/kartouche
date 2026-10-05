@@ -12,7 +12,7 @@ export function loadUserSettings(db: DatabaseSync): Settings {
   return mergeSettings(DEFAULT_SETTINGS, stored)
 }
 
-/** Réglages effectifs : une clé de catalogue laissée vide passe par le proxy RomVault (RetroAchievements reste à l'utilisateur). */
+/** Réglages effectifs : une clé de catalogue laissée vide passe par le proxy Kartouche (RetroAchievements reste à l'utilisateur). */
 export function loadSettings(db: DatabaseSync): Settings {
   const s = loadUserSettings(db)
   if (!s.igdbClientId || !s.igdbClientSecret) { s.igdbClientId = PROXY_KEY; s.igdbClientSecret = PROXY_KEY }

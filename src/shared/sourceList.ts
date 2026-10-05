@@ -1,6 +1,6 @@
 /**
  * Format d'une liste de sources de téléchargement ajoutée par l'utilisateur (v0.2.0).
- * RomVault ne fournit, ne scrape ni n'agrège aucune liste : chacune est une URL JSON que
+ * Kartouche ne fournit, ne scrape ni n'agrège aucune liste : chacune est une URL JSON que
  * l'utilisateur ajoute lui-même dans Paramètres → Sources, sous sa propre responsabilité.
  */
 export const SOURCE_LIST_SCHEMA_VERSION = 1
@@ -12,7 +12,7 @@ export interface SourceListEntryHash {
 
 export interface SourceListEntry {
   title: string
-  /** Identifiant de console RomVault (src/shared/consoles.ts), pas un identifiant Steam/IGDB. */
+  /** Identifiant de console Kartouche (src/shared/consoles.ts), pas un identifiant Steam/IGDB. */
   console: string
   sizeBytes?: number
   /**
@@ -56,7 +56,7 @@ export interface SourceListSummary {
   entryCount: number
   matchedCount: number
   error: string | null
-  /** Liste ajoutée depuis un fichier (et non une URL) : RomVault en garde une copie dans son dossier de données. */
+  /** Liste ajoutée depuis un fichier (et non une URL) : Kartouche en garde une copie dans son dossier de données. */
   hasLocalCopy: boolean
   /** Chemin de la copie locale (quand elle existe) : c'est ce fichier, et non l'original, que l'actualisation lit. */
   localCopyPath: string | null

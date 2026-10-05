@@ -5,7 +5,7 @@ export interface Release { version: string; url: string; name: string }
 interface ApiAsset { name: string; browser_download_url: string }
 interface ApiRelease { tag_name: string; name?: string; draft?: boolean; prerelease?: boolean; published_at?: string; assets: ApiAsset[] }
 
-const HEADERS = { 'user-agent': 'RomVault', accept: 'application/json' }
+const HEADERS = { 'user-agent': 'Kartouche', accept: 'application/json' }
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(20000) })
@@ -26,7 +26,7 @@ export function pickRelease(releases: ApiRelease[], asset: string, prerelease: b
 }
 
 async function getText(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { 'user-agent': 'RomVault' }, signal: AbortSignal.timeout(20000) })
+  const res = await fetch(url, { headers: { 'user-agent': 'Kartouche' }, signal: AbortSignal.timeout(20000) })
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`)
   return res.text()
 }

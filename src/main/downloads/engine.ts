@@ -32,7 +32,7 @@ function filenameFromUri(uri: string): string {
 /** Télécharge une URI vers `part`, en reprenant via Range si `part` existe déjà et que le serveur le permet. */
 async function fetchOne(uri: string, part: string, sourceId: number, signal: AbortSignal, report: Report, httpFetch: HttpFetch): Promise<void> {
   let startAt = existsSync(part) ? statSync(part).size : 0
-  const headers: Record<string, string> = { 'user-agent': 'RomVault' }
+  const headers: Record<string, string> = { 'user-agent': 'Kartouche' }
   if (startAt > 0) headers['range'] = `bytes=${startAt}-`
 
   const res = await httpFetch(uri, { headers, signal })

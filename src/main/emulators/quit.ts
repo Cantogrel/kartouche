@@ -63,7 +63,7 @@ for ($i = 0; $i -lt 4; $i++) {
 `
 
 // Valide les boîtes de dialogue d'un programme (bouton « Oui » / « OK » invoqué par UI Automation) : l'installation d'un firmware RPCS3 demande « Install firmware? »
-// puis affiche « Successfully installed », deux clics que l'utilisateur ne doit pas avoir à faire. S'arrête avec RomVault.
+// puis affiche « Successfully installed », deux clics que l'utilisateur ne doit pas avoir à faire. S'arrête avec Kartouche.
 const CONFIRM_SCRIPT = `param([int]$ParentPid, [string]$Proc, [string]$Names, [string]$Seen = '')
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $wanted = $Names -split ','

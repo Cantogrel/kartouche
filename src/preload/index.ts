@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { RomVaultApi } from '@shared/ipc'
+import type { KartoucheApi } from '@shared/ipc'
 
-const api: RomVaultApi = {
+const api: KartoucheApi = {
   invoke: (channel, req) => ipcRenderer.invoke(channel, req),
   on: (event, cb) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

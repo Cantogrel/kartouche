@@ -5,7 +5,7 @@ import { archiveVolume } from '../library/archive'
 import { baseKeyOfFile } from '../library/content/baseKey'
 import { switchContentFromFilename } from '../library/switchContent'
 
-// Quels fichiers d'un torrent RomVault doit-il réellement demander ? Un torrent peut contenir plusieurs jeux, des notices, des images, des mises à jour,
+// Quels fichiers d'un torrent Kartouche doit-il réellement demander ? Un torrent peut contenir plusieurs jeux, des notices, des images, des mises à jour,
 // des DLC, les pistes d'un disque… La règle suit celle de l'import (library/importer.ts) : on garde ce que l'import sait utiliser pour CE jeu et rien d'autre
 // — les fichiers non sélectionnés ne sont jamais téléchargés.
 

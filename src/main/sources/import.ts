@@ -12,7 +12,7 @@ export type Fetcher = (url: string) => Promise<unknown>
 
 export const defaultFetch: Fetcher = async (url) => {
   if (!isHttpUrl(url)) return JSON.parse(await readFile(url, 'utf8'))
-  const res = await fetch(url, { headers: { 'user-agent': 'RomVault' }, signal: AbortSignal.timeout(60_000) })
+  const res = await fetch(url, { headers: { 'user-agent': 'Kartouche' }, signal: AbortSignal.timeout(60_000) })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }

@@ -119,7 +119,7 @@ interface RunAttempt { elapsedMs: number; stopped: boolean; captured: string }
 /**
  * Un jeu Dolphin qui se ferme tout seul très vite (voir QUICK_EXIT_MS) peut être bloqué par `FastDiscSpeed`, activé
  * globalement à l'installation (voir configureDolphin) — sans qu'on sache d'avance lequel : la base officielle des
- * réglages par jeu de Dolphin ne liste actuellement aucun cas de ce genre (vérifié sur GitHub), donc RomVault n'a pas
+ * réglages par jeu de Dolphin ne liste actuellement aucun cas de ce genre (vérifié sur GitHub), donc Kartouche n'a pas
  * de liste fiable à embarquer (voir DOLPHIN_FAST_DISC_EXCLUSIONS dans configure.ts). On le désactive pour CE jeu et on
  * retente une seule fois avant de conclure à un vrai échec (BIOS, fichier corrompu…) : si ça règle le problème, le
  * fichier GameSettings créé reste en place pour tous les lancements suivants ; sinon, s'il n'existait pas avant notre
@@ -277,7 +277,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     }
     // Cemu : Pro Controller par défaut, profil GamePad pour les jeux qui l'exigent (profil de l'utilisateur jamais touché).
     if (def.id === 'cemu') await applyCemuControls(row.dir, entry.title, basename(entry.path)).catch(() => {})
-    // RetroArch range ses sauvegardes et états dans le dossier de données de RomVault (par jeu, hors de l'installation).
+    // RetroArch range ses sauvegardes et états dans le dossier de données de Kartouche (par jeu, hors de l'installation).
     if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot).catch(() => {})
     // DuckStation n'écrit rien sur la sortie standard : sans ça, un jeu qui se ferme tout seul ne laisse aucune trace exploitable.
     if (def.id === 'duckstation') {

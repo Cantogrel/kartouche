@@ -43,7 +43,7 @@ export interface ProbeContext {
 export type ContentState = 'installed' | 'pending' | 'failed'
 
 /**
- * Raison d'une mise en attente : `emulatorMissing` (pas encore installé dans RomVault), `emulatorRunning` (l'émulateur tourne et réécrirait sa
+ * Raison d'une mise en attente : `emulatorMissing` (pas encore installé dans Kartouche), `emulatorRunning` (l'émulateur tourne et réécrirait sa
  * configuration), `onLaunch` (l'installation passe par l'émulateur lui-même, déclenchée au prochain lancement du jeu), `needsKey` (une clé fournie
  * par l'utilisateur manque : zRIF, licence…), `unsupported` (installation pas encore implémentée pour ce format), `error` (échec, nouvelle tentative possible).
  */

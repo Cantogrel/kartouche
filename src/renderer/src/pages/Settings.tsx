@@ -192,7 +192,7 @@ export function Settings() {
 
         {section === 'about' && info && (
           <>
-            <p className="muted">RomVault v{info.version} · SQLite {info.sqlite}</p>
+            <p className="muted">Kartouche v{info.version} · SQLite {info.sqlite}</p>
             <h3>{t('update.title')}</h3>
             <p className="muted">{updateLabel}</p>
             <div className="row">
@@ -300,7 +300,7 @@ function SourceFormatDialog({ onClose }: { onClose: () => void }) {
 }
 
 /**
- * Listes de sources apportées par l'utilisateur (v0.2.0). RomVault n'en fournit, n'en scrape ni
+ * Listes de sources apportées par l'utilisateur (v0.2.0). Kartouche n'en fournit, n'en scrape ni
  * n'en agrège aucune : chaque liste vient d'une URL ou d'un fichier JSON local que l'utilisateur choisit lui-même.
  */
 function SourcesSection() {
