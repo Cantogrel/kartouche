@@ -408,3 +408,11 @@ input[type='range'] { accent-color: var(--accent); max-width: 320px; }
 .lightbox-btn { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; color: #fff; padding: 6px 12px; cursor: pointer; font-size: 14px; }
 .lightbox-btn:hover, .lightbox-btn:focus-visible { background: var(--accent); border-color: var(--accent); outline: none; }
 .lightbox-count { min-width: 110px; text-align: center; font-size: 13px; }
+
+/* Big Picture : bande-annonce et captures en plein écran (BpMedia) */
+.bp-media-overlay { z-index: 60; }
+.bp-media { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; width: 100%; height: 100%; padding: 24px; box-sizing: border-box; }
+.bp-media-frame { width: min(94vw, calc((100vh - 130px) * 16 / 9)); aspect-ratio: 16 / 9; border: 0; border-radius: 10px; background: #000; }
+.bp-media-image { max-width: 94vw; max-height: calc(100vh - 130px); object-fit: contain; border-radius: 10px; }
+.bp-media-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.bp-media-name { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
