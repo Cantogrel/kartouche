@@ -141,7 +141,14 @@ export const MIGRATIONS: readonly string[] = [
     id INTEGER PRIMARY KEY, entry_id INTEGER NOT NULL REFERENCES library(id) ON DELETE CASCADE,
     started_at INTEGER NOT NULL, ended_at INTEGER NOT NULL, minutes INTEGER NOT NULL
   );
-  CREATE INDEX play_sessions_entry ON play_sessions (entry_id, started_at)`
+  CREATE INDEX play_sessions_entry ON play_sessions (entry_id, started_at)`,
+  // v22 : émulateurs ajoutés par l'utilisateur (0.3.0), hors de la liste installable depuis l'app : exécutable, modèle d'arguments, consoles et extensions
+  // (JSON). `library.emulator_id` : émulateur choisi pour CE jeu (intégré ou `custom-<n>`) ; NULL = celui par défaut de sa console.
+  `CREATE TABLE custom_emulators (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, exe TEXT NOT NULL, args TEXT NOT NULL DEFAULT '"{rom}"',
+    consoles TEXT NOT NULL DEFAULT '[]', extensions TEXT NOT NULL DEFAULT '[]', created_at INTEGER NOT NULL
+  );
+  ALTER TABLE library ADD COLUMN emulator_id TEXT`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {
