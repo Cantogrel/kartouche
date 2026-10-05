@@ -364,3 +364,16 @@ input[type='range'] { accent-color: var(--accent); max-width: 320px; }
 .edit-error { margin: 0; color: #ff7b7b; }
 
 .edit-banner { height: 140px; border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; position: relative; }
+
+/* Bande-annonce intégrée (TrailerPlayer) */
+.media-section { margin-top: 16px; }
+.trailer { display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+.trailer-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius); overflow: hidden; }
+.trailer-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.trailer-poster { position: absolute; inset: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #1b1830, #0d0c18); border: 0; color: var(--text-strong); cursor: pointer; }
+.trailer-poster:hover .trailer-play, .trailer-poster:focus-visible .trailer-play { transform: scale(1.1); background: var(--accent); }
+.trailer-play { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,.14); font-size: 26px; padding-left: 4px; transition: transform .15s, background .15s; }
+.trailer-name { font-size: 14px; opacity: .85; }
+.trailer-bar { flex-wrap: wrap; gap: 6px; }
+.trailer-pick { background: none; border: 1px solid var(--border); border-radius: 5px; padding: 3px 9px; color: var(--text); cursor: pointer; font-size: 12px; }
+.trailer-pick.on { border-color: var(--accent); color: var(--accent); }

@@ -494,5 +494,10 @@
   "edit.err.tooLarge": "Image trop lourde (15 Mo max).",
   "edit.err.missing": "Fichier introuvable.",
   "edit.err.unreadable": "Fichier illisible.",
-  "edit.err.other": "Image refusée."
+  "edit.err.other": "Image refusée.",
+  "media.title": "Bande-annonce",
+  "media.trailer": "Bande-annonce",
+  "media.play": "Lire",
+  "media.stop": "Fermer le lecteur",
+  "media.openYoutube": "Ouvrir sur YouTube"
 }
