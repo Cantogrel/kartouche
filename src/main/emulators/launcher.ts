@@ -27,6 +27,11 @@ import { detectSonyPad, readPs3Serial } from './rpcs3'
 import { installCia } from './content/azahar'
 import { installPendingContent } from './content'
 import { recordPlaySession } from '../library/stats'
+import { chooseEmulator } from '@shared/emulatorChoice'
+import { buildCustomCommand, splitArgs, type CustomEmulator } from '@shared/customEmulators'
+import { parseLaunchSpec } from '@shared/launch'
+import { listCustomEmulators } from './customStore'
+import { runProcess, type RunSpec } from './genericLaunch'
 
 const running = new Map<number, { pid: number; stopped: boolean; graceMs?: number }>()
 
@@ -203,6 +208,14 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
   // partie tourne déjà si on en relance une autre depuis un autre écran. Le renderer propose de fermer l'autre jeu
   // (cf. `stopGameAndWait`) plutôt que de bloquer sans recours.
   if (running.size > 0) return { ok: false, error: 'otherRunning' }
+  // Entrée qui n'est pas une ROM (exécutable, jeu de launcher) ou ROM confiée à un émulateur personnalisé : lancement générique, sans la préparation propre aux
+  // émulateurs intégrés (configuration, sauvegardes, contenu). Les émulateurs intégrés gardent leur chemin habituel, plus bas.
+  const head = db.prepare('SELECT kind, console, path, missing, emulator_id, launch FROM library WHERE id = ?').get(entryId) as
+    { kind: string; console: string; path: string; missing: number; emulator_id: string | null; launch: string | null } | undefined
+  if (!head) return { ok: false, error: 'noFile' }
+  if (head.kind !== 'rom') return launchExternalEntry(db, entryId, head.launch, notify, cacheDir)
+  const choice = chooseEmulator({ console: head.console, file: head.path, entryChoice: head.emulator_id, defaults: loadSettings(db).emulatorDefaults, customs: listCustomEmulators(db) })
+  if (choice?.kind === 'custom') return launchWithCustomEmulator(db, entryId, head, choice.emulator, notify, cacheDir)
   const entry = db.prepare('SELECT console, title, title_id, path, missing, cia_installed, vita_title_id FROM library WHERE id = ?').get(entryId) as
     { console: string; title: string; title_id: string | null; path: string; missing: number; cia_installed: number; vita_title_id: string | null } | undefined
   if (!entry || entry.missing === 1 || !existsSync(entry.path)) return { ok: false, error: 'noFile' }
@@ -346,6 +359,51 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     running.delete(entryId)
     return { ok: false, error: 'spawn', detail: e instanceof Error ? e.message : String(e) }
   }
+}
+
+/** Jeu confié à un émulateur personnalisé : la ligne de commande vient du modèle d'arguments de l'utilisateur, rien n'est configuré chez l'émulateur. */
+async function launchWithCustomEmulator(db: DatabaseSync, entryId: number, head: { console: string; path: string; missing: number }, emu: CustomEmulator, notify: (s: GameSession) => void, cacheDir: string): Promise<LaunchResult> {
+  if (head.missing === 1 || !existsSync(head.path)) return { ok: false, error: 'noFile' }
+  if (!existsSync(emu.exe)) return { ok: false, error: 'notInstalled', detail: emu.name }
+  const cmd = buildCustomCommand(emu, { rom: head.path, console: head.console })
+  return superviseProcess(db, entryId, { exe: cmd.exe, args: cmd.args, cwd: dirname(cmd.exe) }, notify, cacheDir)
+}
+
+/** Exécutable ajouté à la main ou jeu de launcher : lancé tel quel. (Les jeux lancés par l'adresse d'un launcher viennent avec leurs connecteurs.) */
+async function launchExternalEntry(db: DatabaseSync, entryId: number, launchJson: string | null, notify: (s: GameSession) => void, cacheDir: string): Promise<LaunchResult> {
+  const spec = parseLaunchSpec(launchJson)
+  if (!spec || spec.type !== 'exe' || !spec.exe) return { ok: false, error: 'unsupported' }
+  if (!existsSync(spec.exe)) return { ok: false, error: 'noFile' }
+  return superviseProcess(db, entryId, { exe: spec.exe, args: splitArgs(spec.args ?? ''), cwd: spec.cwd ?? dirname(spec.exe) }, notify, cacheDir)
+}
+
+/**
+ * Lance un processus et en suit la session comme pour un émulateur : un seul jeu à la fois, arrêt propre (Ctrl+Alt+Q, Retour+Start, bouton « Fermer le jeu »),
+ * temps de jeu et session enregistrés à la fin, fermeture rapide signalée avec la sortie du processus.
+ */
+async function superviseProcess(db: DatabaseSync, entryId: number, spec: RunSpec, notify: (s: GameSession) => void, cacheDir: string): Promise<LaunchResult> {
+  const started = Date.now()
+  const handle = runProcess(spec)
+  if (handle.pid === 0) return { ok: false, error: 'spawn', detail: (await handle.done).error }
+  running.set(entryId, { pid: handle.pid, stopped: false })
+  let stopWatch: (() => void) | null = null
+  let over = false
+  void watchQuitChord(cacheDir, () => stopGame(entryId)).then((stop) => { if (over) stop(); else stopWatch = stop }).catch(() => {})
+  void handle.done.then((outcome) => {
+    over = true
+    stopWatch?.()
+    const stopped = running.get(entryId)?.stopped ?? false
+    running.delete(entryId)
+    const minutes = sessionMinutes(outcome.elapsedMs)
+    db.prepare('UPDATE library SET play_minutes = play_minutes + ?, last_played = ? WHERE id = ?').run(minutes, Date.now(), entryId)
+    if (minutes > 0) recordPlaySession(db, entryId, started, Date.now(), minutes)
+    const total = db.prepare('SELECT play_minutes FROM library WHERE id = ?').get(entryId) as { play_minutes: number } | undefined
+    // Fermeture rapide = échec probable, sauf sortie propre (code 0) : un raccourci ou un lanceur qui passe la main à une autre application (Bloc-notes du Store…) rend la main tout de suite.
+    const quickExit: QuickExit | undefined = !stopped && outcome.elapsedMs < QUICK_EXIT_MS && outcome.exitCode !== 0 ? { elapsedMs: outcome.elapsedMs, log: (outcome.error ?? outcome.captured.trim()) || undefined } : undefined
+    notify({ entryId, running: false, playMinutes: total?.play_minutes, quickExit })
+  })
+  notify({ entryId, running: true })
+  return { ok: true }
 }
 
 /** Ouvre l'émulateur seul (configuration, installation du firmware). */

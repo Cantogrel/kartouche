@@ -75,6 +75,8 @@ export interface LibraryEntry {
   kind: EntryKind
   /** D'où vient une entrée non-ROM (`manual`, `steam`…) ; null pour une ROM. */
   source: string | null
+  /** Émulateur choisi pour CE jeu (intégré ou `custom-<n>`) ; null = celui par défaut de sa console. */
+  emulatorId: string | null
   path: string
   size: number
   match: MatchKind

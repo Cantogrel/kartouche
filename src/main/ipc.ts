@@ -25,6 +25,7 @@ import { listSourceLists, refreshAllSourceLists, refreshSourceList, removeAllSou
 import { sourcesDir } from './sources/localCopy'
 import { getStats } from './library/stats'
 import { deleteCustomEmulator, listCustomEmulators, saveCustomEmulator } from './emulators/customStore'
+import { chooseEmulator, emulatorOptions, resolveEmulatorId } from '@shared/emulatorChoice'
 import { buildCustomCommand, formatCommand } from '@shared/customEmulators'
 import { clearCustomImage, customArtDir, removeEntryArt, setCustomImage } from './library/customArt'
 import { downscaleImage } from './library/customArtResize'
@@ -162,6 +163,43 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     return importPaths(db, req.paths, { copy: s.importCopy, deleteSource: req.deleteSource ?? s.importDeleteSource, romsDir: paths.roms, logDir: paths.logs }, sendLibProgress)
   })
   // Surcouche utilisateur (titre, description, images…) : affichage seulement, l'identité du jeu n'est jamais modifiée (voir shared/overrides.ts).
+  // Choix de l'émulateur : par jeu (`library.emulator_id`) ou par console (réglage `emulatorDefaults`) ; un choix qui ne sait pas lancer le jeu est refusé.
+  const emulatorContext = (entryId: number): { console: string; file: string; entryChoice: string | null } | null => {
+    const e = db.prepare('SELECT console, path, kind, emulator_id FROM library WHERE id = ?').get(entryId) as { console: string; path: string; kind: string; emulator_id: string | null } | undefined
+    return e && e.kind === 'rom' ? { console: e.console, file: e.path, entryChoice: e.emulator_id } : null
+  }
+  handle('emulators:options', (entryId) => {
+    const ctx = emulatorContext(entryId)
+    if (!ctx) return { options: [], chosen: null, consoleDefault: null, effective: null }
+    const customs = listCustomEmulators(db)
+    const defaults = loadSettings(db).emulatorDefaults
+    const eff = chooseEmulator({ ...ctx, defaults, customs })
+    return {
+      options: emulatorOptions({ ...ctx, customs }),
+      chosen: resolveEmulatorId(ctx.entryChoice, { ...ctx, customs }) ? ctx.entryChoice : null,
+      consoleDefault: resolveEmulatorId(defaults[ctx.console], { ...ctx, customs }) ? defaults[ctx.console] : null,
+      effective: eff ? (eff.kind === 'builtin' ? eff.def.id : eff.emulator.id) : null
+    }
+  })
+  handle('emulators:choose', ({ entryId, emulatorId }) => {
+    const ctx = emulatorContext(entryId)
+    if (!ctx) return false
+    if (emulatorId !== null && !resolveEmulatorId(emulatorId, { ...ctx, customs: listCustomEmulators(db) })) return false
+    db.prepare('UPDATE library SET emulator_id = ? WHERE id = ?').run(emulatorId, entryId)
+    return true
+  })
+  handle('emulators:setDefault', ({ console: cons, emulatorId }) => {
+    const defaults = { ...loadSettings(db).emulatorDefaults }
+    if (emulatorId === null) delete defaults[cons]
+    else {
+      // Valable pour une console si l'émulateur sait la lancer (n'importe quelle extension : le contrôle du fichier se fait à chaque jeu).
+      const ok = resolveEmulatorId(emulatorId, { console: cons, file: '', customs: listCustomEmulators(db).map((e) => ({ ...e, extensions: [] })) })
+      if (!ok) return false
+      defaults[cons] = emulatorId
+    }
+    saveSettings(db, { emulatorDefaults: defaults })
+    return true
+  })
   handle('customEmulators:list', () => listCustomEmulators(db))
   handle('customEmulators:save', ({ id, ...input }) => saveCustomEmulator(db, input, id))
   handle('customEmulators:delete', (id) => deleteCustomEmulator(db, id))

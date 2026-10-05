@@ -29,6 +29,8 @@ export interface Settings {
   uiScale: number
   accent: Accent
   reduceMotion: boolean
+  /** Émulateur par défaut de chaque console (id de console → id d'émulateur, intégré ou `custom-<n>`) ; absent = l'émulateur intégré de la console. */
+  emulatorDefaults: Record<string, string>
 }
 
 export const ACCENTS = ['white', 'violet', 'blue', 'green', 'orange'] as const
@@ -53,12 +55,13 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'auto',
   uiScale: 1,
   accent: 'violet',
-  reduceMotion: false
+  reduceMotion: false,
+  emulatorDefaults: {}
 }
 
 /** Fusionne une saisie partielle non fiable avec les valeurs actuelles : toute valeur invalide est ignorée. */
 export function mergeSettings(base: Settings, patch: unknown): Settings {
-  const out: Settings = { ...base, scanFolders: [...base.scanFolders] }
+  const out: Settings = { ...base, scanFolders: [...base.scanFolders], emulatorDefaults: { ...base.emulatorDefaults } }
   if (typeof patch !== 'object' || patch === null) return out
   const p = patch as Record<string, unknown>
   if (p.language === 'auto' || p.language === 'en' || p.language === 'fr') out.language = p.language
@@ -79,6 +82,9 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (typeof p.uiScale === 'number' && (UI_SCALES as readonly number[]).includes(p.uiScale)) out.uiScale = p.uiScale
   if (typeof p.accent === 'string' && (ACCENTS as readonly string[]).includes(p.accent)) out.accent = p.accent as Accent
   if (typeof p.reduceMotion === 'boolean') out.reduceMotion = p.reduceMotion
+  if (typeof p.emulatorDefaults === 'object' && p.emulatorDefaults !== null && !Array.isArray(p.emulatorDefaults)) {
+    out.emulatorDefaults = Object.fromEntries(Object.entries(p.emulatorDefaults as Record<string, unknown>).filter(([k, v]) => /^[a-z0-9]+$/.test(k) && typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v)) as [string, string][])
+  }
   return out
 }
 

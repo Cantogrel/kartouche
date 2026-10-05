@@ -17,13 +17,13 @@ import { customArtDir, removeEntryArt } from './customArt'
 interface Row {
   id: number; game_id: number | null; console: string; title: string; path: string; size: number; match: string
   missing: number; added_at: number; play_minutes: number; last_played: number | null; favorite: number; pinned: number
-  kind: string; source: string | null; launch: string | null
+  kind: string; source: string | null; launch: string | null; emulator_id: string | null
 }
 
 const toEntry = (r: Row, collections: number[] = [], hasSources = false, overrides: EntryOverrides = {}): LibraryEntry => ({
   id: r.id, gameId: r.game_id, console: r.console, title: r.title, shownTitle: overrides.title ?? r.title,
   overridden: OVERRIDE_FIELDS.filter((f) => overrides[f] !== undefined),
-  art: Object.fromEntries(OVERRIDE_IMAGE_FIELDS.filter((f) => overrides[f] !== undefined).map((f) => [f, overrides[f]])) as Partial<Record<OverrideImageField, string>>, kind: r.kind as EntryKind, source: r.source, path: r.path, size: r.size, match: r.match as MatchKind,
+  art: Object.fromEntries(OVERRIDE_IMAGE_FIELDS.filter((f) => overrides[f] !== undefined).map((f) => [f, overrides[f]])) as Partial<Record<OverrideImageField, string>>, kind: r.kind as EntryKind, source: r.source, emulatorId: r.emulator_id, path: r.path, size: r.size, match: r.match as MatchKind,
   missing: r.missing === 1, addedAt: r.added_at, playMinutes: r.play_minutes, lastPlayed: r.last_played,
   favorite: r.favorite === 1, pinned: r.pinned === 1, collections, hasSources
 })
