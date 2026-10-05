@@ -1,7 +1,9 @@
+import { isLangCode } from './lang'
 import { isHexColor, RADII, type Radius } from './appearance'
 import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeLayout } from './homeLayout'
 
-export type LanguageSetting = 'auto' | 'en' | 'fr'
+/** 'auto' (langue de l'OS) ou un code de langue (intégrée ou fichier utilisateur, cf. lang.ts). */
+export type LanguageSetting = string
 export type ThemeSetting = 'auto' | 'light' | 'dark'
 
 export interface Settings {
@@ -81,7 +83,7 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   const out: Settings = { ...base, scanFolders: [...base.scanFolders], emulatorDefaults: { ...base.emulatorDefaults }, connectors: { ...base.connectors } }
   if (typeof patch !== 'object' || patch === null) return out
   const p = patch as Record<string, unknown>
-  if (p.language === 'auto' || p.language === 'en' || p.language === 'fr') out.language = p.language
+  if (p.language === 'auto' || isLangCode(p.language)) out.language = p.language
   if (typeof p.importCopy === 'boolean') out.importCopy = p.importCopy
   if (typeof p.importDeleteSource === 'boolean') out.importDeleteSource = p.importDeleteSource
   if (typeof p.startInBigPicture === 'boolean') out.startInBigPicture = p.startInBigPicture
@@ -112,10 +114,13 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   return out
 }
 
-/** Langue effective : réglage explicite, sinon langue de l'OS (français si l'OS est en français, anglais sinon). */
+/**
+ * Langue effective côté main (descriptions de jeux, configuration des émulateurs : seuls l'anglais et le français y sont gérés) :
+ * réglage explicite, sinon langue de l'OS (français si l'OS est en français, anglais sinon). L'interface, elle, utilise `pickLanguage` (lang.ts).
+ */
 export function resolveLanguage(setting: LanguageSetting, osLocale: string): 'en' | 'fr' {
-  if (setting !== 'auto') return setting
-  return osLocale.toLowerCase().startsWith('fr') ? 'fr' : 'en'
+  const code = setting === 'auto' ? osLocale.toLowerCase() : setting
+  return code.startsWith('fr') ? 'fr' : 'en'
 }
 
 /** Thème effectif : réglage explicite, sinon thème clair/sombre de l'OS. */

@@ -1,13 +1,18 @@
 import { create } from 'zustand'
 import type { AppInfo } from '@shared/ipc'
-import { DEFAULT_SETTINGS, resolveLanguage, resolveTheme, type Settings } from '@shared/settings'
-import { setLanguage, type Lang } from '@/i18n'
+import { DEFAULT_SETTINGS, resolveTheme, type Settings } from '@shared/settings'
+import { pickLanguage, type LangInfo } from '@shared/lang'
+import { availableLanguages, setLanguage, setUserLanguages, type Lang } from '@/i18n'
 
 interface SettingsState {
   ready: boolean
   info: AppInfo | null
   settings: Settings
   lang: Lang
+  /** Langues disponibles (intégrées + fichiers de l'utilisateur). */
+  languages: LangInfo[]
+  /** Relit les fichiers de langue de l'utilisateur et réapplique la langue choisie (après un import ou un retrait). */
+  refreshLanguages: () => Promise<void>
   /** Thème effectif (clair/sombre) : réglage explicite, sinon thème système — suivi en direct via `listen`. */
   theme: 'light' | 'dark'
   load: () => Promise<void>
@@ -16,16 +21,23 @@ interface SettingsState {
 }
 
 export const useSettings = create<SettingsState>((set, get) => ({
-  ready: false, info: null, settings: DEFAULT_SETTINGS, lang: 'en', theme: 'dark',
+  ready: false, info: null, settings: DEFAULT_SETTINGS, lang: 'en', languages: availableLanguages(), theme: 'dark',
   load: async () => {
-    const [info, settings] = await Promise.all([window.api.invoke('app:info'), window.api.invoke('settings:get')])
-    const lang = resolveLanguage(settings.language, info.osLocale)
+    const [info, settings, userLangs] = await Promise.all([window.api.invoke('app:info'), window.api.invoke('settings:get'), window.api.invoke('lang:user')])
+    setUserLanguages(userLangs)
+    const lang = pickLanguage(settings.language, info.osLocale, availableLanguages().map((l) => l.code))
     setLanguage(lang)
-    set({ info, settings, lang, theme: resolveTheme(settings.theme, info.osDark), ready: true })
+    set({ info, settings, lang, languages: availableLanguages(), theme: resolveTheme(settings.theme, info.osDark), ready: true })
+  },
+  refreshLanguages: async () => {
+    setUserLanguages(await window.api.invoke('lang:user'))
+    const lang = pickLanguage(get().settings.language, get().info?.osLocale ?? 'en', availableLanguages().map((l) => l.code))
+    setLanguage(lang)
+    set({ lang, languages: availableLanguages() })
   },
   update: async (patch) => {
     const settings = await window.api.invoke('settings:set', patch)
-    const lang = resolveLanguage(settings.language, get().info?.osLocale ?? 'en')
+    const lang = pickLanguage(settings.language, get().info?.osLocale ?? 'en', availableLanguages().map((l) => l.code))
     setLanguage(lang)
     set({ settings, lang, theme: resolveTheme(settings.theme, get().info?.osDark ?? false) })
   },

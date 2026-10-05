@@ -58,4 +58,4 @@ export function mainGenre(raws: readonly string[] | undefined): string | null {
   return IMPORTANCE.find((g) => ids.has(g)) ?? null
 }
 
-export const genreLabel = (id: string, lang: 'en' | 'fr'): string => GENRES[id]?.[lang] ?? id
+export const genreLabel = (id: string, lang: string): string => GENRES[id]?.[lang === 'fr' ? 'fr' : 'en'] ?? id

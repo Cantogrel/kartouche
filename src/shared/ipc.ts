@@ -1,4 +1,5 @@
 import type { Settings } from './settings'
+import type { LangFile, LangParse } from './lang'
 import type { Collection, ImportRequest, ImportResult, LibraryContentItem, LibraryEntry, LibraryProgress, SbiImportResult, GameStats } from './library'
 import type { GameMedia } from './media'
 import type { CustomEmulatorState, SaveEmulatorResult } from './customEmulators'
@@ -42,6 +43,13 @@ export interface IpcChannels {
   'app:info': { req: void; res: AppInfo }
   'settings:get': { req: void; res: Settings }
   'settings:set': { req: Partial<Settings>; res: Settings }
+  /** Langues ajoutées par l'utilisateur (fichiers du dossier `languages`), chaînes comprises. */
+  'lang:user': { req: void; res: LangFile[] }
+  /** Ouvre le sélecteur de fichier, valide puis installe une langue ; null si annulé. */
+  'lang:import': { req: void; res: LangParse | null }
+  'lang:remove': { req: string; res: boolean }
+  /** Enregistre un modèle de fichier de langue (toutes les clés en anglais) à l'endroit choisi ; false si annulé. */
+  'lang:exportTemplate': { req: void; res: boolean }
   /** Ouvre le sélecteur de dossier ; le changement prend effet au redémarrage. */
   'paths:chooseDataDir': { req: void; res: { dataDir: string; restartRequired: boolean } | null }
   'paths:openDataDir': { req: void; res: void }

@@ -621,5 +621,19 @@
   "settings.themeImport": "Import theme",
   "settings.themeExported": "Theme exported and copied.",
   "settings.themeImported": "Theme applied.",
-  "settings.themeInvalid": "This text is not a Kartouche theme."
+  "settings.themeInvalid": "This text is not a Kartouche theme.",
+  "settings.langFilesHint": "Add a language by importing a translation file. Missing texts are shown in English.",
+  "settings.langImport": "Add a language file…",
+  "settings.langTemplate": "Save translation template…",
+  "settings.langTemplateSaved": "Template saved. Fill in the texts, set the code and name, then add the file.",
+  "settings.langAdded": "{name} added ({n} texts still in English).",
+  "settings.langMissing": "{n} untranslated",
+  "settings.langRemove": "Remove",
+  "settings.langError.size": "This file is too large.",
+  "settings.langError.json": "This file cannot be read as JSON.",
+  "settings.langError.format": "This is not a Kartouche language file.",
+  "settings.langError.code": "The language code is missing or invalid (e.g. es, pt-br).",
+  "settings.langError.name": "The language name is missing or too long.",
+  "settings.langError.strings": "The file contains no translated text.",
+  "settings.langError.builtin": "This language is already built in."
 }

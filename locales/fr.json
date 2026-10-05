@@ -621,5 +621,19 @@
   "settings.themeImport": "Importer un thème",
   "settings.themeExported": "Thème exporté et copié.",
   "settings.themeImported": "Thème appliqué.",
-  "settings.themeInvalid": "Ce texte n'est pas un thème Kartouche."
+  "settings.themeInvalid": "Ce texte n'est pas un thème Kartouche.",
+  "settings.langFilesHint": "Ajoutez une langue en important un fichier de traduction. Les textes manquants s'affichent en anglais.",
+  "settings.langImport": "Ajouter un fichier de langue…",
+  "settings.langTemplate": "Enregistrer le modèle de traduction…",
+  "settings.langTemplateSaved": "Modèle enregistré. Remplissez les textes, indiquez le code et le nom, puis ajoutez le fichier.",
+  "settings.langAdded": "{name} ajoutée ({n} textes encore en anglais).",
+  "settings.langMissing": "{n} non traduits",
+  "settings.langRemove": "Retirer",
+  "settings.langError.size": "Ce fichier est trop volumineux.",
+  "settings.langError.json": "Ce fichier n'est pas un JSON lisible.",
+  "settings.langError.format": "Ce n'est pas un fichier de langue Kartouche.",
+  "settings.langError.code": "Le code de langue est absent ou invalide (ex. es, pt-br).",
+  "settings.langError.name": "Le nom de la langue est absent ou trop long.",
+  "settings.langError.strings": "Le fichier ne contient aucun texte traduit.",
+  "settings.langError.builtin": "Cette langue est déjà intégrée."
 }

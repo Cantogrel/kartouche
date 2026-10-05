@@ -98,7 +98,7 @@ describe('settingsStore', () => {
 
   it('ignore les valeurs invalides', () => {
     const db = fresh()
-    saveSettings(db, { language: 'de' as never, importCopy: 'oui' as never })
+    saveSettings(db, { language: 'Deutsch' as never, importCopy: 'oui' as never })
     expect(loadUserSettings(db)).toEqual(DEFAULT_SETTINGS)
   })
 

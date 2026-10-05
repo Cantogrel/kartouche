@@ -16,6 +16,7 @@ import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSettin
 import { formatSize } from '@shared/format'
 import { AppearanceAdvanced } from '@/ui/AppearanceAdvanced'
 import { LaunchersSection } from '@/ui/LaunchersSection'
+import { LanguageFiles } from '@/ui/LanguageFiles'
 import { HomeLayoutEditor } from '@/ui/HomeLayoutEditor'
 
 const SECTIONS = ['general', 'appearance', 'emulation', 'sources', 'launchers', 'about', 'danger'] as const
@@ -27,7 +28,7 @@ export function Settings() {
   // `gameId` sert de section de départ pour cette route (ex. venant du badge de mise à jour → « À propos »).
   const requestedSection = useApp((s) => s.gameId)
   const [section, setSection] = useState<Section>(isSection(requestedSection) ? requestedSection : 'general')
-  const { settings, info, update } = useSettings()
+  const { settings, info, update, languages } = useSettings()
   const [restart, setRestart] = useState(false)
   const [cacheMsg, setCacheMsg] = useState<string | null>(null)
   const [clearingCache, setClearingCache] = useState(false)
@@ -84,10 +85,10 @@ export function Settings() {
               {t('settings.language')}
               <select value={settings.language} onChange={(e) => update({ language: e.target.value as LanguageSetting })}>
                 <option value="auto">{t('settings.langAuto')}</option>
-                <option value="en">English</option>
-                <option value="fr">Français</option>
+                {languages.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
               </select>
             </label>
+            <LanguageFiles />
             <label className="check">
               <input type="checkbox" checked={settings.startInBigPicture} onChange={(e) => update({ startInBigPicture: e.target.checked })} /> {t('settings.startBigPicture')}
             </label>
