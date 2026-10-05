@@ -8,10 +8,10 @@ import { useApp, type LibraryTab } from '@/store/app'
 import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
 import { onEntryContext } from '@/ui/EntryMenu'
-import { consoleById } from '@shared/consoles'
+import { platformLabel } from '@shared/consoles'
 import { orderConsolesByRecency, type ImportItem } from '@shared/library'
 
-const labelOf = (id: string): string => consoleById(id)?.label ?? id
+const labelOf = (id: string): string => platformLabel(id)
 const itemLabel = (i: ImportItem): string => (i.status === 'attached' && i.parent ? `${t('import.attached')} · ${i.parent}` : t(`import.${i.status}`))
 // Position de scroll de la grille, conservée hors de l'état React pour survivre au démontage de la page (fiche jeu puis retour).
 let lastScrollTop = 0

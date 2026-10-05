@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Cover, Tag } from '@/ui'
 import { useApp } from '@/store/app'
 import { t } from '@/i18n'
-import { consoleById } from '@shared/consoles'
+import { platformLabel } from '@shared/consoles'
 import { canonicalGenre, genreLabel } from '@shared/genres'
 import { formatSize } from '@shared/format'
 import { isTorrentSource } from '@shared/uriKind'
@@ -46,7 +46,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
       <Cover className="hero" kind="hero" gameId={game.id} title={game.name}>
         <div className="hero-title">{game.name}</div>
         <div className="hero-bar">
-          <strong>{consoleById(game.console)?.label ?? game.console}</strong>
+          <strong>{platformLabel(game.console)}</strong>
           <div className="row">
             {!owned && <Button variant="primary" onClick={() => void addToLibrary(game.id)}>{t('addToLibrary')}</Button>}
             {owned?.missing && <Button variant="primary" onClick={() => void link()}>{t('linkRom')}</Button>}
@@ -65,7 +65,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
         <div className="panel">
           {year && <div><strong>{t('game.released', { d: String(year) })}</strong></div>}
           <div className="muted">{[details?.publisher && t('game.publishedBy', { p: details.publisher }), developer && t('game.developedBy', { p: developer })].filter(Boolean).join(' · ')}</div>
-          <div className="tags">{genres.map((x) => <Tag key={x}>{x}</Tag>)}<Tag>{consoleById(game.console)?.label ?? game.console}</Tag></div>
+          <div className="tags">{genres.map((x) => <Tag key={x}>{x}</Tag>)}<Tag>{platformLabel(game.console)}</Tag></div>
           {owned && <LibraryFile entry={owned} />}
           {loadingDetails && !details && <><span className="skeleton" style={{ width: '90%' }} /><span className="skeleton" style={{ width: '80%' }} /><span className="skeleton" style={{ width: '55%' }} /></>}
           {details?.summary && (<><h3>{t('game.about')}</h3><p>{details.summary}</p><p className="muted">{details.summarySource === 'wikipedia' ? t('game.summaryWikipedia') : details.summarySource === 'machine' ? t('game.summaryMachine') : t('game.source', { p: details.provider.split('+')[0].toUpperCase() })}</p></>)}

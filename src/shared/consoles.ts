@@ -1,3 +1,5 @@
+import { PC_PLATFORM } from './launch'
+
 /**
  * Consoles du catalogue = celles prises en charge par un émulateur prévu (voir SUMMARY du projet).
  * `dat` : source du catalogue. Libretro (no-intro/redump) ; « igdb » pour la Switch, absente de Libretro (nécessite une clé IGDB).
@@ -41,3 +43,6 @@ export const CONSOLES: readonly ConsoleDef[] = [
 ]
 
 export const consoleById = (id: string): ConsoleDef | undefined => CONSOLES.find((c) => c.id === id)
+
+/** Nom affiché d'une plateforme : console du catalogue, « PC » pour les entrées non-ROM (exécutables, jeux de launcher), sinon l'identifiant tel quel. */
+export const platformLabel = (id: string): string => consoleById(id)?.label ?? (id === PC_PLATFORM ? 'PC' : id)

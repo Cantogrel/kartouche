@@ -126,7 +126,15 @@ export const MIGRATIONS: readonly string[] = [
     entry_id INTEGER NOT NULL REFERENCES library(id) ON DELETE CASCADE,
     field TEXT NOT NULL, value TEXT NOT NULL, updated_at INTEGER NOT NULL,
     PRIMARY KEY (entry_id, field)
-  ) WITHOUT ROWID`
+  ) WITHOUT ROWID`,
+  // v20 : entrées qui ne sont pas des ROM (0.3.0) : `exe` (exécutable ajouté à la main) et `launcher` (jeu de Steam, Epic…). Elles n'ont pas de console du
+  // catalogue (console = 'pc'), ni de hash ; `launch` (JSON, voir shared/launch.ts) dit comment les lancer. source + native_id (appid Steam…) évitent les
+  // doublons à chaque nouvelle lecture du launcher. Les entrées existantes sont toutes des ROM (kind par défaut).
+  `ALTER TABLE library ADD COLUMN kind TEXT NOT NULL DEFAULT 'rom' CHECK (kind IN ('rom', 'exe', 'launcher'));
+  ALTER TABLE library ADD COLUMN source TEXT;
+  ALTER TABLE library ADD COLUMN native_id TEXT;
+  ALTER TABLE library ADD COLUMN launch TEXT;
+  CREATE UNIQUE INDEX library_native ON library (source, native_id) WHERE native_id IS NOT NULL`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

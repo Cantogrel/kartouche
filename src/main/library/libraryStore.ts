@@ -10,17 +10,19 @@ import { contentDir, parkContent } from './content/store'
 import { uninstallContent } from '../emulators/content'
 import type { LibraryContentItem, LibraryEntry, MatchKind, SbiImportResult } from '@shared/library'
 import { OVERRIDE_FIELDS, type EntryOverrides } from '@shared/overrides'
+import { launchCheckPath, parseLaunchSpec, type EntryKind } from '@shared/launch'
 import { loadOverrides } from './overrides'
 import { customArtDir, removeEntryArt } from './customArt'
 
 interface Row {
   id: number; game_id: number | null; console: string; title: string; path: string; size: number; match: string
   missing: number; added_at: number; play_minutes: number; last_played: number | null; favorite: number; pinned: number
+  kind: string; source: string | null; launch: string | null
 }
 
 const toEntry = (r: Row, collections: number[] = [], hasSources = false, overrides: EntryOverrides = {}): LibraryEntry => ({
   id: r.id, gameId: r.game_id, console: r.console, title: r.title, shownTitle: overrides.title ?? r.title,
-  overridden: OVERRIDE_FIELDS.filter((f) => overrides[f] !== undefined), path: r.path, size: r.size, match: r.match as MatchKind,
+  overridden: OVERRIDE_FIELDS.filter((f) => overrides[f] !== undefined), kind: r.kind as EntryKind, source: r.source, path: r.path, size: r.size, match: r.match as MatchKind,
   missing: r.missing === 1, addedAt: r.added_at, playMinutes: r.play_minutes, lastPlayed: r.last_played,
   favorite: r.favorite === 1, pinned: r.pinned === 1, collections, hasSources
 })
@@ -37,11 +39,13 @@ function membership(db: DatabaseSync): Map<number, number[]> {
 
 /** Vérifie sur disque la présence de chaque fichier de la bibliothèque et met à jour l'indicateur « manquant ». */
 export function refreshMissing(db: DatabaseSync): number {
-  const rows = db.prepare('SELECT id, path, missing FROM library').all() as { id: number; path: string; missing: number }[]
+  const rows = db.prepare('SELECT id, path, missing, kind, launch FROM library').all() as { id: number; path: string; missing: number; kind: string; launch: string | null }[]
   const upd = db.prepare('UPDATE library SET missing = ? WHERE id = ?')
   let n = 0
   for (const r of rows) {
-    const m = existsSync(r.path) ? 0 : 1
+    // Entrée non-ROM : « manquant » = l'exécutable (ou le dossier d'installation) a disparu ; sans rien à vérifier (jeu de launcher sans chemin), on la suppose présente.
+    const check = r.kind === 'rom' ? r.path : (parseLaunchSpec(r.launch) ? launchCheckPath(parseLaunchSpec(r.launch)!) : null)
+    const m = check === null || existsSync(check) ? 0 : 1
     if (m !== r.missing) upd.run(m, r.id)
     n += m
   }
@@ -76,7 +80,7 @@ const entryById = (db: DatabaseSync, id: number): LibraryEntry =>
  */
 export function relinkUnmatched(db: DatabaseSync): number {
   const rows = db.prepare(`SELECT id, console, title, crc, sha1 FROM library
-    WHERE game_id IS NULL OR NOT EXISTS (SELECT 1 FROM catalog_games c WHERE c.id = library.game_id)`).all() as
+    WHERE kind = 'rom' AND (game_id IS NULL OR NOT EXISTS (SELECT 1 FROM catalog_games c WHERE c.id = library.game_id))`).all() as
     { id: number; console: string; title: string; crc: string | null; sha1: string | null }[]
   const upd = db.prepare('UPDATE library SET game_id = ?, title = ?, match = ? WHERE id = ?')
   let relinked = 0
@@ -121,9 +125,18 @@ const vita3kUserDir = (): string => join(homedir(), 'AppData', 'Roaming', 'Vita3
  * `save` (sauvegardes seulement) ou `all` (ROM, sauvegardes et entrée).
  */
 export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAction, savesRoot: string, romsDir?: string, dataDir?: string): Promise<void> {
-  const r = db.prepare('SELECT console, title, path, title_id, vita_title_id FROM library WHERE id = ?').get(id) as
-    { console: string; title: string; path: string; title_id: string | null; vita_title_id: string | null } | undefined
+  const r = db.prepare('SELECT console, title, path, title_id, vita_title_id, kind FROM library WHERE id = ?').get(id) as
+    { console: string; title: string; path: string; title_id: string | null; vita_title_id: string | null; kind: string } | undefined
   if (!r) return
+  // Entrée non-ROM (exécutable, jeu de launcher) : seule l'entrée est retirée. Son fichier appartient à l'utilisateur ou au launcher, et Kartouche ne gère
+  // ni ses sauvegardes ni ses mises à jour : `file` et `save` ne font rien, `all` équivaut à `entry`.
+  if (r.kind !== 'rom') {
+    if (action === 'entry' || action === 'all') {
+      db.prepare('DELETE FROM library WHERE id = ?').run(id)
+      if (dataDir) await removeEntryArt(null, dataDir, id)
+    }
+    return
+  }
   if (action === 'save' || action === 'all') {
     // Avant la ROM : melonDS range ses sauvegardes à côté d'elle. Copies de sécurité (backups/) conservées volontairement.
     await deleteGameSaves(db, savesRoot, { id, console: r.console, path: r.path }).catch(() => {})
@@ -179,7 +192,7 @@ export function clearLibrary(db: DatabaseSync, dataDir?: string): void {
 
 /** Supprime le fichier ROM de tous les jeux (action « Actions dangereuses ») ainsi que leurs mises à jour/DLC ; `refreshMissing` marquera les entrées sans fichier au prochain chargement. */
 export async function deleteAllRomFiles(db: DatabaseSync, romsDir?: string): Promise<void> {
-  const rows = db.prepare('SELECT id, path FROM library WHERE missing = 0').all() as { id: number; path: string }[]
+  const rows = db.prepare("SELECT id, path FROM library WHERE missing = 0 AND kind = 'rom'").all() as { id: number; path: string }[]
   for (const r of rows) { await deleteRomFiles(r.path); await uninstallAllContent(db, r.id, romsDir) }
 }
 

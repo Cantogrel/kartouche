@@ -5,7 +5,7 @@ import { useApp } from '@/store/app'
 import { useSettings } from '@/store/settings'
 import { useLibrary } from '@/store/library'
 import { useDownloads } from '@/store/downloads'
-import { CONSOLES, MAKERS, consoleById } from '@shared/consoles'
+import { CONSOLES, MAKERS, platformLabel } from '@shared/consoles'
 import { genreLabel } from '@shared/genres'
 import { PUBLISHER_OTHER, publisherLabel } from '@shared/publishers'
 import { SOURCE_FILTER_ANY, type CatalogPage, type CatalogSort, type SyncProgress } from '@shared/catalog'
@@ -13,7 +13,7 @@ import { SOURCE_FILTER_ANY, type CatalogPage, type CatalogSort, type SyncProgres
 const PAGE = 60
 const SOURCE_TAGS_SHOWN = 3
 const toggle = (arr: string[], v: string): string[] => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
-const labelOf = (id: string): string => consoleById(id)?.label ?? id
+const labelOf = (id: string): string => platformLabel(id)
 const DEFAULT_DIR = { popularity: 'desc', year: 'desc', title: 'asc', random: 'asc' } as const
 const newSeed = (): number => Math.floor(Math.random() * 1_000_000)
 // Position de scroll de la liste, conservée hors de l'état React pour survivre au démontage de la page (fiche jeu puis retour).
