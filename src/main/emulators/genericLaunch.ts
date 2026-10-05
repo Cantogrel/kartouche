@@ -32,7 +32,11 @@ const CAPTURE_MAX = 8000
 export function runProcess(spec: RunSpec): RunHandle {
   const started = Date.now()
   let captured = ''
-  const child = spawn(spec.exe, spec.args, { cwd: spec.cwd, env: spec.env ?? process.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: false })
+  const base = { cwd: spec.cwd, env: spec.env ?? process.env, stdio: ['ignore', 'pipe', 'pipe'] as ['ignore', 'pipe', 'pipe'], windowsHide: false }
+  // Node refuse de lancer directement un .bat/.cmd (EINVAL) : on passe par cmd.exe, chaque argument entre guillemets.
+  const child = /\.(bat|cmd)$/i.test(spec.exe)
+    ? spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${[spec.exe, ...spec.args].map((a) => `"${a.replace(/"/g, '""')}"`).join(' ')}"`], { ...base, windowsVerbatimArguments: true })
+    : spawn(spec.exe, spec.args, base)
   const onOutput = (chunk: Buffer): void => { captured = (captured + chunk.toString('utf8')).slice(-CAPTURE_MAX) }
   child.stdout?.on('data', onOutput)
   child.stderr?.on('data', onOutput)

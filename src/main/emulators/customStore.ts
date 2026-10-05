@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { existsSync } from 'node:fs'
+import { loadSettings, saveSettings } from '../db/settingsStore'
 import { CUSTOM_ID_PREFIX, validateCustomEmulator, type CustomEmulator, type CustomEmulatorState, type SaveEmulatorResult } from '@shared/customEmulators'
 
 interface Row { id: string; name: string; exe: string; args: string; consoles: string; extensions: string }
@@ -40,6 +41,10 @@ export function saveCustomEmulator(db: DatabaseSync, input: unknown, id?: string
 export function deleteCustomEmulator(db: DatabaseSync, id: string): void {
   db.prepare('UPDATE library SET emulator_id = NULL WHERE emulator_id = ?').run(id)
   db.prepare('DELETE FROM custom_emulators WHERE id = ?').run(id)
+  // Les identifiants sont réutilisés (MAX + 1) : un défaut de console oublié ici serait hérité par le prochain émulateur ajouté.
+  const defaults = loadSettings(db).emulatorDefaults
+  const kept = Object.fromEntries(Object.entries(defaults).filter(([, v]) => v !== id))
+  if (Object.keys(kept).length !== Object.keys(defaults).length) saveSettings(db, { emulatorDefaults: kept })
 }
 
 /** Émulateurs personnalisés qui savent lancer cette console, dans l'ordre alphabétique. */

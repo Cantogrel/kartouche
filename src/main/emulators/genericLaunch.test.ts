@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { runProcess } from './genericLaunch'
 
 const NODE = process.execPath
@@ -26,6 +29,18 @@ describe('runProcess', () => {
   it('transmet le dossier de travail et l’environnement', async () => {
     const h = runProcess({ exe: NODE, args: ['-e', 'console.log(process.cwd().length > 0, process.env.KARTOUCHE_TEST)'], env: { ...process.env, KARTOUCHE_TEST: 'ok' } })
     expect((await h.done).captured).toContain('true ok')
+  })
+
+  it.runIf(process.platform === 'win32')('lance un .bat (Node refuse sinon : EINVAL) avec ses arguments, espaces compris', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kbat-'))
+    try {
+      const bat = join(dir, 'mon yuzu.bat')
+      writeFileSync(bat, '@echo off\r\necho [%~1][%~2]\r\nexit /b 7\r\n')
+      const o = await runProcess({ exe: bat, args: ['C:\\Mes jeux\\a b.nsp', 'switch'] }).done
+      expect(o.error).toBeUndefined()
+      expect(o.exitCode).toBe(7)
+      expect(o.captured).toContain('[C:\\Mes jeux\\a b.nsp][switch]')
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
   it('un argument avec espaces, guillemets ou caractères spéciaux arrive tel quel (pas de passage par un interpréteur de commandes)', async () => {
