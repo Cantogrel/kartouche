@@ -13,6 +13,9 @@ import { formatMinutes } from '@shared/format'
 import type { GameStats } from '@shared/library'
 import { useGameMedia } from '@/ui/GameMedia'
 import { BpGallery, BpTrailer } from './BpMedia'
+import { pushLayer } from './layers'
+import { useEntryEmulators } from '@/store/customEmulators'
+import { isCustomEmulatorId } from '@shared/customEmulators'
 import { useEntryOverrides } from '@/store/overrides'
 import { formatSize } from '@shared/format'
 import { isTorrentSource } from '@shared/uriKind'
@@ -80,6 +83,18 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
     return () => { off = true }
   }, [ownedId, owned?.playMinutes])
   const images = media ? [...media.screenshots, ...media.artworks] : []
+  // Choix de l'émulateur à la manette (seulement quand un émulateur personnalisé sait lancer ce jeu) : fenêtre de boutons, B la ferme sans fermer la fiche.
+  const emus = useEntryEmulators(owned)
+  const customChosen = isCustomEmulatorId(emus?.effective)
+  const [choosing, setChoosing] = useState(false)
+  useEffect(() => (choosing ? pushLayer((a) => { if (a === 'back') { setChoosing(false); return true } return false }) : undefined), [choosing])
+  useEffect(() => { if (choosing) focusEl(navItems()[0]) }, [choosing])
+  const pickEmulator = async (id: string | null): Promise<void> => {
+    if (!owned) return
+    await window.api.invoke('emulators:choose', { entryId: owned.id, emulatorId: id })
+    await useLibrary.getState().refresh()
+    setChoosing(false)
+  }
   const origTitle = game?.name ?? owned?.title ?? ''
   const view = entry ? resolveView(baseViewFrom(game, details, origTitle), overrides) : null
   const title = view?.title ?? origTitle
@@ -90,7 +105,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   const genres = entry && overrides.genre !== undefined ? [overrides.genre] : [...new Set([game?.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
   const launch = async (): Promise<void> => {
     if (!owned) return
-    if (def && installed === false) { setError(t('play.notInstalled')); return }
+    if (def && installed === false && !customChosen) { setError(t('play.notInstalled')); return }
     const r = await play(owned.id)
     if (!r.ok && r.error === 'otherRunning') {
       const otherId = useEmulators.getState().running.find((id) => id !== owned.id)
@@ -144,6 +159,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
                 </button>
               : <button data-nav className="bp-btn primary" onClick={clickDownload}>⬇ {t('download.button')}{sources.length === 1 && sources[0].sizeBytes ? ` · ${formatSize(sources[0].sizeBytes)}` : ''}</button>)}
             {owned && <button data-nav className="bp-btn" onClick={() => void useLibrary.getState().setFlag(owned.id, { favorite: !owned.favorite })}>{owned.favorite ? '♥' : '♡'} {t(owned.favorite ? 'fav.remove' : 'fav.add')}</button>}
+            {emus && emus.options.length > 1 && <button data-nav className="bp-btn" onClick={() => setChoosing(true)}>{t('bp.emulator')}</button>}
             {media && media.trailers.length > 0 && <button data-nav className="bp-btn" onClick={() => openLayer('trailer')}>▶ {t('media.title')}</button>}
             {images.length > 0 && <button data-nav className="bp-btn" onClick={() => openLayer('gallery')}>{t('media.gallery')} ({images.length})</button>}
             <button data-nav className="bp-btn" onClick={onClose}>{t('bp.back')}</button>
@@ -151,6 +167,16 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
           {/* B (retour) et X (favoris) agissent tout de suite en plus des boutons ci-dessus, sans devoir y amener le focus : cf. le gestionnaire `opened` dans BigPicture.tsx. Pas d'indice ici (redondant avec les boutons visibles). */}
         </div>
       </div>
+      {choosing && emus && (
+        <div className="bp-overlay">
+          <div className="bp-menu" data-focus-root>
+            <p>{t('bp.emulatorTitle')}</p>
+            <button data-nav className="bp-btn" onClick={() => void pickEmulator(null)}>{t('playWith.default', { name: emus.options.find((o) => o.id === (emus.consoleDefault ?? emus.options.find((x) => x.kind === 'builtin')?.id))?.name ?? '' })}{emus.chosen === null ? ' \u2713' : ''}</button>
+            {emus.options.map((o) => <button key={o.id} data-nav className="bp-btn" onClick={() => void pickEmulator(o.id)}>{o.name}{emus.chosen === o.id ? ' \u2713' : ''}</button>)}
+            <button data-nav className="bp-btn" onClick={() => setChoosing(false)}>{t('dialog.cancel')}</button>
+          </div>
+        </div>
+      )}
       {layer === 'trailer' && media && <BpTrailer trailers={media.trailers} onClose={closeLayer} />}
       {layer === 'gallery' && images.length > 0 && <BpGallery images={images} onClose={closeLayer} />}
       {confirmStop && (

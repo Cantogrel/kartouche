@@ -8,6 +8,10 @@ import { extensionsForConsoles } from '@shared/library'
 import { useEmulators } from '@/store/emulators'
 import { BiosPanel } from '@/ui/BiosPanel'
 import { biosSlotsFor } from '@shared/bios'
+import { useCustomEmulators } from '@/store/customEmulators'
+import { useDialog } from '@/ui/CollectionDialogs'
+import { useSettings } from '@/store/settings'
+import { platformLabel } from '@shared/consoles'
 
 const consoleNames = (def: EmulatorDef): string => def.consoles.map((c) => CONSOLES.find((x) => x.id === c)?.label ?? c).join(', ')
 const acceptedFiles = (def: EmulatorDef): string => extensionsForConsoles(def.consoles).map((x) => `.${x}`).join(' ')
@@ -18,6 +22,10 @@ export function Emulators() {
   const { list, loaded, progress, errors, latest, checking, refresh, install, uninstall, locate, check } = useEmulators()
   useEffect(() => { void refresh() }, [refresh])
   const state = (id: string) => list.find((e) => e.id === id)
+  const customs = useCustomEmulators((s) => s.list)
+  const defaults = useSettings((s) => s.settings.emulatorDefaults)
+  useEffect(() => { void useCustomEmulators.getState().refresh() }, [])
+  const setDefault = async (console: string, id: string | null): Promise<void> => { await window.api.invoke('emulators:setDefault', { console, emulatorId: id }); await useSettings.getState().load() }
   return (
     <div className="content">
       <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -76,6 +84,36 @@ export function Emulators() {
       </div>
       </Section>
       ))}
+      <Section title={t('emu.custom.title')}>
+        <p className="muted">{t('emu.custom.hint')}</p>
+        <div className="emu-grid">
+          {customs.map((e) => (
+            <div key={e.id} className="emu-card">
+              <h3>{e.name}</h3>
+              <div className="muted emu-exts" title={e.exe}>{e.exe}</div>
+              <div className="muted">{t('emu.custom.consoles', { list: e.consoles.map(platformLabel).join(', ') || '—' })}</div>
+              <div className="muted emu-exts">{t('emu.acceptedFiles', { list: e.extensions.length ? e.extensions.map((x) => `.${x}`).join(' ') : t('emu.custom.allFiles') })}</div>
+              {e.consoles.length > 0 && (
+                <div className="chip-row" role="group" aria-label={t('emu.custom.defaultTitle')}>
+                  {e.consoles.map((c) => {
+                    const on = defaults[c] === e.id
+                    return <button key={c} type="button" className={`chip${on ? ' on' : ''}`} aria-pressed={on} title={t('emu.custom.defaultFor', { console: platformLabel(c) })} onClick={() => void setDefault(c, on ? null : e.id)}>{on ? '\u2713 ' : ''}{platformLabel(c)}</button>
+                  })}
+                </div>
+              )}
+              <div className="emu-foot">
+                <Tag>{e.missing ? t('emu.custom.missing') : t('emu.custom')}</Tag>
+                <div className="row">
+                  <Button onClick={() => void window.api.invoke('customEmulators:open', e.id)} disabled={e.missing}>{t('emu.open')}</Button>
+                  <Button onClick={() => useDialog.getState().open({ kind: 'customEmulator', id: e.id })}>{t('emu.custom.edit')}</Button>
+                  <Button onClick={async () => { if (await confirmDialog(t('emu.custom.confirmDelete', { name: e.name }))) { await window.api.invoke('customEmulators:delete', e.id); await useCustomEmulators.getState().refresh(); await useSettings.getState().load() } }}>{t('emu.custom.delete')}</Button>
+                </div>
+              </div>
+            </div>
+          ))}
+          <button type="button" className="emu-card emu-add" onClick={() => useDialog.getState().open({ kind: 'customEmulator', id: null })}>+ {t('emu.custom.add')}</button>
+        </div>
+      </Section>
     </div>
   )
 }

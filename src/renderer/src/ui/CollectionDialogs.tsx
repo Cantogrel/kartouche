@@ -3,6 +3,8 @@ import { create } from 'zustand'
 import { Button } from '@/ui'
 import { Modal } from './Modal'
 import { EditGameDialog } from './EditGameDialog'
+import { CustomEmulatorDialog } from './CustomEmulatorDialog'
+import { PlayWithDialog } from './PlayWith'
 import { t } from '@/i18n'
 import { useLibrary } from '@/store/library'
 import { platformLabel } from '@shared/consoles'
@@ -14,6 +16,10 @@ type Dialog =
   | { kind: 'picker'; entryId: number }
   /** Modification d'un jeu de la bibliothèque : titre, description, images… (surcouche, voir shared/overrides.ts). */
   | { kind: 'edit'; entryId: number }
+  /** Ajout (id = null) ou modification d'un émulateur personnalisé. */
+  | { kind: 'customEmulator'; id: string | null }
+  /** Choix de l'émulateur d'un jeu (« Jouer avec… »). */
+  | { kind: 'playWith'; entryId: number }
 
 interface DialogState { dialog: Dialog | null; open: (d: Dialog) => void; close: () => void }
 export const useDialog = create<DialogState>((set) => ({ dialog: null, open: (dialog) => set({ dialog }), close: () => set({ dialog: null }) }))
@@ -25,6 +31,8 @@ export function Dialogs() {
   const { dialog, close } = useDialog()
   if (!dialog) return null
   if (dialog.kind === 'edit') return <EditGameDialog entryId={dialog.entryId} onClose={close} />
+  if (dialog.kind === 'customEmulator') return <CustomEmulatorDialog id={dialog.id} onClose={close} />
+  if (dialog.kind === 'playWith') return <PlayWithDialog entryId={dialog.entryId} onClose={close} />
   return dialog.kind === 'editor' ? <CollectionEditor collectionId={dialog.collectionId} onClose={close} /> : <CollectionPicker entryId={dialog.entryId} onClose={close} />
 }
 

@@ -7,6 +7,8 @@ import { useEmulators } from '@/store/emulators'
 import { useLibrary } from '@/store/library'
 import { useApp } from '@/store/app'
 import type { LibraryEntry } from '@shared/library'
+import { isCustomEmulatorId } from '@shared/customEmulators'
+import { useCustomEmulators, useEntryEmulators } from '@/store/customEmulators'
 
 /**
  * Lance un jeu (installe-d'abord si l'émulateur manque, propose de fermer l'autre partie en cours si besoin) — hors
@@ -15,7 +17,9 @@ import type { LibraryEntry } from '@shared/library'
 export async function playEntry(entry: LibraryEntry): Promise<void> {
   const def = emulatorForConsole(entry.console)
   const installed = useEmulators.getState().list.find((e) => e.id === def?.id)?.installed
-  if (def && installed === false) { useApp.getState().go('emulators'); return }
+  // Jeu confié à un émulateur personnalisé : rien à installer, l'émulateur intégré de la console n'a pas à l'être.
+  const effective = useCustomEmulators.getState().list.length > 0 && entry.kind === 'rom' ? (await window.api.invoke('emulators:options', entry.id)).effective : null
+  if (def && installed === false && !isCustomEmulatorId(effective)) { useApp.getState().go('emulators'); return }
   // Un échec est affiché via QuickExitNotice (même vitrine qu'une fermeture rapide) : voir useEmulators.play.
   const r = await useEmulators.getState().play(entry.id)
   // Un seul jeu à la fois (cf. launchGame) : on propose de fermer l'autre plutôt que de laisser un message sec.
@@ -35,6 +39,8 @@ export function PlayButton({ entry }: { entry: LibraryEntry }) {
   const launching = useEmulators((s) => s.launching.includes(entry.id))
   const installed = useEmulators((s) => s.list.find((e) => e.id === emulatorForConsole(entry.console)?.id)?.installed)
   const def = emulatorForConsole(entry.console)
+  const effective = useEntryEmulators(entry)?.effective
+  const customChosen = isCustomEmulatorId(effective)
   return (
     <>
       {running
@@ -42,7 +48,7 @@ export function PlayButton({ entry }: { entry: LibraryEntry }) {
         // launching : le clic est pris en compte mais rien n'est encore lancé (peut prendre plusieurs minutes la
         // première fois pour un jeu Vita — install avant de pouvoir jouer) ; désactivé pour éviter un double clic.
         : <Button variant="primary" disabled={launching} onClick={() => void playEntry(entry)}>
-            {launching ? t('play.launching') : installed === false && def ? t('play.installFirst', { name: def.name }) : `▶ ${t('play')}`}
+            {launching ? t('play.launching') : installed === false && def && !customChosen ? t('play.installFirst', { name: def.name }) : `▶ ${t('play')}`}
           </Button>}
       {running && <span className="muted">{t('play.quitHint')}</span>}
     </>
