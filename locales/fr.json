@@ -625,5 +625,9 @@
   "settings.homeDrag": "Glisser pour réordonner (ou flèches haut et bas du clavier)",
   "home.statsRoms": "{n} jeux · {r} ROMs · {h} h jouées",
   "bp.media": "Médias",
-  "edit.genreHint": "Séparez les genres par des virgules"
+  "edit.genreHint": "Séparez les genres par des virgules",
+  "launchers.link": "Associer",
+  "launchers.unlink": "Dissocier",
+  "launchers.detecting": "Détection…",
+  "launchers.unlinkConfirm": "Dissocier {name} ? Ses {n} jeu(x) seront retirés de la bibliothèque (leurs fichiers ne sont pas touchés)."
 }

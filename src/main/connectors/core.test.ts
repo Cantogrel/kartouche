@@ -105,3 +105,19 @@ describe("désactivation d'un launcher", () => {
     expect(launcherEntryIds(db, 'steam')).toEqual([])
   })
 })
+
+describe('listConnectors : détection différée', () => {
+  it('sans détection, répond tout de suite avec la dernière détection connue (null au départ)', async () => {
+    let detections = 0
+    const c = fake([], { id: 'gog', detect: async () => { detections++; return true } })
+    expect((await listConnectors(db, [c], false))[0]).toMatchObject({ id: 'gog', detected: null })
+    expect(detections).toBe(0)
+    expect((await listConnectors(db, [c], true))[0].detected).toBe(true)
+    expect((await listConnectors(db, [c], false))[0].detected).toBe(true)
+    expect(detections).toBe(1)
+  })
+  it('un launcher dont la détection plante est simplement absent', async () => {
+    const c = fake([], { id: 'ea', detect: async () => { throw new Error('reg') } })
+    expect((await listConnectors(db, [c], true))[0].detected).toBe(false)
+  })
+})

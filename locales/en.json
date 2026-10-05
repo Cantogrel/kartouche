@@ -625,5 +625,9 @@
   "settings.homeDrag": "Drag to reorder (or use the up and down arrow keys)",
   "home.statsRoms": "{n} games · {r} ROMs · {h} h played",
   "bp.media": "Media",
-  "edit.genreHint": "Separate genres with commas"
+  "edit.genreHint": "Separate genres with commas",
+  "launchers.link": "Link",
+  "launchers.unlink": "Unlink",
+  "launchers.detecting": "Detecting…",
+  "launchers.unlinkConfirm": "Unlink {name}? Its {n} game(s) will be removed from the library (their files are not touched)."
 }

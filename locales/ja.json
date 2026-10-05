@@ -625,5 +625,9 @@
   "settings.homeDrag": "ドラッグして並べ替え（または上下の矢印キー）",
   "home.statsRoms": "{n} 本のゲーム · ROM {r} 本 · {h} 時間プレイ",
   "bp.media": "メディア",
-  "edit.genreHint": "ジャンルはカンマで区切ってください"
+  "edit.genreHint": "ジャンルはカンマで区切ってください",
+  "launchers.link": "連携",
+  "launchers.unlink": "連携解除",
+  "launchers.detecting": "検出中…",
+  "launchers.unlinkConfirm": "{name} の連携を解除しますか？{n} 本のゲームがライブラリから削除されます（ファイルには手を加えません）。"
 }

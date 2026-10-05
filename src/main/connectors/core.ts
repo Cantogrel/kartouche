@@ -24,11 +24,13 @@ export const gamesOf = (db: DatabaseSync, source: GameSource): number =>
 export const launcherEntryIds = (db: DatabaseSync, source: GameSource): number[] =>
   (db.prepare("SELECT id FROM library WHERE source = ? AND kind = 'launcher'").all(source) as { id: number }[]).map((r) => r.id)
 
-export async function connectorStatus(db: DatabaseSync, connector: Connector, enabled: boolean): Promise<ConnectorStatus> {
-  let detected = false
-  try { detected = await connector.detect() } catch { /* launcher illisible = absent */ }
-  return { id: connector.id, name: connector.name, detected, enabled, games: gamesOf(db, connector.id) }
+/** Le launcher est-il installé ? Un launcher illisible compte comme absent. */
+export async function detectConnector(connector: Connector): Promise<boolean> {
+  try { return await connector.detect() } catch { return false }
 }
+
+export const connectorStatus = (db: DatabaseSync, connector: Connector, enabled: boolean, detected: boolean | null): ConnectorStatus =>
+  ({ id: connector.id, name: connector.name, detected, enabled, games: gamesOf(db, connector.id) })
 
 /**
  * Lit le launcher et met la bibliothèque à jour : jeux nouveaux ajoutés, jeux connus mis à jour (lancement, dossier) sans toucher à leur titre, leurs

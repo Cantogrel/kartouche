@@ -625,5 +625,9 @@
   "settings.homeDrag": "拖动以重新排序（或使用键盘上下方向键）",
   "home.statsRoms": "{n} 个游戏 · {r} 个 ROM · 已游玩 {h} 小时",
   "bp.media": "媒体",
-  "edit.genreHint": "类型之间用逗号分隔"
+  "edit.genreHint": "类型之间用逗号分隔",
+  "launchers.link": "关联",
+  "launchers.unlink": "取消关联",
+  "launchers.detecting": "正在检测…",
+  "launchers.unlinkConfirm": "取消关联 {name}？它的 {n} 个游戏将从游戏库中移除（文件不会被改动）。"
 }

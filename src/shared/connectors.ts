@@ -65,8 +65,8 @@ export function launchSpecOf(g: DetectedGame): LaunchSpec {
 export interface ConnectorStatus {
   id: GameSource
   name: string
-  /** Le launcher est installé sur ce PC (ses fichiers ont été trouvés). */
-  detected: boolean
+  /** Le launcher est installé sur ce PC (ses fichiers ont été trouvés) ; `null` = pas encore vérifié (la détection tourne en arrière-plan). */
+  detected: boolean | null
   enabled: boolean
   /** Jeux de ce launcher actuellement dans la bibliothèque. */
   games: number

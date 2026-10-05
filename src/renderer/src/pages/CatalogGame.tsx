@@ -150,7 +150,8 @@ function DownloadButton({ sources, gameName, gameId }: { sources: GameSource[]; 
           ))}
         </select>
       )}
-      {isTorrentSource(sources.find((s) => s.id === selected)?.uris ?? []) && <Tag className="tag-p2p">{t('download.torrentTag')}</Tag>}
+      <div className="dl-col">
+        {isTorrentSource(sources.find((s) => s.id === selected)?.uris ?? []) && <Tag className="tag-p2p">{t('download.torrentTag')}</Tag>}
       {busy
         // Juste après le clic, avant la première mesure réelle (comme « Lancement… » sur le bouton Jouer) : pas encore annulable.
         ? (percent !== null
@@ -160,6 +161,7 @@ function DownloadButton({ sources, gameName, gameId }: { sources: GameSource[]; 
               ? <Button onClick={cancel}>{t('download.connecting')}</Button>
               : <Button disabled>{t('download.downloading')}</Button>)
         : <Button variant="primary" onClick={() => void start()}>{t('download.button')}{sources.length === 1 && sources[0].sizeBytes ? ` · ${formatSize(sources[0].sizeBytes)}` : ''}</Button>}
+      </div>
     </div>
   )
 }
