@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { copyFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
@@ -11,6 +11,7 @@ import { uninstallContent } from '../emulators/content'
 import type { LibraryContentItem, LibraryEntry, MatchKind, SbiImportResult } from '@shared/library'
 import { OVERRIDE_FIELDS, type EntryOverrides } from '@shared/overrides'
 import { loadOverrides } from './overrides'
+import { customArtDir, removeEntryArt } from './customArt'
 
 interface Row {
   id: number; game_id: number | null; console: string; title: string; path: string; size: number; match: string
@@ -119,7 +120,7 @@ const vita3kUserDir = (): string => join(homedir(), 'AppData', 'Roaming', 'Vita3
  * Suppression, au choix : `file` (ROM supprimée, le jeu reste sans fichier), `entry` (retiré de la bibliothèque, ROM conservée),
  * `save` (sauvegardes seulement) ou `all` (ROM, sauvegardes et entrée).
  */
-export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAction, savesRoot: string, romsDir?: string): Promise<void> {
+export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAction, savesRoot: string, romsDir?: string, dataDir?: string): Promise<void> {
   const r = db.prepare('SELECT console, title, path, title_id, vita_title_id FROM library WHERE id = ?').get(id) as
     { console: string; title: string; path: string; title_id: string | null; vita_title_id: string | null } | undefined
   if (!r) return
@@ -147,10 +148,12 @@ export async function removeEntry(db: DatabaseSync, id: number, action: RemoveAc
       await rm(join(dirname(r.path), '.content', r.title_id), { recursive: true, force: true }).catch(() => undefined)
     }
     db.prepare('DELETE FROM library WHERE id = ?').run(id)
+    if (dataDir) await removeEntryArt(null, dataDir, id) // images personnelles : la ligne de surcharge est partie avec l'entrée (cascade)
   } else if (action === 'entry') {
     // ROM conservée : ses mises à jour/DLC restent sur le disque et attendent le jeu, rattachés de nouveau s'il est réimporté.
     parkContent(db, id)
     db.prepare('DELETE FROM library WHERE id = ?').run(id)
+    if (dataDir) await removeEntryArt(null, dataDir, id)
   }
   // vita_title_id remis à zéro : sans ça, un fichier relié plus tard relancerait par un Title ID dont la copie Vita3K n'existe plus.
   else if (action === 'file') db.prepare('UPDATE library SET missing = 1, vita_title_id = NULL WHERE id = ?').run(id)
@@ -168,9 +171,10 @@ async function uninstallAllContent(db: DatabaseSync, libraryId: number, romsDir:
 }
 
 /** Vide entièrement la bibliothèque (action « Actions dangereuses » des réglages) ; les fichiers ROM ne sont pas touchés, et les contenus rangés attendent leur jeu. */
-export function clearLibrary(db: DatabaseSync): void {
+export function clearLibrary(db: DatabaseSync, dataDir?: string): void {
   for (const g of db.prepare('SELECT id FROM library').all() as { id: number }[]) parkContent(db, g.id)
   db.exec('DELETE FROM library')
+  if (dataDir) rmSync(customArtDir(dataDir), { recursive: true, force: true })
 }
 
 /** Supprime le fichier ROM de tous les jeux (action « Actions dangereuses ») ainsi que leurs mises à jour/DLC ; `refreshMissing` marquera les entrées sans fichier au prochain chargement. */

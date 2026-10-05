@@ -11,10 +11,12 @@ import { getImage, type ImageKind } from './catalog/images'
 import { getGame, rebuildDerived } from './catalog/catalogStore'
 import { loadSettings } from './db/settingsStore'
 import { initUpdater } from './updater'
+import { pruneCustomArt, readCustomArt } from './library/customArt'
 import { migrateLegacyUserData, removeLegacyUpdaterCache, retireLegacyUserData } from './legacy'
 import { loadWindowState, saveWindowState, type WindowState } from './windowState'
 
-// Images du catalogue servies depuis le cache disque : kimg://card|tile|hero|icon/<id du jeu> (vignette catalogue, tuile bibliothèque, bannière, icône)
+// Images du catalogue servies depuis le cache disque : kimg://card|tile|hero|icon/<id du jeu> (vignette catalogue, tuile bibliothèque, bannière, icône) ;
+// kimg://custom/<id de l'entrée>/<fichier> : image personnelle d'un jeu de la bibliothèque (<data>/custom-art/)
 protocol.registerSchemesAsPrivileged([{ scheme: 'kimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 
 /** Faux si les bornes sauvegardées tombent hors de tout écran actuellement branché (moniteur externe débranché…). */
@@ -112,8 +114,14 @@ if (!app.requestSingleInstanceLock()) {
       const iconDir = join(paths.cache, 'images', 'icon')
       readdir(iconDir).then((files) => Promise.all(files.filter((f) => f.endsWith('.miss')).map((f) => rm(join(iconDir, f))))).catch(() => { /* dossier pas encore créé : rien à nettoyer */ })
     }
+    // Images personnelles qui n'ont plus d'entrée (arrêt brutal, remise à zéro…) : retirées au démarrage, sans bloquer l'ouverture.
+    void pruneCustomArt(db, paths.dataDir).catch(() => undefined)
     protocol.handle('kimg', async (req) => {
       const u = new URL(req.url)
+      if (u.hostname === 'custom') {
+        const art = await readCustomArt(paths.dataDir, decodeURIComponent(u.pathname).replace(/^\/+/, ''))
+        return art ? new Response(new Uint8Array(art.data), { headers: { 'content-type': art.type, 'cache-control': 'max-age=86400' } }) : new Response(null, { status: 404 })
+      }
       const game = getGame(db, Number(u.pathname.split('/').filter(Boolean)[0]))
       const kind: ImageKind = u.hostname === 'hero' || u.hostname === 'icon' || u.hostname === 'tile' ? u.hostname : 'card'
       try {

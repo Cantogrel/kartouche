@@ -21,6 +21,7 @@ import { getAchievements } from './achievements/retroachievements'
 import { addSourceList, rematchSources } from './sources/import'
 import { listSourceLists, refreshAllSourceLists, refreshSourceList, removeAllSourceLists, removeSourceList, sourcesForGame } from './sources/manage'
 import { sourcesDir } from './sources/localCopy'
+import { customArtDir } from './library/customArt'
 import { defaultFetch } from './sources/import'
 import { cancelDownload, downloadSource } from './downloads/engine'
 import { installDownload } from './downloads/install'
@@ -102,6 +103,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     for (const suffix of ['', '-wal', '-shm']) await rm(dbFile + suffix, { force: true })
     // Les copies locales des listes de sources n'ont plus de liste à laquelle se rattacher.
     await rm(sourcesDir(paths.dataDir), { recursive: true, force: true })
+    await rm(customArtDir(paths.dataDir), { recursive: true, force: true }) // images personnelles : plus de jeu auquel les rattacher
     app.relaunch(); app.exit(0)
   })
 
@@ -167,8 +169,8 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     refreshMissing(db)
     return r
   })
-  handle('library:remove', (req) => removeEntry(db, req.id, req.action, paths.saves, paths.roms))
-  handle('library:clearAll', () => clearLibrary(db))
+  handle('library:remove', (req) => removeEntry(db, req.id, req.action, paths.saves, paths.roms, paths.dataDir))
+  handle('library:clearAll', () => clearLibrary(db, paths.dataDir))
   handle('library:deleteAllFiles', () => deleteAllRomFiles(db, paths.roms))
   handle('library:add', (gameId) => addCatalogGame(db, gameId))
   handle('library:pickSbi', async () => {
