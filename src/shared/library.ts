@@ -176,3 +176,26 @@ export interface SbiImportResult {
 
 /** Consoles qui ont des mises à jour/DLC gérés par Kartouche (voir `library/content/`) : leur fiche propose l'import et la désinstallation unitaires. */
 export const CONTENT_CONSOLES: readonly string[] = ['switch', 'n3ds', 'ps3', 'wiiu', 'vita']
+
+/** Statistiques d'un jeu (fiche) ; voir `getStats` (main/library/stats.ts) pour ce que chaque valeur couvre. */
+export interface GameStats {
+  /** Temps de jeu total (celui de la bibliothèque, depuis toujours). */
+  playMinutes: number
+  /** Sessions enregistrées (depuis la 0.3.0) et leurs durées. */
+  sessions: number
+  averageSessionMinutes: number
+  longestSessionMinutes: number
+  firstPlayed: number | null
+  lastPlayed: number | null
+  addedAt: number
+  last7DaysMinutes: number
+  last30DaysMinutes: number
+  /** Rang par temps de jeu parmi les jeux déjà lancés (1 = le plus joué) ; null si jamais lancé. */
+  rank: number | null
+  /** Nombre de jeux déjà lancés (dénominateur du rang). */
+  playedGames: number
+  /** ROM + mises à jour/DLC rangés par Kartouche. */
+  sizeBytes: number
+  /** Popularité du catalogue (IGDB) ; null si inconnue. */
+  popularity: number | null
+}

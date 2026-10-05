@@ -22,6 +22,7 @@ import { getAchievements } from './achievements/retroachievements'
 import { addSourceList, rematchSources } from './sources/import'
 import { listSourceLists, refreshAllSourceLists, refreshSourceList, removeAllSourceLists, removeSourceList, sourcesForGame } from './sources/manage'
 import { sourcesDir } from './sources/localCopy'
+import { getStats } from './library/stats'
 import { clearCustomImage, customArtDir, removeEntryArt, setCustomImage } from './library/customArt'
 import { downscaleImage } from './library/customArtResize'
 import { clearAllOverrides, clearOverride, getOverrides, setOverride } from './library/overrides'
@@ -157,6 +158,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     return importPaths(db, req.paths, { copy: s.importCopy, deleteSource: req.deleteSource ?? s.importDeleteSource, romsDir: paths.roms, logDir: paths.logs }, sendLibProgress)
   })
   // Surcouche utilisateur (titre, description, images…) : affichage seulement, l'identité du jeu n'est jamais modifiée (voir shared/overrides.ts).
+  handle('library:stats', (id) => getStats(db, id))
   handle('library:overrides', (id) => getOverrides(db, id))
   handle('library:setOverride', ({ id, field, value }) => {
     if ((OVERRIDE_TEXT_FIELDS as readonly string[]).includes(field)) setOverride(db, id, field, value)
