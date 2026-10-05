@@ -36,6 +36,11 @@ describe('choix de la langue', () => {
     expect(pickLanguage('auto', 'fr_CA', avail)).toBe('fr')
     expect(pickLanguage('auto', 'ja-JP', avail)).toBe('en')
   })
+  it('chinois / japonais du système → langues CJK intégrées', () => {
+    const cjk = ['en', 'zh-hans', 'ja']
+    expect(pickLanguage('auto', 'zh-CN', cjk)).toBe('zh-hans')
+    expect(pickLanguage('auto', 'ja-JP', cjk)).toBe('ja')
+  })
   it("langue retirée : retombe sur celle de l'OS", () => expect(pickLanguage('de', 'fr-FR', avail)).toBe('fr'))
   it('réglages : code valide accepté, invalide ignoré ; main reste en/fr', () => {
     expect(mergeSettings(DEFAULT_SETTINGS, { language: 'pt-br' }).language).toBe('pt-br')

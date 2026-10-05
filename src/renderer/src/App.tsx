@@ -56,6 +56,8 @@ export default function App() {
     el.style.zoom = String(uiScale)
     el.dataset.accent = accent
     el.dataset.theme = theme
+    // Langue du document : choisit les polices CJK (voir styles.css) et vaut aussi pour le Big Picture, rendu hors de `.app`.
+    el.lang = lang
     // Aligne le rendu natif (case à cocher, <select>, ascenseur) sur le thème choisi plutôt que sur celui de l'OS.
     el.style.colorScheme = theme
     el.classList.toggle('reduce-motion', reduceMotion)
@@ -65,7 +67,7 @@ export default function App() {
     else { el.style.removeProperty('--accent'); el.style.removeProperty('--accent-fg') }
     el.style.setProperty('--radius', `${RADIUS_PX[radius][0]}px`)
     el.style.setProperty('--radius-lg', `${RADIUS_PX[radius][1]}px`)
-  }, [uiScale, accent, theme, reduceMotion, accentColor, radius, highContrast])
+  }, [uiScale, accent, theme, reduceMotion, accentColor, radius, highContrast, lang])
 
   if (!ready) return null
   if (bigPicture) return <BigPicture onExit={() => setBigPicture(false)} />

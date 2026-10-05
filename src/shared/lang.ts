@@ -8,7 +8,7 @@ export const LANG_CODE_RE = /^[a-z]{2,3}(-[a-z0-9]{2,8}){0,2}$/
 export const isLangCode = (s: unknown): s is string => typeof s === 'string' && LANG_CODE_RE.test(s)
 
 /** Langues livrées avec l'app (le fichier de référence est l'anglais). */
-export const BUILTIN_LANGS: Record<string, string> = { en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch', it: 'Italiano', 'pt-pt': 'Português (Portugal)' }
+export const BUILTIN_LANGS: Record<string, string> = { en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch', it: 'Italiano', 'pt-pt': 'Português (Portugal)', 'zh-hans': '简体中文', ja: '日本語' }
 
 export interface LangFile {
   code: string

@@ -4,10 +4,12 @@ import es from '../../../../locales/es.json'
 import de from '../../../../locales/de.json'
 import it from '../../../../locales/it.json'
 import ptPt from '../../../../locales/pt-pt.json'
+import zhHans from '../../../../locales/zh-hans.json'
+import ja from '../../../../locales/ja.json'
 import { BUILTIN_LANGS, placeholderMismatches, translate, untranslatedKeys, type Dicts, type LangFile, type LangInfo } from '@shared/lang'
 
 /** Langues livrées avec l'app : un fichier `locales/<code>.json` chacune, mêmes clés que l'anglais (test de parité). */
-export const builtin: Dicts = { en, fr, es, de, it, 'pt-pt': ptPt }
+export const builtin: Dicts = { en, fr, es, de, it, 'pt-pt': ptPt, 'zh-hans': zhHans, ja }
 const dicts: Dicts = { ...builtin }
 /** Noms d'affichage des langues ajoutées par l'utilisateur. */
 const userNames: Record<string, string> = {}
