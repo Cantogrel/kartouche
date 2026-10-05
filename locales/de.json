@@ -83,7 +83,6 @@
   "game.noFile": "Diesem Spiel ist keine ROM zugeordnet",
   "home.continue": "Weiterspielen",
   "home.recent": "Kürzlich hinzugefügt",
-  "home.sec.stats": "Bibliotheksstatistik",
   "home.sec.continue": "Weiterspielen",
   "home.sec.favorites": "Favoriten",
   "home.sec.recent": "Kürzlich hinzugefügt",
@@ -623,5 +622,8 @@
   "settings.langError.name": "Der Sprachname fehlt oder ist zu lang.",
   "settings.langError.strings": "Die Datei enthält keinen übersetzten Text.",
   "settings.langError.builtin": "Diese Sprache ist bereits integriert.",
-  "settings.homeDrag": "Zum Umsortieren ziehen (oder Pfeiltasten nach oben und unten)"
+  "settings.homeDrag": "Zum Umsortieren ziehen (oder Pfeiltasten nach oben und unten)",
+  "home.statsRoms": "{n} Spiele · {r} ROMs · {h} Std. gespielt",
+  "bp.media": "Medien",
+  "edit.genreHint": "Genres mit Kommas trennen"
 }

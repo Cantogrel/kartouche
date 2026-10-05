@@ -74,9 +74,9 @@ describe('actualisation de la fiche d’un jeu modifié', () => {
 describe('baseViewFrom', () => {
   it('suit l’ordre de la fiche : catalogue d’abord, fiche ensuite, titre de la bibliothèque à défaut', () => {
     expect(baseViewFrom({ name: 'Zelda', year: 1991, genre: 'Action', developer: 'Nintendo' }, { summary: 'S', developer: 'Autre', releaseYear: 1990, genres: ['RPG'] }, 'x'))
-      .toEqual({ title: 'Zelda', description: 'S', genre: 'Action', year: 1991, developer: 'Nintendo' })
+      .toEqual({ title: 'Zelda', description: 'S', genre: 'Action, rpg', year: 1991, developer: 'Nintendo' })
     expect(baseViewFrom({ name: 'Zelda', year: null, genre: null, developer: null }, { summary: 'S', developer: 'Dev', releaseYear: 1990, genres: ['RPG', 'Aventure'] }, 'x'))
-      .toEqual({ title: 'Zelda', description: 'S', genre: 'RPG', year: 1990, developer: 'Dev' })
+      .toEqual({ title: 'Zelda', description: 'S', genre: 'rpg, Aventure', year: 1990, developer: 'Dev' })
     expect(baseViewFrom(null, null, 'Titre du fichier')).toEqual({ title: 'Titre du fichier', description: null, genre: null, year: null, developer: null })
   })
 })

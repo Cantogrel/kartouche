@@ -4,11 +4,13 @@ import { Modal } from './Modal'
 import { confirmDialog } from './AskDialog'
 import { t } from '@/i18n'
 import { useLibrary } from '@/store/library'
+import { useSettings } from '@/store/settings'
 import { usePcMeta } from '@/store/pcMeta'
 import { useGameMedia } from './GameMedia'
 import { defaultBackgroundId, igdbImageUrl } from '@shared/media'
 import type { PcMetaView } from '@shared/pcMeta'
-import { baseViewFrom, YEAR_MAX, YEAR_MIN, type BaseView, type EntryOverrides, type OverrideImageField, type OverrideTextField } from '@shared/overrides'
+import { genreLabel } from '@shared/genres'
+import { baseViewFrom, splitGenres, YEAR_MAX, YEAR_MIN, type BaseView, type EntryOverrides, type OverrideImageField, type OverrideTextField } from '@shared/overrides'
 
 /*
  * Modification d'un jeu de la bibliothèque : titre, description, genre, année, développeur et images. Ce que l'utilisateur change est une surcouche
@@ -25,6 +27,7 @@ const baseText = (b: BaseView, f: OverrideTextField): string => (f === 'year' ? 
 
 export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose: () => void }) {
   const entry = useLibrary((s) => s.entries.find((e) => e.id === entryId))
+  const lang = useSettings((s) => s.lang)
   const refresh = useLibrary((s) => s.refresh)
   const [ov, setOv] = useState<EntryOverrides | null>(null)
   const [base, setBase] = useState<BaseView | null>(null)
@@ -63,7 +66,8 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
 
   if (!entry || !ov || !base) return null
 
-  const original = (f: OverrideTextField): string => baseText(base, f)
+  // Genre : tous ceux de la fiche, dans la langue de l'interface (le champ en accepte plusieurs, séparés par des virgules).
+  const original = (f: OverrideTextField): string => (f === 'genre' ? splitGenres(base.genre).map((g) => genreLabel(g, lang)).join(', ') : baseText(base, f))
   const value = (f: OverrideTextField): string => edits[f] ?? ov[f] ?? original(f)
   const modified = (f: OverrideTextField): boolean => { const v = value(f).trim(); return v !== '' && v !== original(f) }
   const setText = (f: OverrideTextField, v: string): void => { setError(null); setEdits((e) => ({ ...e, [f]: v })) }
@@ -137,7 +141,7 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
             <span className="edit-label">{t(`edit.f.${f}`)}{modified(f) && <span className="edit-badge">{t('edit.modified')}</span>}</span>
             {f === 'description'
               ? <textarea rows={5} value={value(f)} onChange={(e) => setText(f, e.target.value)} />
-              : <input value={value(f)} maxLength={f === 'year' ? 4 : 200} inputMode={f === 'year' ? 'numeric' : undefined} onChange={(e) => setText(f, e.target.value)} />}
+              : <input value={value(f)} maxLength={f === 'year' ? 4 : 200} placeholder={f === 'genre' ? t('edit.genreHint') : undefined} inputMode={f === 'year' ? 'numeric' : undefined} onChange={(e) => setText(f, e.target.value)} />}
             {modified(f) && (
               <span className="edit-sub muted">{t('edit.original', { v: original(f) || '—' })} <button type="button" className="edit-link" disabled={busy} onClick={() => void resetField(f)}>{t('edit.reset')}</button></span>
             )}

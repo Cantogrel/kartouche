@@ -18,7 +18,7 @@ import { defaultBackgroundId, igdbImageUrl } from '@shared/media'
 import { PlayWithButton } from '@/ui/PlayWith'
 import { Section } from '@/ui/Section'
 import { StatsPanel } from '@/ui/GameStats'
-import { baseViewFrom, resolveView } from '@shared/overrides'
+import { baseViewFrom, resolveView, splitGenres } from '@shared/overrides'
 import { useDownloads } from '@/store/downloads'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
 import { OpenEmulatorButton, PlayButton, QuickExitNotice } from '@/ui/PlayButton'
@@ -59,7 +59,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
   const summary = view ? view.description ?? undefined : details?.summary
   const summaryIsMine = !!entry && overrides.description !== undefined
   // Genre principal du catalogue d'abord, puis ceux de la fiche (dédoublonnés après traduction).
-  const genres = entry && overrides.genre !== undefined ? [overrides.genre] : [...new Set([game.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
+  const genres = entry && overrides.genre !== undefined ? splitGenres(overrides.genre).map((g) => genreLabel(g, lang)) : [...new Set([game.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
   return (
     <div className="content nopad detail-page">
       {backdropUrl && <div className="detail-backdrop" aria-hidden style={{ backgroundImage: `url(${backdropUrl})` }} />}

@@ -49,3 +49,29 @@ export function defaultBackgroundId(media: Pick<GameMedia, 'screenshots' | 'artw
   const bannerId = bannerFromIgdb ? media.artworks[0] ?? media.screenshots[0] : undefined
   return [...media.screenshots, ...media.artworks].find((id) => id !== bannerId) ?? null
 }
+
+const NOT_THE_GAME = /anime|animated series|episode|\bep\.? ?\d|season|\btv\b|cartoon|movie|film|opening|ending|review|reaction|let'?s play|soundtrack|\bost\b|\bamv\b|compilation|top \d+/i
+
+/**
+ * Pénalité (0 = bon candidat) du titre YouTube d'une vidéo pour la bande-annonce de CE jeu. Les noms IGDB sont presque tous « Trailer » : seul le titre de la
+ * vidéo distingue la bande-annonce du jeu de celle d'une série animée, d'un film ou d'une suite (« … 2 » alors que le jeu n'a pas ce numéro).
+ */
+export function trailerTitlePenalty(title: string, gameName: string): number {
+  let p = 0
+  if (NOT_THE_GAME.test(title)) p += 10
+  const numbersIn = (x: string): Set<string> => new Set(x.match(/\b\d{1,2}\b/g) ?? [])
+  const wanted = numbersIn(gameName)
+  if ([...numbersIn(title)].some((n) => !wanted.has(n))) p += 6
+  const words = gameName.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !/^(the|version|edition|and)$/.test(w))
+  const hay = title.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (words.length > 0 && !words.some((w) => hay.includes(w))) p += 4
+  return p
+}
+
+/** Réordonne les bandes-annonces d'après le titre de leur vidéo (stable : à pénalité égale, l'ordre d'IGDB est conservé) et remplace le nom générique « Trailer » par ce titre. */
+export function rankTrailersByTitle(trailers: GameMedia['trailers'], titles: (string | null)[], gameName: string): GameMedia['trailers'] {
+  return trailers
+    .map((v, i) => ({ v: titles[i] ? { ...v, name: titles[i]!.slice(0, 80) } : v, i, p: titles[i] ? trailerTitlePenalty(titles[i]!, gameName) : 2 }))
+    .sort((a, b) => a.p - b.p || a.i - b.i)
+    .map((x) => x.v)
+}

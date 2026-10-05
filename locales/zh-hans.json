@@ -83,7 +83,6 @@
   "game.noFile": "此游戏尚未关联 ROM",
   "home.continue": "继续游戏",
   "home.recent": "最近添加",
-  "home.sec.stats": "游戏库统计",
   "home.sec.continue": "继续游戏",
   "home.sec.favorites": "收藏",
   "home.sec.recent": "最近添加",
@@ -623,5 +622,8 @@
   "settings.langError.name": "语言名称缺失或过长。",
   "settings.langError.strings": "文件中没有任何已翻译的文本。",
   "settings.langError.builtin": "此语言已内置。",
-  "settings.homeDrag": "拖动以重新排序（或使用键盘上下方向键）"
+  "settings.homeDrag": "拖动以重新排序（或使用键盘上下方向键）",
+  "home.statsRoms": "{n} 个游戏 · {r} 个 ROM · 已游玩 {h} 小时",
+  "bp.media": "媒体",
+  "edit.genreHint": "类型之间用逗号分隔"
 }

@@ -83,7 +83,6 @@
   "game.noFile": "このゲームには ROM が関連付けられていません",
   "home.continue": "続きからプレイ",
   "home.recent": "最近追加",
-  "home.sec.stats": "ライブラリの統計",
   "home.sec.continue": "続きからプレイ",
   "home.sec.favorites": "お気に入り",
   "home.sec.recent": "最近追加",
@@ -623,5 +622,8 @@
   "settings.langError.name": "言語名がないか長すぎます。",
   "settings.langError.strings": "ファイルに翻訳されたテキストが含まれていません。",
   "settings.langError.builtin": "この言語はすでに組み込まれています。",
-  "settings.homeDrag": "ドラッグして並べ替え（または上下の矢印キー）"
+  "settings.homeDrag": "ドラッグして並べ替え（または上下の矢印キー）",
+  "home.statsRoms": "{n} 本のゲーム · ROM {r} 本 · {h} 時間プレイ",
+  "bp.media": "メディア",
+  "edit.genreHint": "ジャンルはカンマで区切ってください"
 }

@@ -10,7 +10,7 @@ import { CONSOLES, platformLabel } from '@shared/consoles'
 import { EMULATORS } from '@shared/emulators'
 import type { CatalogPage } from '@shared/catalog'
 import type { LanguageSetting } from '@shared/settings'
-import { visibleHomeSections } from '@shared/homeLayout'
+import { homeStats, visibleHomeSections } from '@shared/homeLayout'
 import { orderConsolesByRecency, type LibraryEntry } from '@shared/library'
 import { focusEl, navItems, useNav, useTypeText } from './useNav'
 import { dispatchToLayer } from './layers'
@@ -54,6 +54,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   }
   const collections = useLibrary((s) => s.collections)
   const homeLayout = useSettings((s) => s.settings.homeLayout)
+  const stats = homeStats(entries)
   const running = useEmulators((s) => s.running)
   const [section, setSection] = useState<Section>('home')
   const [consoleTab, setConsoleTab] = useState('all')
@@ -216,9 +217,9 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
       <div className="bp-body" data-scroll>
         {section === 'home' && (playable.length === 0 ? <p className="empty">{t('bp.empty')}</p> : (
           <>
+            <p className="muted home-stats">{t(stats.hasOther ? 'home.statsRoms' : 'home.stats', { n: stats.games, r: stats.roms, h: stats.hours })}</p>
             {visibleHomeSections(homeLayout).map((s) => {
               switch (s) {
-                case 'stats': return <p key={s} className="muted home-stats">{t('home.stats', { n: entries.length, h: Math.round(entries.reduce((n, e) => n + e.playMinutes, 0) / 60) })}</p>
                 case 'continue': return playable.some((e) => e.lastPlayed) ? <div key={s}><h2 className="bp-h">{t('home.continue')}</h2><div className="bp-grid">{libTiles(playable.filter((e) => e.lastPlayed).slice(0, 8), 'c')}</div></div> : null
                 case 'favorites': return playable.some((e) => e.favorite) ? <div key={s}><h2 className="bp-h">{t('home.favorites')}</h2><div className="bp-grid">{libTiles(playable.filter((e) => e.favorite).slice(0, 8), 'f')}</div></div> : null
                 case 'recent': return <div key={s}><h2 className="bp-h">{t('home.recent')}</h2><div className="bp-grid">{libTiles([...playable].sort((a, b) => b.addedAt - a.addedAt).slice(0, 8), 'r')}</div></div>

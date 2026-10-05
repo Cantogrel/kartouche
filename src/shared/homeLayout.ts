@@ -1,5 +1,5 @@
-/** Blocs de l'accueil (classique et Big Picture) : le « collections » regroupe une rangée par collection non vide. */
-export const HOME_SECTIONS = ['stats', 'continue', 'favorites', 'recent', 'collections'] as const
+/** Blocs réordonnables de l'accueil (classique et Big Picture) : « collections » regroupe une rangée par collection non vide. La ligne de stats n'en fait pas partie : elle reste toujours en haut. */
+export const HOME_SECTIONS = ['continue', 'favorites', 'recent', 'collections'] as const
 export type HomeSection = (typeof HOME_SECTIONS)[number]
 
 export interface HomeLayout {
@@ -45,4 +45,10 @@ export function reorderHomeSection(l: HomeLayout, s: HomeSection, to: number): H
 
 export function toggleHomeSection(l: HomeLayout, s: HomeSection): HomeLayout {
   return { ...l, hidden: l.hidden.includes(s) ? l.hidden.filter((x) => x !== s) : [...l.hidden, s] }
+}
+
+/** Ligne de stats de l'accueil. `roms` n'a de sens (et n'est affiché) que lorsque des jeux PC (launchers, exécutables) sont aussi dans la bibliothèque. */
+export function homeStats(entries: { kind: string; playMinutes: number }[]): { games: number; roms: number; hours: number; hasOther: boolean } {
+  const roms = entries.filter((e) => e.kind === 'rom').length
+  return { games: entries.length, roms, hours: Math.round(entries.reduce((n, e) => n + e.playMinutes, 0) / 60), hasOther: roms < entries.length }
 }

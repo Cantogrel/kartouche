@@ -1,4 +1,5 @@
 import type { CatalogGame, GameDetails } from './catalog'
+import { canonicalGenre } from './genres'
 
 /**
  * Surcouche utilisateur d'un jeu de la bibliothèque (titre, description, images…). Elle ne remplace JAMAIS l'identité du jeu :
@@ -20,7 +21,7 @@ export type EntryOverrides = Partial<Record<OverrideField, string>>
 export const isOverrideField = (v: unknown): v is OverrideField => typeof v === 'string' && (OVERRIDE_FIELDS as readonly string[]).includes(v)
 export const isImageField = (f: OverrideField): f is OverrideImageField => (OVERRIDE_IMAGE_FIELDS as readonly string[]).includes(f)
 
-const MAX_LENGTH: Record<OverrideTextField, number> = { title: 200, description: 8000, genre: 100, year: 4, developer: 200 }
+const MAX_LENGTH: Record<OverrideTextField, number> = { title: 200, description: 8000, genre: 200, year: 4, developer: 200 }
 export const YEAR_MIN = 1950
 export const YEAR_MAX = 2100
 
@@ -62,6 +63,9 @@ export interface EntryView extends BaseView {
   overridden: OverrideField[]
 }
 
+/** Genres d'une valeur de genre (plusieurs possibles, séparés par des virgules, points-virgules ou barres) : sans doublon, 8 au plus. */
+export const splitGenres = (genre: string | null | undefined): string[] => [...new Set((genre ?? '').split(/[,;/]+/).map((g) => g.trim()).filter(Boolean))].slice(0, 8)
+
 export function resolveView(base: BaseView, overrides: EntryOverrides = {}): EntryView {
   const year = overrides.year !== undefined ? Number(overrides.year) : base.year
   const images: EntryView['images'] = {}
@@ -95,7 +99,7 @@ export function baseViewFrom(
   return {
     title: game?.name ?? fallbackTitle,
     description: details?.summary ?? null,
-    genre: game?.genre ?? details?.genres?.[0] ?? null,
+    genre: [...new Set([game?.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g) ?? g)].filter((g): g is string => !!g))].join(', ') || null,
     year: game?.year ?? details?.releaseYear ?? null,
     developer: game?.developer ?? details?.developer ?? null
   }
