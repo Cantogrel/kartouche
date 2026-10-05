@@ -118,7 +118,15 @@ export const MIGRATIONS: readonly string[] = [
   `ALTER TABLE source_lists ADD COLUMN local_copy TEXT`,
   // v18 : fichiers de l'émulateur que l'installation d'un contenu a RÉÉCRITS (Vita3K fusionne une mise à jour dans le dossier du jeu) : copie de sauvegarde de chaque original (JSON
   // cible → copie), restaurée à la désinstallation. Sans elle, une mise à jour de ce genre ne pourrait pas être défaite.
-  `ALTER TABLE library_content ADD COLUMN emu_backup TEXT`
+  `ALTER TABLE library_content ADD COLUMN emu_backup TEXT`,
+  // v19 : surcouche utilisateur (0.3.0) : titre, description, genre, année, éditeur et images modifiés par l'utilisateur, une ligne par champ.
+  // Elle ne touche jamais à l'identité du jeu (titre du catalogue, hash, game_id) : reconnaissance, sources et téléchargements l'ignorent.
+  // Les valeurs sont conservées tant que l'entrée existe (cascade à sa suppression) ; `value` des images = chemin relatif à <data>/custom-art/.
+  `CREATE TABLE library_overrides (
+    entry_id INTEGER NOT NULL REFERENCES library(id) ON DELETE CASCADE,
+    field TEXT NOT NULL, value TEXT NOT NULL, updated_at INTEGER NOT NULL,
+    PRIMARY KEY (entry_id, field)
+  ) WITHOUT ROWID`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {
