@@ -1,5 +1,6 @@
 import type { Settings } from './settings'
 import type { Collection, ImportRequest, ImportResult, LibraryContentItem, LibraryEntry, LibraryProgress, SbiImportResult } from './library'
+import type { GameMedia } from './media'
 import type { EntryOverrides, OverrideField, OverrideImageField, OverrideTextField, SetImageResult } from './overrides'
 import type { AchievementsResult } from './achievements'
 import type { BackupInfo, SaveInfo } from './saves'
@@ -45,6 +46,8 @@ export interface IpcChannels {
   'catalog:get': { req: number; res: CatalogGame | null }
   'catalog:details': { req: { id: number; refresh?: boolean }; res: GameDetails | null }
   'catalog:sync': { req: string[] | undefined; res: SyncResult }
+  /** Bandes-annonces, captures et artworks du jeu (IGDB) ; null si rien n'est disponible. Mis en cache 30 jours. */
+  'catalog:media': { req: { id: number; refresh?: boolean }; res: GameMedia | null }
   'catalog:status': { req: void; res: { total: number; syncedAt: number | null; syncing: boolean; enriched: boolean } }
   /** Passe IGDB (si configuré) : popularité, genre, développeur, année ; renvoie le nombre de jeux rapprochés. */
   'catalog:popularity': { req: void; res: number }
