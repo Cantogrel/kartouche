@@ -134,7 +134,14 @@ export const MIGRATIONS: readonly string[] = [
   ALTER TABLE library ADD COLUMN source TEXT;
   ALTER TABLE library ADD COLUMN native_id TEXT;
   ALTER TABLE library ADD COLUMN launch TEXT;
-  CREATE UNIQUE INDEX library_native ON library (source, native_id) WHERE native_id IS NOT NULL`
+  CREATE UNIQUE INDEX library_native ON library (source, native_id) WHERE native_id IS NOT NULL`,
+  // v21 : sessions de jeu (0.3.0) : une ligne par partie terminée, pour les statistiques de la fiche (nombre de sessions, durée moyenne, plus longue, 7/30 derniers
+  // jours). `library.play_minutes` reste le total de référence (il inclut le temps d'avant la 0.3.0, dont on ne connaît pas le détail).
+  `CREATE TABLE play_sessions (
+    id INTEGER PRIMARY KEY, entry_id INTEGER NOT NULL REFERENCES library(id) ON DELETE CASCADE,
+    started_at INTEGER NOT NULL, ended_at INTEGER NOT NULL, minutes INTEGER NOT NULL
+  );
+  CREATE INDEX play_sessions_entry ON play_sessions (entry_id, started_at)`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

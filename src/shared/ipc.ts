@@ -1,5 +1,5 @@
 import type { Settings } from './settings'
-import type { Collection, ImportRequest, ImportResult, LibraryContentItem, LibraryEntry, LibraryProgress, SbiImportResult } from './library'
+import type { Collection, ImportRequest, ImportResult, LibraryContentItem, LibraryEntry, LibraryProgress, SbiImportResult, GameStats } from './library'
 import type { GameMedia } from './media'
 import type { EntryOverrides, OverrideField, OverrideImageField, OverrideTextField, SetImageResult } from './overrides'
 import type { AchievementsResult } from './achievements'
@@ -55,6 +55,8 @@ export interface IpcChannels {
   'images:cancel': { req: { kind: 'card' | 'tile' | 'hero' | 'icon'; gameId: number }; res: void }
   'library:list': { req: void; res: LibraryEntry[] }
   /** Valeurs modifiées par l'utilisateur sur un jeu de la bibliothèque (voir shared/overrides.ts) ; vide si rien n'est modifié. */
+  /** Statistiques de jeu d'une entrée (temps, sessions, rang, taille…) ; null si l'entrée n'existe pas. */
+  'library:stats': { req: number; res: GameStats | null }
   'library:overrides': { req: number; res: EntryOverrides }
   /** Modifie un champ texte (titre, description, genre, année, éditeur) ; une valeur vide ou invalide rétablit l'origine. Les images passent par `library:setImage`. Renvoie les surcharges à jour. */
   'library:setOverride': { req: { id: number; field: OverrideTextField; value: string }; res: EntryOverrides }

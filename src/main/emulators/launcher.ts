@@ -26,6 +26,7 @@ import { readPs2Game } from './pcsx2'
 import { detectSonyPad, readPs3Serial } from './rpcs3'
 import { installCia } from './content/azahar'
 import { installPendingContent } from './content'
+import { recordPlaySession } from '../library/stats'
 
 const running = new Map<number, { pid: number; stopped: boolean; graceMs?: number }>()
 
@@ -320,6 +321,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       running.delete(entryId)
       const minutes = sessionMinutes(attempt.elapsedMs)
       db.prepare('UPDATE library SET play_minutes = play_minutes + ?, last_played = ? WHERE id = ?').run(minutes, Date.now(), entryId)
+      if (minutes > 0) recordPlaySession(db, entryId, started, Date.now(), minutes) // une partie de moins de 30 s (échec de lancement) n'est pas une session
       const total = db.prepare('SELECT play_minutes FROM library WHERE id = ?').get(entryId) as { play_minutes: number } | undefined
       // Fermé tout seul (pas par l'utilisateur) en moins de QUICK_EXIT_MS : probablement un échec plutôt qu'une vraie partie.
       let quickExit: QuickExit | undefined
