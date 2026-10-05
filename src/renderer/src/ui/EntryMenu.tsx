@@ -73,6 +73,12 @@ function quickActionsFor(entry: LibraryEntry): Action[] {
   const emulatorInstalled = useEmulators.getState().list.find((e) => e.id === def?.id)?.installed === true
   const running = useEmulators.getState().running.includes(entry.id)
   const list: Action[] = []
+  if (entry.kind !== 'rom') {
+    // Exécutable ou jeu de launcher : lancement direct, et seule l'entrée peut être retirée (jamais ses fichiers).
+    if (hasFile) list.push(running ? { key: 'stop', label: `■ ${t('play.stop')}`, run: () => window.api.invoke('game:stop', entry.id) } : { key: 'play', label: `▶ ${t('play')}`, run: () => playEntry(entry) }, sep('sep1'))
+    list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), editAction(entry), sep('sep2'), removeEntryAction(entry, lib, useApp.getState().back))
+    return list
+  }
   if (hasFile && emulatorInstalled) {
     list.push(running
       ? { key: 'stop', label: `■ ${t('play.stop')}`, run: () => window.api.invoke('game:stop', entry.id) }
@@ -95,6 +101,11 @@ function fullActionsFor(entry: LibraryEntry, back: () => void): Action[] {
   const hasFile = !entry.missing
   const ask = (key: string): Promise<boolean> => confirmDialog(t(`confirm.${key}`, { title: entry.shownTitle }))
   const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), editAction(entry), ...(playWithAction(entry) ? [playWithAction(entry)!] : []), sep('sep1')]
+  if (entry.kind !== 'rom') {
+    if (hasFile) list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })
+    list.push(sep('sep2'), removeEntryAction(entry, lib, back))
+    return list
+  }
   if (!hasFile) list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
   if (hasFile) {
     list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })

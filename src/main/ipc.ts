@@ -28,6 +28,9 @@ import { deleteCustomEmulator, getCustomEmulator, listCustomEmulators, saveCusto
 import { spawn } from 'node:child_process'
 import { chooseEmulator, emulatorOptions, resolveEmulatorId } from '@shared/emulatorChoice'
 import { buildCustomCommand, formatCommand } from '@shared/customEmulators'
+import { addExecutables, updateExeLaunch } from './library/addExe'
+import { getLaunchSpec } from './library/external'
+import { EXE_PICK_EXTENSIONS } from '@shared/exeEntry'
 import { clearCustomImage, customArtDir, removeEntryArt, setCustomImage } from './library/customArt'
 import { downscaleImage } from './library/customArtResize'
 import { clearAllOverrides, clearOverride, getOverrides, setOverride } from './library/overrides'
@@ -212,6 +215,22 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     child.unref()
     return true
   })
+  handle('library:addExe', async (given) => {
+    let files = given
+    if (!files) {
+      const win = BrowserWindow.getFocusedWindow()
+      const opts = { properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[], filters: [{ name: 'Executables', extensions: EXE_PICK_EXTENSIONS }, { name: '*', extensions: ['*'] }] }
+      const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+      files = r.canceled ? [] : r.filePaths
+    }
+    return addExecutables(db, files, {
+      dataDir: paths.dataDir,
+      readShortcut: (p) => { try { const l = shell.readShortcutLink(p); return { target: l.target, args: l.args, cwd: l.cwd } } catch { return null } },
+      icon: async (p) => { const img = await app.getFileIcon(p, { size: 'large' }); return img.isEmpty() ? null : img.toPNG() }
+    })
+  })
+  handle('library:launchSpec', (id) => getLaunchSpec(db, id))
+  handle('library:setLaunch', ({ id, ...patch }) => updateExeLaunch(db, id, patch))
   handle('customEmulators:pickExe', async () => {
     const win = BrowserWindow.getFocusedWindow()
     const opts = { properties: ['openFile'] as 'openFile'[], filters: [{ name: 'Executable', extensions: ['exe', 'bat', 'cmd'] }, { name: '*', extensions: ['*'] }] }

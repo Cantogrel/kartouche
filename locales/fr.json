@@ -560,5 +560,15 @@
   "playWith.use": "Utiliser pour ce jeu",
   "playWith.hint": "Le choix s'applique à ce jeu seulement. Pour une console entière, voir Émulateurs → Mes émulateurs.",
   "bp.emulator": "Émulateur",
-  "bp.emulatorTitle": "Jouer avec…"
+  "bp.emulatorTitle": "Jouer avec…",
+  "exe.add": "Un exécutable…",
+  "exe.invalid": "{n} fichier(s) refusé(s) : seuls les .exe, .bat, .cmd et raccourcis vers l'un d'eux sont acceptés.",
+  "exe.already": "Cet exécutable est déjà dans la bibliothèque.",
+  "exe.launch": "Lancement",
+  "exe.f.exe": "Exécutable",
+  "exe.f.args": "Arguments",
+  "exe.f.cwd": "Dossier de travail",
+  "exe.cwdHint": "Par défaut : le dossier de l'exécutable",
+  "exe.err.launch": "Exécutable invalide ou déjà utilisé par un autre jeu.",
+  "exe.local": "Exécutable local (hors catalogue)"
 }

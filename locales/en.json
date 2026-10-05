@@ -560,5 +560,15 @@
   "playWith.use": "Use for this game",
   "playWith.hint": "The choice applies to this game only. For a whole console, see Emulators → My emulators.",
   "bp.emulator": "Emulator",
-  "bp.emulatorTitle": "Play with…"
+  "bp.emulatorTitle": "Play with…",
+  "exe.add": "An executable…",
+  "exe.invalid": "{n} file(s) refused: only .exe, .bat, .cmd and shortcuts to one of them are accepted.",
+  "exe.already": "This executable is already in the library.",
+  "exe.launch": "Launch",
+  "exe.f.exe": "Executable",
+  "exe.f.args": "Arguments",
+  "exe.f.cwd": "Working folder",
+  "exe.cwdHint": "Default: the executable's folder",
+  "exe.err.launch": "Invalid executable, or already used by another game.",
+  "exe.local": "Local executable (not in the catalog)"
 }

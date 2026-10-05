@@ -1,3 +1,4 @@
+import { isAddablePath } from '@shared/exeEntry'
 import { confirmDialog } from '@/ui/AskDialog'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Button, Pill } from '@/ui'
@@ -57,10 +58,20 @@ export function Library() {
     .filter((g) => !q || g.shownTitle.toLowerCase().includes(q))
     // Épinglé : remonte en tête de la grille (pas seulement de la liste latérale), sans changer l'ordre du reste.
     .sort((a, b) => Number(b.pinned) - Number(a.pinned))
+  const [exeNote, setExeNote] = useState<string | null>(null)
   const pick = async (kind: 'files' | 'folder'): Promise<void> => { setMenu(false); await importPaths(await window.api.invoke('library:pick', kind)) }
+  const addExe = async (paths?: string[]): Promise<void> => {
+    setMenu(false)
+    const r = await useLibrary.getState().addExe(paths)
+    setExeNote(r.invalid.length ? t('exe.invalid', { n: String(r.invalid.length) }) : r.added.length === 0 && r.existing.length ? t('exe.already') : null)
+  }
   const onDrop = (e: DragEvent): void => {
     e.preventDefault(); setOver(false)
-    void importPaths([...e.dataTransfer.files].map((f) => window.api.pathOf(f)).filter(Boolean))
+    // Exécutables et raccourcis : ajoutés comme jeux PC ; le reste suit l'import de ROM habituel.
+    const files = [...e.dataTransfer.files].map((f) => window.api.pathOf(f)).filter(Boolean)
+    const exes = files.filter(isAddablePath)
+    if (exes.length) void addExe(exes)
+    void importPaths(files.filter((p) => !isAddablePath(p)))
   }
   const current = collectionId !== null ? collections.find((c) => c.id === collectionId) : undefined
   const counts = result ? (['added', 'attached', 'orphan', 'duplicate', 'ambiguous', 'error'] as const).map((k) => [k, result.items.filter((i) => i.status === k).length] as const).filter(([, n]) => n > 0) : []
@@ -92,6 +103,7 @@ export function Library() {
               <div className="menu">
                 <button onClick={() => void pick('files')}>{t('import.files')}</button>
                 <button onClick={() => void pick('folder')}>{t('import.folder')}</button>
+                <button onClick={() => void addExe()}>{t('exe.add')}</button>
               </div>
             )}
           </span>}
@@ -124,6 +136,7 @@ export function Library() {
           {games.map((g) => <EntryCard key={g.id} entry={g} />)}
         </div>
       )}
+      {exeNote && <p className="muted exe-note" role="status" onClick={() => setExeNote(null)}>{exeNote}</p>}
       {over && <div className="drop-hint">{t('import.drop')}</div>}
     </div>
   )
