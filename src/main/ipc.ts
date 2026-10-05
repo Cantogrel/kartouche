@@ -24,6 +24,8 @@ import { addSourceList, rematchSources } from './sources/import'
 import { listSourceLists, refreshAllSourceLists, refreshSourceList, removeAllSourceLists, removeSourceList, sourcesForGame } from './sources/manage'
 import { sourcesDir } from './sources/localCopy'
 import { getStats } from './library/stats'
+import { deleteCustomEmulator, listCustomEmulators, saveCustomEmulator } from './emulators/customStore'
+import { buildCustomCommand, formatCommand } from '@shared/customEmulators'
 import { clearCustomImage, customArtDir, removeEntryArt, setCustomImage } from './library/customArt'
 import { downscaleImage } from './library/customArtResize'
 import { clearAllOverrides, clearOverride, getOverrides, setOverride } from './library/overrides'
@@ -160,6 +162,16 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     return importPaths(db, req.paths, { copy: s.importCopy, deleteSource: req.deleteSource ?? s.importDeleteSource, romsDir: paths.roms, logDir: paths.logs }, sendLibProgress)
   })
   // Surcouche utilisateur (titre, description, images…) : affichage seulement, l'identité du jeu n'est jamais modifiée (voir shared/overrides.ts).
+  handle('customEmulators:list', () => listCustomEmulators(db))
+  handle('customEmulators:save', ({ id, ...input }) => saveCustomEmulator(db, input, id))
+  handle('customEmulators:delete', (id) => deleteCustomEmulator(db, id))
+  handle('customEmulators:pickExe', async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = { properties: ['openFile'] as 'openFile'[], filters: [{ name: 'Executable', extensions: ['exe', 'bat', 'cmd'] }, { name: '*', extensions: ['*'] }] }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+  })
+  handle('customEmulators:preview', ({ exe, args, rom, console: cons }) => formatCommand(buildCustomCommand({ exe, args }, { rom, console: cons })))
   handle('library:stats', (id) => getStats(db, id))
   handle('library:overrides', (id) => getOverrides(db, id))
   handle('library:setOverride', ({ id, field, value }) => {

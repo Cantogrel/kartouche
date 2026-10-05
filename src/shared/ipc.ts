@@ -1,6 +1,7 @@
 import type { Settings } from './settings'
 import type { Collection, ImportRequest, ImportResult, LibraryContentItem, LibraryEntry, LibraryProgress, SbiImportResult, GameStats } from './library'
 import type { GameMedia } from './media'
+import type { CustomEmulatorState, SaveEmulatorResult } from './customEmulators'
 import type { EntryOverrides, OverrideField, OverrideImageField, OverrideTextField, SetImageResult } from './overrides'
 import type { AchievementsResult } from './achievements'
 import type { BackupInfo, SaveInfo } from './saves'
@@ -57,6 +58,16 @@ export interface IpcChannels {
   'images:cancel': { req: { kind: 'card' | 'tile' | 'hero' | 'icon'; gameId: number }; res: void }
   'library:list': { req: void; res: LibraryEntry[] }
   /** Valeurs modifiées par l'utilisateur sur un jeu de la bibliothèque (voir shared/overrides.ts) ; vide si rien n'est modifié. */
+  /** Émulateurs ajoutés par l'utilisateur (voir shared/customEmulators.ts), avec l'état de leur exécutable. */
+  'customEmulators:list': { req: void; res: CustomEmulatorState[] }
+  /** Ajoute (sans `id`) ou modifie (avec `id`) un émulateur ; l'exécutable doit exister. */
+  'customEmulators:save': { req: { id?: string; name: string; exe: string; args: string; consoles: string[]; extensions: string[] }; res: SaveEmulatorResult }
+  /** Supprime un émulateur ; les jeux qui le choisissaient retombent sur celui par défaut de leur console. */
+  'customEmulators:delete': { req: string; res: void }
+  /** Sélecteur de fichier pour l'exécutable ; null si annulé. */
+  'customEmulators:pickExe': { req: void; res: string | null }
+  /** Ligne de commande qui serait lancée pour ce modèle d'arguments et ce fichier (aperçu, rien n'est lancé). */
+  'customEmulators:preview': { req: { exe: string; args: string; rom?: string; console?: string }; res: string }
   /** Statistiques de jeu d'une entrée (temps, sessions, rang, taille…) ; null si l'entrée n'existe pas. */
   'library:stats': { req: number; res: GameStats | null }
   'library:overrides': { req: number; res: EntryOverrides }
