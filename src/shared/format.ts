@@ -9,3 +9,12 @@ export function formatSize(bytes: number): string {
   const decimals = value >= 100 ? 0 : value >= 10 ? 1 : 2
   return `${value.toFixed(decimals)} ${UNITS[unit]}`
 }
+
+/** Durée de jeu lisible : 45 min, 2 h, 2 h 30 (les secondes ne comptent pas). */
+export function formatMinutes(minutes: number): string {
+  const m = Math.max(0, Math.round(Number.isFinite(minutes) ? minutes : 0))
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  const r = m % 60
+  return r === 0 ? `${h} h` : `${h} h ${String(r).padStart(2, '0')}`
+}
