@@ -12,6 +12,7 @@ import { baseViewFrom, resolveView } from '@shared/overrides'
 import { formatMinutes } from '@shared/format'
 import type { GameStats } from '@shared/library'
 import { useGameMedia } from '@/ui/GameMedia'
+import { usePcMeta } from '@/store/pcMeta'
 import { BpGallery, BpTrailer } from './BpMedia'
 import { pushLayer } from './layers'
 import { useEntryEmulators } from '@/store/customEmulators'
@@ -69,7 +70,9 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   // Fiche ouverte depuis la bibliothèque (`entry`) : les modifications de l'utilisateur s'appliquent, comme en mode classique. Depuis le catalogue, la fiche reste celle d'origine.
   const overrides = useEntryOverrides(entry)
   // Médias (bande-annonce, captures) et statistiques : même contenu que la fiche classique, ouverts en plein écran à la manette.
-  const media = useGameMedia(gameId)
+  const pcMeta = usePcMeta(owned)
+  const catalogMedia = useGameMedia(gameId)
+  const media = catalogMedia ?? pcMeta?.media ?? null
   const [layer, setLayer] = useState<'trailer' | 'gallery' | null>(null)
   const opener = useRef<HTMLElement | null>(null)
   const openLayer = (which: 'trailer' | 'gallery'): void => { opener.current = document.activeElement as HTMLElement | null; setLayer(which) }
@@ -96,7 +99,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
     setChoosing(false)
   }
   const origTitle = game?.name ?? owned?.title ?? ''
-  const view = entry ? resolveView(baseViewFrom(game, details, origTitle), overrides) : null
+  const view = entry ? resolveView(baseViewFrom(game, details ?? (pcMeta?.details ?? null), origTitle), overrides) : null
   const title = view?.title ?? origTitle
   const cons = game?.console ?? owned?.console ?? ''
   const year = view ? view.year ?? undefined : game?.year ?? details?.releaseYear
