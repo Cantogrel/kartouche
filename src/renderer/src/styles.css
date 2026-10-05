@@ -8,6 +8,9 @@
   --radius: 6px; --radius-lg: 10px; --sidebar-w: 240px; --titlebar-h: 30px;
   --font: 'Noto Sans', 'Segoe UI', system-ui, sans-serif;
 }
+/* Polices CJK : sans cela, un texte japonais s'affiche avec les glyphes chinois (et inversement) selon la police de repli du système. */
+:root:lang(ja) { --font: 'Yu Gothic UI', 'Meiryo UI', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif; }
+:root:lang(zh) { --font: 'Microsoft YaHei UI', 'Noto Sans SC', 'Segoe UI', system-ui, sans-serif; }
 /* Mode clair : détecté depuis le thème Windows, ou choisi dans Paramètres → Apparence → Thème. */
 :root[data-theme='light'] {
   --bg: #f4f4f6; --bg-sidebar: #ffffff; --bg-elevated: #ffffff; --bg-card: #ffffff;
