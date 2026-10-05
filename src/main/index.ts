@@ -11,7 +11,7 @@ import { getImage, type ImageKind } from './catalog/images'
 import { getGame, rebuildDerived } from './catalog/catalogStore'
 import { loadSettings } from './db/settingsStore'
 import { initUpdater } from './updater'
-import { migrateLegacyUserData } from './legacy'
+import { migrateLegacyUserData, removeLegacyUpdaterCache, retireLegacyUserData } from './legacy'
 import { loadWindowState, saveWindowState, type WindowState } from './windowState'
 
 // Images du catalogue servies depuis le cache disque : kimg://card|tile|hero|icon/<id du jeu> (vignette catalogue, tuile bibliothèque, bannière, icône)
@@ -61,7 +61,14 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   // Ancien nom du produit (RomVault) : reprend bootstrap.json et le stockage local, avant que Chromium ouvre le sien.
-  migrateLegacyUserData(app.getPath('userData'), [join(app.getPath('appData'), 'RomVault')])
+  const legacyUserData = join(app.getPath('appData'), 'RomVault')
+  migrateLegacyUserData(app.getPath('userData'), [legacyUserData])
+  // Application installée seulement : elle a remplacé RomVault, ses restes (caches, installateur téléchargé) ne servent plus. En développement
+  // l'ancien dossier peut appartenir à une RomVault installée à côté, on n'y touche pas.
+  if (app.isPackaged) {
+    retireLegacyUserData(app.getPath('userData'), legacyUserData)
+    removeLegacyUpdaterCache(process.env['LOCALAPPDATA'])
+  }
 
   app.on('second-instance', () => {
     if (!mainWindow) return
