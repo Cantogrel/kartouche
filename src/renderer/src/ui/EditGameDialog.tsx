@@ -28,6 +28,8 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
   const [edits, setEdits] = useState<Partial<Record<OverrideTextField, string>>>({})
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** Lancement d'un exécutable ajouté (exécutable, arguments, dossier) : enregistré avec le reste. */
+  const [launch, setLaunch] = useState<{ exe: string; args: string; cwd: string } | null>(null)
   const gameId = entry?.gameId ?? null
   const title = entry?.title ?? ''
 
@@ -37,6 +39,7 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
       const [o, game] = await Promise.all([window.api.invoke('library:overrides', entryId), gameId !== null ? window.api.invoke('catalog:get', gameId) : Promise.resolve(null)])
       if (off) return
       setOv(o)
+      if (entry?.kind === 'exe') { const l = await window.api.invoke('library:launchSpec', entryId); if (!off && l) setLaunch({ exe: l.exe ?? '', args: l.args ?? '', cwd: l.cwd ?? '' }) }
       setBase(baseViewFrom(game, null, title))
       // La fiche (description, genre de repli…) peut demander du réseau : elle complète les valeurs d'origine quand elle arrive, sans bloquer la fenêtre.
       if (gameId !== null) void window.api.invoke('catalog:details', { id: gameId }).then((d) => { if (!off) setBase(baseViewFrom(game, d, title)) }).catch(() => undefined)
@@ -87,6 +90,10 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
         if (v === '' || v === original(f)) { if (ov[f] !== undefined) await window.api.invoke('library:clearOverride', { id: entryId, field: f }) }
         else if (v !== ov[f]) await window.api.invoke('library:setOverride', { id: entryId, field: f as OverrideTextField, value: v })
       }
+      if (launch && entry.kind === 'exe') {
+        const ok = await window.api.invoke('library:setLaunch', { id: entryId, ...launch })
+        if (!ok) { setError(t('exe.err.launch')); return }
+      }
       await refresh()
       onClose()
     } finally { setBusy(false) }
@@ -110,6 +117,17 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
             )}
           </label>
         ))}
+        {launch && (
+          <>
+            <h3 className="edit-section">{t('exe.launch')}</h3>
+            <label className="field edit-field" style={{ maxWidth: 'none' }}><span className="edit-label">{t('exe.f.exe')}</span>
+              <input value={launch.exe} onChange={(e) => setLaunch({ ...launch, exe: e.target.value })} /></label>
+            <label className="field edit-field" style={{ maxWidth: 'none' }}><span className="edit-label">{t('exe.f.args')}</span>
+              <input value={launch.args} maxLength={2000} onChange={(e) => setLaunch({ ...launch, args: e.target.value })} /></label>
+            <label className="field edit-field" style={{ maxWidth: 'none' }}><span className="edit-label">{t('exe.f.cwd')}</span>
+              <input value={launch.cwd} placeholder={t('exe.cwdHint')} onChange={(e) => setLaunch({ ...launch, cwd: e.target.value })} /></label>
+          </>
+        )}
         <h3 className="edit-section">{t('edit.images')}</h3>
         {IMAGE_FIELDS.map((f) => (
           <div key={f} className="edit-image" onDragOver={(e) => e.preventDefault()} onDrop={drop(f)}>

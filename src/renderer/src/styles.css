@@ -426,3 +426,5 @@ input[type='range'] { accent-color: var(--accent); max-width: 320px; }
 .emu-add { display: grid; place-items: center; min-height: 120px; border-style: dashed; color: var(--text-muted); cursor: pointer; background: none; font: inherit; }
 .emu-add:hover, .emu-add:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
 .playwith-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px; }
+
+.exe-note { cursor: pointer; margin: 8px 0; }

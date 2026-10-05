@@ -4,6 +4,8 @@ import type { GameMedia } from './media'
 import type { CustomEmulatorState, SaveEmulatorResult } from './customEmulators'
 import type { EmulatorOption } from './emulatorChoice'
 import type { EntryOverrides, OverrideField, OverrideImageField, OverrideTextField, SetImageResult } from './overrides'
+import type { AddExeResult } from './exeEntry'
+import type { LaunchSpec } from './launch'
 import type { AchievementsResult } from './achievements'
 import type { BackupInfo, SaveInfo } from './saves'
 import type { BiosImportResult, BiosSlotStatus } from './bios'
@@ -73,6 +75,12 @@ export interface IpcChannels {
   'customEmulators:delete': { req: string; res: void }
   /** Ouvre l'émulateur seul (sans jeu), pour vérifier qu'il démarre ; faux si l'exécutable est introuvable. */
   'customEmulators:open': { req: string; res: boolean }
+  /** Ajoute des exécutables (.exe/.bat/.cmd/.lnk) comme jeux ; sans chemins, ouvre le sélecteur. */
+  'library:addExe': { req: string[] | undefined; res: AddExeResult }
+  /** Spécification de lancement d'une entrée non-ROM ; null pour une ROM. */
+  'library:launchSpec': { req: number; res: LaunchSpec | null }
+  /** Modifie exécutable, arguments ou dossier de travail d'un exécutable ajouté ; faux si refusé (type, chemin déjà pris…). */
+  'library:setLaunch': { req: { id: number; exe?: string; args?: string; cwd?: string }; res: boolean }
   /** Sélecteur de fichier pour l'exécutable ; null si annulé. */
   'customEmulators:pickExe': { req: void; res: string | null }
   /** Ligne de commande qui serait lancée pour ce modèle d'arguments et ce fichier (aperçu, rien n'est lancé). */

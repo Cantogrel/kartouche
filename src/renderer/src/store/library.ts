@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { AddExeResult } from '@shared/exeEntry'
 import type { Collection, ImportResult, LibraryEntry, LibraryProgress } from '@shared/library'
 
 type RemoveAction = 'file' | 'entry' | 'save' | 'all'
@@ -17,6 +18,8 @@ interface LibraryState {
   result: ImportResult | null
   refresh: () => Promise<void>
   importPaths: (paths: string[]) => Promise<void>
+  /** Ajoute des exécutables (ou raccourcis) comme jeux ; sans chemins, ouvre le sélecteur. Renvoie le bilan. */
+  addExe: (paths?: string[]) => Promise<AddExeResult>
   /** Choisit des fichiers dans l'Explorateur et les importe (rattache la ROM à un jeu sans fichier si elle correspond). */
   link: () => Promise<void>
   scan: () => Promise<void>
@@ -59,6 +62,7 @@ export const useLibrary = create<LibraryState>((set, get) => {
       set({ entries, collections, loaded: true, rev: get().rev + 1 })
     },
     importPaths: (paths) => (paths.length ? run(() => window.api.invoke('library:import', { paths })) : Promise.resolve()),
+    addExe: async (paths) => { const r = await window.api.invoke('library:addExe', paths); if (r.added.length) await get().refresh(); return r },
     link: async () => { await get().importPaths(await window.api.invoke('library:pick', 'files')) },
     scan: () => run(() => window.api.invoke('library:scan')),
     add: async (gameId) => { await window.api.invoke('library:add', gameId); await get().refresh() },
