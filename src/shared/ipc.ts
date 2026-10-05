@@ -47,6 +47,8 @@ export interface IpcChannels {
   'catalog:details': { req: { id: number; refresh?: boolean }; res: GameDetails | null }
   'catalog:sync': { req: string[] | undefined; res: SyncResult }
   /** Bandes-annonces, captures et artworks du jeu (IGDB) ; null si rien n'est disponible. Mis en cache 30 jours. */
+  /** Ouvre la bande-annonce (identifiant YouTube) dans le navigateur ; l'identifiant est validé, jamais une adresse libre. */
+  'media:openTrailer': { req: string; res: void }
   'catalog:media': { req: { id: number; refresh?: boolean }; res: GameMedia | null }
   'catalog:status': { req: void; res: { total: number; syncedAt: number | null; syncing: boolean; enriched: boolean } }
   /** Passe IGDB (si configuré) : popularité, genre, développeur, année ; renvoie le nombre de jeux rapprochés. */

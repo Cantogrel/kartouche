@@ -12,6 +12,7 @@ import { tgdb } from './catalog/tgdb'
 import { syncPopularity } from './catalog/popularity'
 import { localizeDetails } from './catalog/l10n'
 import { getMedia } from './catalog/media'
+import { isMediaId, youtubeWatchUrl } from '@shared/media'
 import { cancelImage } from './catalog/images'
 import { importPaths } from './library/importer'
 import { uninstallContent } from './emulators/content'
@@ -121,6 +122,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     // Description dans la langue de l'interface (Wikipédia, sinon traduction automatique), recherchée en même temps que les fournisseurs.
     return localizeDetails(db, game, getDetails(db, game, PROVIDERS, s, { refresh: req.refresh }), resolveLanguage(s.language, app.getLocale()))
   })
+  handle('media:openTrailer', async (videoId) => { if (isMediaId(videoId)) await shell.openExternal(youtubeWatchUrl(videoId)) })
   handle('catalog:media', async ({ id, refresh }) => {
     const game = getGame(db, id)
     return game ? getMedia(db, game, loadSettings(db), { refresh }) : null

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, screen } from 'electron'
+import { app, BrowserWindow, protocol, screen, session } from 'electron'
 import { join } from 'node:path'
 import { readdir, rm } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
@@ -12,6 +12,7 @@ import { getGame, rebuildDerived } from './catalog/catalogStore'
 import { loadSettings } from './db/settingsStore'
 import { initUpdater } from './updater'
 import { pruneCustomArt, readCustomArt } from './library/customArt'
+import { EMBED_REFERER, needsEmbedReferer } from './embedHeaders'
 import { migrateLegacyUserData, removeLegacyUpdaterCache, retireLegacyUserData } from './legacy'
 import { loadWindowState, saveWindowState, type WindowState } from './windowState'
 
@@ -114,6 +115,10 @@ if (!app.requestSingleInstanceLock()) {
       const iconDir = join(paths.cache, 'images', 'icon')
       readdir(iconDir).then((files) => Promise.all(files.filter((f) => f.endsWith('.miss')).map((f) => rm(join(iconDir, f))))).catch(() => { /* dossier pas encore créé : rien à nettoyer */ })
     }
+    // Lecteur de bande-annonce intégré : YouTube exige un Referer (voir embedHeaders.ts), l'interface étant un fichier local.
+    session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['https://www.youtube-nocookie.com/*'] }, (details, callback) => {
+      callback({ requestHeaders: needsEmbedReferer(details.url, details.resourceType) ? { ...details.requestHeaders, Referer: EMBED_REFERER } : details.requestHeaders })
+    })
     // Images personnelles qui n'ont plus d'entrée (arrêt brutal, remise à zéro…) : retirées au démarrage, sans bloquer l'ouverture.
     void pruneCustomArt(db, paths.dataDir).catch(() => undefined)
     protocol.handle('kimg', async (req) => {

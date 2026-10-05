@@ -13,6 +13,7 @@ import type { GameSource } from '@shared/sourceList'
 import { useLibrary } from '@/store/library'
 import { useEntryOverrides } from '@/store/overrides'
 import { useDialog } from '@/ui/CollectionDialogs'
+import { GameMediaSection } from '@/ui/GameMedia'
 import { baseViewFrom, resolveView } from '@shared/overrides'
 import { useDownloads } from '@/store/downloads'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
@@ -81,6 +82,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
           {loadingDetails && !details && <><span className="skeleton" style={{ width: '90%' }} /><span className="skeleton" style={{ width: '80%' }} /><span className="skeleton" style={{ width: '55%' }} /></>}
           {summary && (<><h3>{t('game.about')}</h3><p>{summary}</p>{!summaryIsMine && details && <p className="muted">{details.summarySource === 'wikipedia' ? t('game.summaryWikipedia') : details.summarySource === 'machine' ? t('game.summaryMachine') : t('game.source', { p: details.provider.split('+')[0].toUpperCase() })}</p>}</>)}
         </div>
+        <GameMediaSection gameId={game.id} />
         {owned && !owned.missing && <SavesPanel entry={owned} />}
         {owned && <ContentPanel entry={owned} />}
         {owned && !owned.missing && <AchievementsPanel entry={owned} />}

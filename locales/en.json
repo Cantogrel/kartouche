@@ -494,5 +494,10 @@
   "edit.err.tooLarge": "Image too large (15 MB max).",
   "edit.err.missing": "File not found.",
   "edit.err.unreadable": "File unreadable.",
-  "edit.err.other": "Image rejected."
+  "edit.err.other": "Image rejected.",
+  "media.title": "Trailer",
+  "media.trailer": "Trailer",
+  "media.play": "Play",
+  "media.stop": "Close player",
+  "media.openYoutube": "Open on YouTube"
 }
