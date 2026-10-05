@@ -1,3 +1,5 @@
+import type { CatalogGame, GameDetails } from './catalog'
+
 /**
  * Surcouche utilisateur d'un jeu de la bibliothèque (titre, description, images…). Elle ne remplace JAMAIS l'identité du jeu :
  * reconnaissance (hash, nom du catalogue), rapprochement des sources, téléchargements, dossier de sauvegardes et fiche du catalogue
@@ -79,3 +81,22 @@ export function resolveView(base: BaseView, overrides: EntryOverrides = {}): Ent
 export type SetImageResult =
   | { ok: true; path: string }
   | { ok: false; reason: 'entry' | 'field' | 'missing' | 'tooLarge' | 'notImage' | 'unreadable' | 'cancelled' }
+
+/**
+ * Données d'origine d'un jeu pour l'affichage : le catalogue d'abord (année et éditeur propres à la plateforme), puis la fiche des fournisseurs
+ * (description, genre…) — même ordre que la fiche du catalogue. `fallbackTitle` : titre de la bibliothèque, quand le jeu n'est pas reconnu.
+ * Ne dépend que de ces deux sources : actualiser la fiche met à jour toute valeur d'origine, sans toucher à la surcouche (`resolveView`).
+ */
+export function baseViewFrom(
+  game: Pick<CatalogGame, 'name' | 'year' | 'genre' | 'developer'> | null,
+  details: Pick<GameDetails, 'summary' | 'developer' | 'releaseYear' | 'genres'> | null,
+  fallbackTitle: string
+): BaseView {
+  return {
+    title: game?.name ?? fallbackTitle,
+    description: details?.summary ?? null,
+    genre: game?.genre ?? details?.genres?.[0] ?? null,
+    year: game?.year ?? details?.releaseYear ?? null,
+    developer: game?.developer ?? details?.developer ?? null
+  }
+}
