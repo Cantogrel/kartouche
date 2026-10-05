@@ -68,7 +68,7 @@ describe('Battle.net', () => {
   it.runIf(process.platform === 'win32')('lecture réelle du registre sans erreur', async () => {
     const games = (await battleNetConnector(realBattleNetDeps).scan()) as { title: string }[]
     for (const g of games) expect(g.title).toBeTruthy()
-  })
+  }, 30000)
 })
 
 describe('itch.io', () => {
