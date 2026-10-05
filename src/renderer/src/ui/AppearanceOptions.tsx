@@ -1,11 +1,10 @@
 import { t } from '@/i18n'
 import { useSettings } from '@/store/settings'
-import { accentReadable, RADII } from '@shared/appearance'
+import { RADII } from '@shared/appearance'
 
-/** Dernier élément de la rangée « Couleur d'accent » : un sélecteur de couleur libre (sélectionné quand une couleur personnelle est active), avec l'avertissement de contraste. */
+/** Dernier élément de la rangée « Couleur d'accent » : un sélecteur de couleur libre (sélectionné quand une couleur personnelle est active), . */
 export function AccentCustom() {
   const { settings, update } = useSettings()
-  const theme = useSettings((s) => s.theme)
   const custom = settings.accentColor
   return (
     <>
@@ -13,7 +12,6 @@ export function AccentCustom() {
         <input type="color" aria-label={t('settings.accentCustom')} value={custom || '#7c8cff'} onChange={(e) => void update({ accentColor: e.target.value })} />
       </label>
       {custom && <button className="back" type="button" aria-label={t('settings.accentCustomClear')} title={t('settings.accentCustomClear')} onClick={() => void update({ accentColor: '' })}>×</button>}
-      {custom && !accentReadable(custom, theme) && <span className="muted" role="alert">{t('settings.accentLowContrast')}</span>}
     </>
   )
 }

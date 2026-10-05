@@ -606,7 +606,6 @@
   "sort.time": "Tempo de jogo",
   "settings.accentCustom": "Cor de destaque personalizada",
   "settings.accentCustomClear": "Usar o destaque predefinido",
-  "settings.accentLowContrast": "Esta cor destaca-se pouco do fundo atual; o texto e os realces podem ser difíceis de ler.",
   "settings.radius": "Forma dos cantos",
   "radius.sharp": "Retos",
   "radius.normal": "Normais",
@@ -626,6 +625,5 @@
   "settings.langError.name": "O nome do idioma está em falta ou é demasiado longo.",
   "settings.langError.strings": "O ficheiro não contém nenhum texto traduzido.",
   "settings.langError.builtin": "Este idioma já está integrado.",
-  "action.catalogPage": "Página do catálogo",
   "settings.homeDrag": "Arrasta para reordenar (ou usa as setas para cima e para baixo)"
 }

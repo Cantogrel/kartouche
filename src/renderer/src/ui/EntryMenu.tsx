@@ -44,13 +44,6 @@ const pinAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getSta
   ({ key: 'pin', label: `${entry.pinned ? '★' : '☆'} ${t(entry.pinned ? 'pin.remove' : 'pin.add')}`, run: () => lib.setFlag(entry.id, { pinned: !entry.pinned }) })
 const editAction = (entry: LibraryEntry): Action =>
   ({ key: 'edit', label: `✎ ${t('edit.menu')}`, run: () => useDialog.getState().open({ kind: 'edit', entryId: entry.id }) })
-/** Va à la fiche du catalogue du jeu ; absent si le jeu n'en a pas (exécutable, jeu de launcher, ROM non reconnue) ou si on y est déjà. */
-const catalogPageAction = (entry: LibraryEntry): Action | null => {
-  if (entry.gameId === null) return null
-  const { route, gameId, go } = useApp.getState()
-  if (route === 'game' && gameId === String(entry.gameId)) return null
-  return { key: 'catalog', label: `▦ ${t('action.catalogPage')}`, run: () => go('game', String(entry.gameId)) }
-}
 const playWithAction = (entry: LibraryEntry): Action | null =>
   entry.kind === 'rom' && useCustomEmulators.getState().list.some((e) => e.consoles.includes(entry.console))
     ? { key: 'playWith', label: `▶ ${t('playWith.title')}`, run: () => useDialog.getState().open({ kind: 'playWith', entryId: entry.id }) }
@@ -107,7 +100,7 @@ function fullActionsFor(entry: LibraryEntry, back: () => void, withEdit: boolean
   const lib = useLibrary.getState()
   const hasFile = !entry.missing
   const ask = (key: string): Promise<boolean> => confirmDialog(t(`confirm.${key}`, { title: entry.shownTitle }))
-  const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), ...(withEdit ? [editAction(entry)] : []), ...(playWithAction(entry) ? [playWithAction(entry)!] : []), ...(catalogPageAction(entry) ? [catalogPageAction(entry)!] : []), sep('sep1')]
+  const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), ...(withEdit ? [editAction(entry)] : []), ...(playWithAction(entry) ? [playWithAction(entry)!] : []), sep('sep1')]
   if (entry.kind !== 'rom') {
     if (hasFile) list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })
     list.push(sep('sep2'), removeEntryAction(entry, lib, back))

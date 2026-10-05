@@ -120,12 +120,10 @@ export function Library() {
           </span>}
         </div>
       </div>
-      {(sources.length > 1 || sort !== 'title') && (
+      {sources.length > 1 && (
         <div className="row lib-sources">
-          {sources.length > 1 && <>
-            <Pill active={!sourceFilter} onClick={() => setLibraryView({ sourceFilter: null })}>{t('filter.allSources')}</Pill>
-            {sources.map(([k, n]) => <Pill key={k} active={sourceFilter === k} onClick={() => setLibraryView({ sourceFilter: k })}>{k === 'rom' ? t('filter.rom') : SOURCE_LABELS[k] ?? k} · {n}</Pill>)}
-          </>}
+          <Pill active={!sourceFilter} onClick={() => setLibraryView({ sourceFilter: null })}>{t('filter.allSources')}</Pill>
+          {sources.map(([k, n]) => <Pill key={k} active={sourceFilter === k} onClick={() => setLibraryView({ sourceFilter: k })}>{k === 'rom' ? t('filter.rom') : SOURCE_LABELS[k] ?? k} · {n}</Pill>)}
         </div>
       )}
       {libraryConsoles.length > 1 && (

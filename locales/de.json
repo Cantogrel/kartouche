@@ -606,7 +606,6 @@
   "sort.time": "Spielzeit",
   "settings.accentCustom": "Eigene Akzentfarbe",
   "settings.accentCustomClear": "Voreingestellten Akzent verwenden",
-  "settings.accentLowContrast": "Diese Farbe hebt sich kaum vom aktuellen Hintergrund ab; Text und Hervorhebungen sind möglicherweise schwer lesbar.",
   "settings.radius": "Form der Ecken",
   "radius.sharp": "Eckig",
   "radius.normal": "Normal",
@@ -626,6 +625,5 @@
   "settings.langError.name": "Der Sprachname fehlt oder ist zu lang.",
   "settings.langError.strings": "Die Datei enthält keinen übersetzten Text.",
   "settings.langError.builtin": "Diese Sprache ist bereits integriert.",
-  "action.catalogPage": "Katalogseite",
   "settings.homeDrag": "Zum Umsortieren ziehen (oder Pfeiltasten nach oben und unten)"
 }

@@ -606,7 +606,6 @@
   "sort.time": "游玩时间",
   "settings.accentCustom": "自定义强调色",
   "settings.accentCustomClear": "使用预设强调色",
-  "settings.accentLowContrast": "此颜色与当前背景的对比度不足；文字和高亮可能难以辨认。",
   "settings.radius": "圆角样式",
   "radius.sharp": "直角",
   "radius.normal": "标准",
@@ -626,6 +625,5 @@
   "settings.langError.name": "语言名称缺失或过长。",
   "settings.langError.strings": "文件中没有任何已翻译的文本。",
   "settings.langError.builtin": "此语言已内置。",
-  "action.catalogPage": "目录页面",
   "settings.homeDrag": "拖动以重新排序（或使用键盘上下方向键）"
 }
