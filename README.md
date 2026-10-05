@@ -16,7 +16,9 @@ Téléchargez `Kartouche-Setup-<version>.exe` depuis les [releases](https://gith
 | Catalogue | ~75 000 jeux de 17 consoles, fiches (description, jaquette, genres), recherche, tri, filtres |
 | Bibliothèque | Vos ROMs : glisser-déposer ou « Ajouter un jeu », identification automatique (hash puis nom), favoris, épingles, collections, menu clic droit |
 | Émulateurs | Installation en un clic, configuration automatique (langue, plein écran, résolution, manette), mises à jour, assistant BIOS/firmware |
-| Paramètres | Langue, dossiers surveillés, clés d'API personnelles (facultatives), sauvegardes automatiques, RetroAchievements |
+| Paramètres | Langue, apparence, launchers, dossiers surveillés, clés d'API personnelles (facultatives), sauvegardes automatiques, RetroAchievements |
+
+Personnalisation (modifier un jeu, exécutables et émulateurs perso, launchers, accueil, thèmes, langues) : voir [docs/guide-0.3.0.md](docs/guide-0.3.0.md).
 
 - **Jouer** : bouton « Jouer » d'une fiche. Le temps de jeu est compté (30 s minimum). Pour quitter un jeu : `Ctrl+Alt+Q`, ou `Retour` + `Start` maintenus 1,5 s à la manette, ou le bouton « Fermer le jeu ».
 - **Sauvegardes** : copies zip (5 maximum par jeu), automatiques après chaque partie, restaurables depuis la fiche.
@@ -36,7 +38,7 @@ Téléchargez `Kartouche-Setup-<version>.exe` depuis les [releases](https://gith
 
 ### Accessibilité
 
-Navigation complète au clavier (`Tab`, `Entrée`/`Espace`, `Échap` pour fermer une fenêtre), focus visible partout, lien « Aller au contenu », étiquettes pour les lecteurs d'écran, mouvement réduit respecté (réglage Windows « effets d'animation »), interface en français ou en anglais selon la langue de Windows (modifiable dans les Paramètres).
+Navigation complète au clavier (`Tab`, `Entrée`/`Espace`, `Échap` pour fermer une fenêtre), focus visible partout, lien « Aller au contenu », étiquettes pour les lecteurs d'écran, mouvement réduit respecté (réglage Windows « effets d'animation »), interface en français, anglais, espagnol, allemand, italien, portugais, chinois simplifié ou japonais selon la langue de Windows (modifiable dans les Paramètres ; langues supplémentaires par fichier JSON).
 
 ## Consoles et émulateurs
 
