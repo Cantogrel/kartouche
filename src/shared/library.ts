@@ -202,9 +202,7 @@ export interface GameStats {
   popularity: number | null
 }
 
-/** Origine d'une entrée pour le filtre « Source » : `rom` (émulation) ou la source d'une entrée PC (`manual`, `steam`, `epic`…). */
-export const entrySourceKey = (e: Pick<LibraryEntry, 'kind' | 'source'>): string => (e.kind === 'rom' ? 'rom' : e.source ?? 'manual')
-
+/** Nom du launcher d'origine d'une entrée PC (étiquette des tuiles). */
 export const SOURCE_LABELS: Record<string, string> = {
   manual: 'Exécutables', steam: 'Steam', epic: 'Epic Games', gog: 'GOG', hydra: 'Hydra', xbox: 'Xbox / Microsoft Store', ea: 'EA app', ubisoft: 'Ubisoft Connect', battlenet: 'Battle.net', itch: 'itch.io'
 }

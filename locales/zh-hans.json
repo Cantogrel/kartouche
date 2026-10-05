@@ -598,8 +598,6 @@
   "identify.search": "搜索",
   "identify.searching": "正在搜索…",
   "identify.none": "未找到匹配的游戏。",
-  "filter.allSources": "所有来源",
-  "filter.rom": "模拟",
   "sort.label": "排序方式",
   "sort.recent": "最近游玩",
   "sort.added": "最近添加",

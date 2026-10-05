@@ -103,9 +103,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .side-games { display: flex; flex-direction: column; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
 .row { display: flex; align-items: center; gap: 8px; }
-.lib-sources, .lib-consoles { flex-wrap: wrap; margin: -8px 0 16px; }
-/* Deux rangées de filtres à la suite : la 2e ne remonte pas sur la 1re. */
-.lib-sources + .lib-consoles { margin-top: 0; }
+.lib-consoles { flex-wrap: wrap; margin: -8px 0 16px; }
 .muted { color: var(--text-muted); font-size: 13px; }
 .btn { border: 1px solid var(--border-strong); background: var(--bg-elevated); border-radius: var(--radius); padding: 8px 16px; }
 .btn:hover { background: var(--active); }
@@ -391,7 +389,8 @@ input[type='range'] { accent-color: var(--accent); max-width: 320px; }
 
 /* Fiche de jeu : deux colonnes (texte et médias / informations et panneaux), une seule sous 1100 px */
 .detail-page { position: relative; }
-.detail-backdrop { position: absolute; inset: 0; background-size: cover; background-position: center top; opacity: .18; filter: blur(8px); pointer-events: none; z-index: 0; }
+.detail-backdrop { position: absolute; inset: 0 0 auto 0; height: 75vh; background-size: cover; background-position: center top; opacity: .4; filter: blur(3px); -webkit-mask-image: linear-gradient(#000 30%, transparent); mask-image: linear-gradient(#000 30%, transparent); pointer-events: none; z-index: 0; }
+.hero.hero-short { height: 240px; }
 .detail-page > *:not(.detail-backdrop) { position: relative; z-index: 1; }
 .detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; align-items: start; }
 .detail-main, .detail-side { min-width: 0; display: flex; flex-direction: column; }
@@ -452,3 +451,9 @@ input[type='range'] { accent-color: var(--accent); max-width: 320px; }
 .grabber { cursor: grab; color: var(--text-muted); font-size: 18px; line-height: 1; padding: 2px 4px; border-radius: 4px; user-select: none; }
 .grabber:hover { color: var(--text-strong); background: var(--hover); }
 .grabber:active { cursor: grabbing; }
+
+/* Liste latérale : jeux Kartouche puis jeux PC, séparés par un filet légendé. */
+.side-sep { display: flex; align-items: center; gap: 8px; margin: 10px 4px 4px; color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.side-sep::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+/* Étiquette du launcher d'origine, juste au-dessus du titre d'une tuile. */
+.source-tag { display: block; margin-bottom: 3px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); opacity: .95; }

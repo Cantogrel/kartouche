@@ -154,7 +154,9 @@ export const MIGRATIONS: readonly string[] = [
   `CREATE TABLE pc_meta (
     entry_id INTEGER PRIMARY KEY REFERENCES library(id) ON DELETE CASCADE, matched INTEGER NOT NULL DEFAULT 0, name TEXT, summary TEXT, genres TEXT,
     year INTEGER, developer TEXT, media TEXT, cover TEXT, fetched_at INTEGER NOT NULL
-  )`
+  )`,
+  // v24 : bannière des jeux PC (illustration ou capture IGDB, `pc/<entrée>/banner-<ts>.<ext>`). Chaîne vide = aucune image disponible (on ne réessaie pas).
+  `ALTER TABLE pc_meta ADD COLUMN banner TEXT`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

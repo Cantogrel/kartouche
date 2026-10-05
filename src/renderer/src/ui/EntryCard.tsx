@@ -3,7 +3,7 @@ import { useApp } from '@/store/app'
 import { useGameDownloadPercent } from '@/store/downloads'
 import { onEntryContext } from '@/ui/EntryMenu'
 import { platformLabel } from '@shared/consoles'
-import type { LibraryEntry } from '@shared/library'
+import { SOURCE_LABELS, type LibraryEntry } from '@shared/library'
 
 /** Voile clair qui se remplit sur toute la hauteur/largeur de l'élément parent (positionné) selon l'avancement du téléchargement. */
 export function DownloadVeil({ gameId }: { gameId: number | null }) {
@@ -25,7 +25,7 @@ export function EntryCard({ entry: g }: { entry: LibraryEntry }) {
     </div>
   ) : (
     <div className={`card${g.missing ? ' nofile' : ''}`} role="button" tabIndex={0} aria-label={`${g.shownTitle} (${label})`} onClick={open} onContextMenu={onEntryContext(g.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() } }}>
-      <Cover className="cover-fill" gameId={g.gameId} art={g.art.cover} title={g.shownTitle} kind="tile"><span className="card-title">{g.shownTitle}</span><Badge>{label}</Badge></Cover>
+      <Cover className="cover-fill" gameId={g.gameId} art={g.art.cover} title={g.shownTitle} kind="tile"><span className="card-title">{g.kind === 'launcher' && g.source && <span className="source-tag">{SOURCE_LABELS[g.source] ?? g.source}</span>}{g.shownTitle}</span><Badge>{label}</Badge></Cover>
       <DownloadVeil gameId={g.gameId} />
       {g.favorite && <span className="fav-mark">♥</span>}
       {g.pinned && <span className="pin-mark">★</span>}

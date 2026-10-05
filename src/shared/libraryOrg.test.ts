@@ -1,16 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { entrySourceKey, sortEntries, SOURCE_LABELS } from './library'
+import { sortEntries, SOURCE_LABELS } from './library'
 import { GAME_SOURCES } from './launch'
 
 const e = (shownTitle: string, o: Partial<{ lastPlayed: number | null; addedAt: number; playMinutes: number }> = {}) => ({ shownTitle, lastPlayed: null, addedAt: 0, playMinutes: 0, ...o })
 
-describe('entrySourceKey', () => {
-  it('ROM = émulation, sinon la source de l’entrée PC (exécutable manuel par défaut)', () => {
-    expect(entrySourceKey({ kind: 'rom', source: null })).toBe('rom')
-    expect(entrySourceKey({ kind: 'exe', source: 'manual' })).toBe('manual')
-    expect(entrySourceKey({ kind: 'launcher', source: 'steam' })).toBe('steam')
-    expect(entrySourceKey({ kind: 'launcher', source: null })).toBe('manual')
-  })
+describe('SOURCE_LABELS', () => {
   it('chaque source connue a un libellé', () => {
     for (const s of GAME_SOURCES) expect(SOURCE_LABELS[s], s).toBeTruthy()
   })
