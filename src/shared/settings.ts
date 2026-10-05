@@ -31,6 +31,8 @@ export interface Settings {
   reduceMotion: boolean
   /** Émulateur par défaut de chaque console (id de console → id d'émulateur, intégré ou `custom-<n>`) ; absent = l'émulateur intégré de la console. */
   emulatorDefaults: Record<string, string>
+  /** Launchers dont la bibliothèque est lue (id de connecteur → activé) ; absent = désactivé : rien n'est lu sans que l'utilisateur l'ait demandé. */
+  connectors: Record<string, boolean>
 }
 
 export const ACCENTS = ['white', 'violet', 'blue', 'green', 'orange'] as const
@@ -56,12 +58,13 @@ export const DEFAULT_SETTINGS: Settings = {
   uiScale: 1,
   accent: 'violet',
   reduceMotion: false,
-  emulatorDefaults: {}
+  emulatorDefaults: {},
+  connectors: {}
 }
 
 /** Fusionne une saisie partielle non fiable avec les valeurs actuelles : toute valeur invalide est ignorée. */
 export function mergeSettings(base: Settings, patch: unknown): Settings {
-  const out: Settings = { ...base, scanFolders: [...base.scanFolders], emulatorDefaults: { ...base.emulatorDefaults } }
+  const out: Settings = { ...base, scanFolders: [...base.scanFolders], emulatorDefaults: { ...base.emulatorDefaults }, connectors: { ...base.connectors } }
   if (typeof patch !== 'object' || patch === null) return out
   const p = patch as Record<string, unknown>
   if (p.language === 'auto' || p.language === 'en' || p.language === 'fr') out.language = p.language
@@ -84,6 +87,9 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (typeof p.reduceMotion === 'boolean') out.reduceMotion = p.reduceMotion
   if (typeof p.emulatorDefaults === 'object' && p.emulatorDefaults !== null && !Array.isArray(p.emulatorDefaults)) {
     out.emulatorDefaults = Object.fromEntries(Object.entries(p.emulatorDefaults as Record<string, unknown>).filter(([k, v]) => /^[a-z0-9]+$/.test(k) && typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v)) as [string, string][])
+  }
+  if (typeof p.connectors === 'object' && p.connectors !== null && !Array.isArray(p.connectors)) {
+    out.connectors = Object.fromEntries(Object.entries(p.connectors as Record<string, unknown>).filter(([k, v]) => /^[a-z0-9]{2,20}$/.test(k) && typeof v === 'boolean') as [string, boolean][])
   }
   return out
 }
