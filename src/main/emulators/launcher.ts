@@ -31,9 +31,11 @@ import { chooseEmulator } from '@shared/emulatorChoice'
 import { buildCustomCommand, splitArgs, type CustomEmulator } from '@shared/customEmulators'
 import { parseLaunchSpec } from '@shared/launch'
 import { listCustomEmulators } from './customStore'
+import { runLauncherGame, realUriDeps, type UriLaunchDeps } from './launcherUri'
+import { isLaunchUri } from '@shared/connectors'
 import { runProcess, type RunSpec } from './genericLaunch'
 
-const running = new Map<number, { pid: number; stopped: boolean; graceMs?: number }>()
+const running = new Map<number, { pid: number; stopped: boolean; graceMs?: number; /** Jeu lancé par son launcher : ferme aussi ses autres processus. */ closeOthers?: () => void }>()
 
 /** En dessous, une fermeture sans intervention de l'utilisateur est probablement un échec (BIOS refusé, fichier manquant…) plutôt qu'une vraie partie. */
 const QUICK_EXIT_MS = 10_000
@@ -180,7 +182,10 @@ export const isRunning = (entryId: number): boolean => running.has(entryId)
 /** Ferme le jeu proprement. */
 export function stopGame(entryId: number): void {
   const r = running.get(entryId)
-  if (r && r.pid > 0) { r.stopped = true; closeGracefully(r.pid, r.graceMs) }
+  if (!r) return
+  r.stopped = true // pid 0 : jeu lancé par son launcher et pas encore démarré, l'attente s'arrête
+  if (r.pid > 0) closeGracefully(r.pid, r.graceMs)
+  r.closeOthers?.()
 }
 export const stopAllGames = (): void => { for (const id of running.keys()) stopGame(id) }
 export const runningCount = (): number => running.size
@@ -370,11 +375,52 @@ async function launchWithCustomEmulator(db: DatabaseSync, entryId: number, head:
 }
 
 /** Exécutable ajouté à la main ou jeu de launcher : lancé tel quel. (Les jeux lancés par l'adresse d'un launcher viennent avec leurs connecteurs.) */
-async function launchExternalEntry(db: DatabaseSync, entryId: number, launchJson: string | null, notify: (s: GameSession) => void, cacheDir: string): Promise<LaunchResult> {
+async function launchExternalEntry(db: DatabaseSync, entryId: number, launchJson: string | null, notify: (s: GameSession) => void, cacheDir: string, uriDeps: UriLaunchDeps = realUriDeps): Promise<LaunchResult> {
   const spec = parseLaunchSpec(launchJson)
-  if (!spec || spec.type !== 'exe' || !spec.exe) return { ok: false, error: 'unsupported' }
-  if (!existsSync(spec.exe)) return { ok: false, error: 'noFile' }
-  return superviseProcess(db, entryId, { exe: spec.exe, args: splitArgs(spec.args ?? ''), cwd: spec.cwd ?? dirname(spec.exe) }, notify, cacheDir)
+  if (!spec) return { ok: false, error: 'unsupported' }
+  const direct = (): Promise<LaunchResult> | null => spec.exe && existsSync(spec.exe)
+    ? superviseProcess(db, entryId, { exe: spec.exe, args: splitArgs(spec.args ?? ''), cwd: spec.cwd ?? dirname(spec.exe) }, notify, cacheDir)
+    : null
+  if (spec.type === 'exe') return direct() ?? { ok: false, error: spec.exe ? 'noFile' : 'unsupported' }
+
+  // Jeu d'un launcher : l'adresse du launcher le démarre (Steam, Epic…) ; l'exécutable, s'il est connu, sert de repli quand le launcher est absent ou ne démarre rien.
+  if (!spec.uri || !isLaunchUri(spec.uri)) return direct() ?? { ok: false, error: 'unsupported' }
+  const dir = spec.installDir ?? (spec.exe ? dirname(spec.exe) : null)
+  if (!dir) { uriDeps.open(spec.uri); return { ok: true } } // rien pour suivre la partie : le launcher la lance, sans temps de jeu
+  const uri = spec.uri
+  running.set(entryId, { pid: 0, stopped: false })
+  notify({ entryId, running: true })
+  let stopWatch: (() => void) | null = null
+  let over = false
+  void watchQuitChord(cacheDir, () => stopGame(entryId)).then((stop) => { if (over) stop(); else stopWatch = stop }).catch(() => {})
+  void runLauncherGame({
+    uri, dir, deps: uriDeps, cancelled: () => running.get(entryId)?.stopped === true,
+    onStart: (pids, startedAt) => {
+      const prev = running.get(entryId)
+      running.set(entryId, { pid: pids()[0] ?? 0, stopped: prev?.stopped ?? false, closeOthers: () => { for (const p of pids().slice(1)) closeGracefully(p) } })
+      void startedAt
+    }
+  }).then(async (outcome) => {
+    over = true
+    stopWatch?.()
+    const stopped = running.get(entryId)?.stopped ?? false
+    running.delete(entryId)
+    if (outcome.status === 'ended') {
+      const minutes = sessionMinutes(outcome.endedAt - outcome.startedAt)
+      db.prepare('UPDATE library SET play_minutes = play_minutes + ?, last_played = ? WHERE id = ?').run(minutes, Date.now(), entryId)
+      if (minutes > 0) recordPlaySession(db, entryId, outcome.startedAt, outcome.endedAt, minutes)
+      const total = db.prepare('SELECT play_minutes FROM library WHERE id = ?').get(entryId) as { play_minutes: number } | undefined
+      notify({ entryId, running: false, playMinutes: total?.play_minutes })
+    } else if (outcome.status === 'cancelled' || stopped) {
+      notify({ entryId, running: false })
+    } else {
+      // Launcher absent (aucune application pour son adresse) ou rien n'a démarré : l'exécutable lance le jeu directement quand il est connu.
+      const fallback = direct()
+      if (fallback) { const r = await fallback; if (!r.ok) notify({ entryId, running: false, quickExit: { elapsedMs: 0, log: r.detail ?? r.error } }) }
+      else notify({ entryId, running: false, quickExit: { elapsedMs: 0, log: outcome.status === 'noProtocol' ? 'Launcher not installed' : 'The launcher did not start the game' } })
+    }
+  })
+  return { ok: true }
 }
 
 /**
