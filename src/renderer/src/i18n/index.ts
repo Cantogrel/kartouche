@@ -1,8 +1,13 @@
 import en from '../../../../locales/en.json'
 import fr from '../../../../locales/fr.json'
-import { BUILTIN_LANGS, translate, untranslatedKeys, type Dicts, type LangFile, type LangInfo } from '@shared/lang'
+import es from '../../../../locales/es.json'
+import de from '../../../../locales/de.json'
+import it from '../../../../locales/it.json'
+import ptPt from '../../../../locales/pt-pt.json'
+import { BUILTIN_LANGS, placeholderMismatches, translate, untranslatedKeys, type Dicts, type LangFile, type LangInfo } from '@shared/lang'
 
-const builtin: Dicts = { en, fr }
+/** Langues livrées avec l'app : un fichier `locales/<code>.json` chacune, mêmes clés que l'anglais (test de parité). */
+export const builtin: Dicts = { en, fr, es, de, it, 'pt-pt': ptPt }
 const dicts: Dicts = { ...builtin }
 /** Noms d'affichage des langues ajoutées par l'utilisateur. */
 const userNames: Record<string, string> = {}
@@ -33,9 +38,13 @@ export function t(key: string, params?: Record<string, string | number>): string
   return translate(dicts, current, key, params)
 }
 
-/** Clés présentes dans une langue intégrée mais absentes de l'autre (utilisé par les tests). */
-export function missingKeys(): Record<string, string[]> {
-  return { fr: untranslatedKeys(en, fr), en: untranslatedKeys(fr, en) }
+/** Par langue intégrée : clés de l'anglais manquantes, clés en trop et variables `{x}` différentes (utilisé par les tests). */
+export function localeReport(): Record<string, { missing: string[]; extra: string[]; placeholders: string[] }> {
+  return Object.fromEntries(Object.entries(builtin).filter(([code]) => code !== 'en').map(([code, d]) => [code, {
+    missing: untranslatedKeys(en, d),
+    extra: untranslatedKeys(d, en),
+    placeholders: placeholderMismatches(en, d)
+  }]))
 }
 
 /** Clés de l'anglais qu'une langue ne traduit pas encore. */
