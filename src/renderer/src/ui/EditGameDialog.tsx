@@ -4,6 +4,9 @@ import { Modal } from './Modal'
 import { confirmDialog } from './AskDialog'
 import { t } from '@/i18n'
 import { useLibrary } from '@/store/library'
+import { usePcMeta } from '@/store/pcMeta'
+import { useGameMedia } from './GameMedia'
+import { defaultBackgroundId, igdbImageUrl } from '@shared/media'
 import type { PcMetaView } from '@shared/pcMeta'
 import { baseViewFrom, YEAR_MAX, YEAR_MIN, type BaseView, type EntryOverrides, type OverrideImageField, type OverrideTextField } from '@shared/overrides'
 
@@ -115,7 +118,13 @@ export function EditGameDialog({ entryId, onClose }: { entryId: number; onClose:
     } finally { setBusy(false) }
   }
 
-  const preview = (f: OverrideImageField): string | null => (ov[f] ? `kimg://custom/${ov[f]}` : gameId !== null ? `kimg://${ORIGINAL_KIND[f]}/${gameId}` : null)
+  // Fond par défaut : une image IGDB du jeu, jamais la bannière (voir defaultBackgroundId).
+  const catalogMedia = useGameMedia(gameId)
+  const pcMeta = usePcMeta(entry)
+  const defaultBg = defaultBackgroundId(entry?.kind === 'rom' ? catalogMedia : pcMeta?.media, entry?.kind !== 'rom')
+  const preview = (f: OverrideImageField): string | null => (ov[f] ? `kimg://custom/${ov[f]}`
+    : f === 'background' ? (defaultBg ? igdbImageUrl(defaultBg, 't_screenshot_med') : null)
+    : gameId !== null ? `kimg://${ORIGINAL_KIND[f]}/${gameId}` : null)
   const anyModified = TEXT_FIELDS.some(modified) || IMAGE_FIELDS.some((f) => ov[f] !== undefined)
 
   return (

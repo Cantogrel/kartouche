@@ -14,6 +14,7 @@ import { useLibrary } from '@/store/library'
 import { useEntryOverrides } from '@/store/overrides'
 import { useDialog } from '@/ui/CollectionDialogs'
 import { MediaSections, useGameMedia } from '@/ui/GameMedia'
+import { defaultBackgroundId, igdbImageUrl } from '@shared/media'
 import { PlayWithButton } from '@/ui/PlayWith'
 import { Section } from '@/ui/Section'
 import { StatsPanel } from '@/ui/GameStats'
@@ -44,6 +45,9 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
   // Fiche ouverte depuis la bibliothèque (`entry`) : les modifications de l'utilisateur s'appliquent. Depuis le catalogue, la fiche reste celle d'origine.
   const overrides = useEntryOverrides(entry)
   const media = useGameMedia(game ? game.id : null)
+  // Fond : celui de l'utilisateur, sinon une image IGDB du jeu (jamais la bannière, qui passerait derrière sans se voir).
+  const defaultBg = defaultBackgroundId(media, false)
+  const backdropUrl = entry?.art.background ? `kimg://custom/${entry.art.background}` : defaultBg ? igdbImageUrl(defaultBg, 't_1080p') : null
   useEffect(() => { if (game) setPageTitle(entry ? entry.shownTitle : game.name) }, [game, entry?.shownTitle, setPageTitle])
   if (game === undefined) return null
   if (game === null) return <div className="content"><p className="muted">{t('game.notFound')}</p></div>
@@ -58,7 +62,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
   const genres = entry && overrides.genre !== undefined ? [overrides.genre] : [...new Set([game.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
   return (
     <div className="content nopad detail-page">
-      {entry?.art.background && <div className="detail-backdrop" aria-hidden style={{ backgroundImage: `url(kimg://custom/${entry.art.background})` }} />}
+      {backdropUrl && <div className="detail-backdrop" aria-hidden style={{ backgroundImage: `url(${backdropUrl})` }} />}
       <Cover className="hero" kind="hero" gameId={game.id} art={entry?.art.banner} title={shownName}>
         <div className="hero-title">{shownName}</div>
         <div className="hero-bar">
