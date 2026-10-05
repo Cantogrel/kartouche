@@ -201,3 +201,25 @@ export interface GameStats {
   /** Popularité du catalogue (IGDB) ; null si inconnue. */
   popularity: number | null
 }
+
+/** Origine d'une entrée pour le filtre « Source » : `rom` (émulation) ou la source d'une entrée PC (`manual`, `steam`, `epic`…). */
+export const entrySourceKey = (e: Pick<LibraryEntry, 'kind' | 'source'>): string => (e.kind === 'rom' ? 'rom' : e.source ?? 'manual')
+
+export const SOURCE_LABELS: Record<string, string> = {
+  manual: 'Exécutables', steam: 'Steam', epic: 'Epic Games', gog: 'GOG', hydra: 'Hydra', xbox: 'Xbox / Microsoft Store', ea: 'EA app', ubisoft: 'Ubisoft Connect', battlenet: 'Battle.net', itch: 'itch.io'
+}
+
+export const LIBRARY_SORTS = ['title', 'recent', 'added', 'time'] as const
+export type LibrarySort = (typeof LIBRARY_SORTS)[number]
+
+/** Tri de la grille (stable, l'épinglé reste en tête côté affichage) : titre affiché, dernière partie, date d'ajout ou temps de jeu, du plus grand au plus petit. */
+export function sortEntries<T extends Pick<LibraryEntry, 'shownTitle' | 'lastPlayed' | 'addedAt' | 'playMinutes'>>(list: readonly T[], sort: LibrarySort): T[] {
+  const byTitle = (a: T, b: T): number => a.shownTitle.toLowerCase().localeCompare(b.shownTitle.toLowerCase())
+  const key: Record<LibrarySort, (a: T, b: T) => number> = {
+    title: byTitle,
+    recent: (a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0) || byTitle(a, b),
+    added: (a, b) => b.addedAt - a.addedAt || byTitle(a, b),
+    time: (a, b) => b.playMinutes - a.playMinutes || byTitle(a, b)
+  }
+  return [...list].sort(key[sort])
+}

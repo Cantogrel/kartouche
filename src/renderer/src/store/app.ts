@@ -1,3 +1,4 @@
+import type { LibrarySort } from '@shared/library'
 import { create } from 'zustand'
 import type { CatalogSort } from '@shared/catalog'
 
@@ -7,7 +8,7 @@ export interface CatalogView { consoles: string[]; genres: string[]; publishers:
 /** Onglet de la Bibliothèque : un filtre fixe ou `c<id>` pour une collection. */
 export type LibraryTab = 'all' | 'ready' | 'missing' | 'favorites' | `c${number}`
 /** Filtres de la Bibliothèque, conservés quand on ouvre une fiche puis qu'on revient. */
-export interface LibraryView { tab: LibraryTab; consoleFilter: string | null }
+export interface LibraryView { tab: LibraryTab; consoleFilter: string | null; sourceFilter: string | null; sort: LibrarySort }
 
 export type Route = 'home' | 'catalog' | 'library' | 'emulators' | 'settings' | 'game'
 /** `gameId` = id du jeu pour la route `game` ; section de départ (ex. `about`) pour la route `settings`. */
@@ -42,7 +43,7 @@ export const useApp = create<AppState>((set, get) => ({
   setBigPicture: (bigPicture) => set({ bigPicture }),
   catalog: { consoles: [], genres: [], publishers: [], sources: [], sort: 'popularity', dir: null, seed: Math.floor(Math.random() * 1_000_000), variants: false, limit: 60 },
   setCatalog: (patch) => set({ catalog: { ...get().catalog, ...patch } }),
-  library: { tab: 'all', consoleFilter: null },
+  library: { tab: 'all', consoleFilter: null, sourceFilter: null, sort: 'title' },
   setLibraryView: (patch) => set({ library: { ...get().library, ...patch } }),
   setPageTitle: (pageTitle) => set({ pageTitle }),
   // D'une fiche à une autre (liste latérale) on remplace au lieu d'empiler : « retour » ramène à la page d'origine, pas à la fiche précédente.

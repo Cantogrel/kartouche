@@ -10,7 +10,7 @@ import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
 import { onEntryContext } from '@/ui/EntryMenu'
 import { platformLabel } from '@shared/consoles'
-import { orderConsolesByRecency, type ImportItem } from '@shared/library'
+import { entrySourceKey, LIBRARY_SORTS, orderConsolesByRecency, SOURCE_LABELS, sortEntries, type ImportItem, type LibrarySort } from '@shared/library'
 
 const labelOf = (id: string): string => platformLabel(id)
 const itemLabel = (i: ImportItem): string => (i.status === 'attached' && i.parent ? `${t('import.attached')} · ${i.parent}` : t(`import.${i.status}`))
@@ -19,7 +19,7 @@ let lastScrollTop = 0
 
 export function Library() {
   const { librarySearch, library: view, setLibraryView } = useApp()
-  const { tab, consoleFilter } = view
+  const { tab, consoleFilter, sourceFilter, sort } = view
   const setTab = (next: LibraryTab): void => setLibraryView({ tab: next })
   const setConsoleFilter = (c: string | null): void => setLibraryView({ consoleFilter: c })
   const { entries, collections, loaded, busy, progress, result, refresh, importPaths, scan, dismissResult, deleteCollection } = useLibrary()
@@ -52,7 +52,15 @@ export function Library() {
   const libraryConsoles = useMemo(() => orderConsolesByRecency(entries), [entries])
   // Le jeu de la dernière console visible peut avoir été retiré de la bibliothèque entre-temps.
   useEffect(() => { if (consoleFilter && loaded && !libraryConsoles.includes(consoleFilter)) setConsoleFilter(null) }, [consoleFilter, libraryConsoles, loaded])
-  const games = entries
+  // Sources présentes dans la bibliothèque (ROMs, exécutables, launchers), avec leur nombre de jeux.
+  const sources = useMemo(() => {
+    const n = new Map<string, number>()
+    for (const e of entries) n.set(entrySourceKey(e), (n.get(entrySourceKey(e)) ?? 0) + 1)
+    return [...n.entries()].sort((a, b) => (a[0] === 'rom' ? -1 : b[0] === 'rom' ? 1 : a[0].localeCompare(b[0])))
+  }, [entries])
+  useEffect(() => { if (sourceFilter && loaded && !sources.some(([k]) => k === sourceFilter)) setLibraryView({ sourceFilter: null }) }, [sourceFilter, sources, loaded, setLibraryView])
+  const games = sortEntries(entries, sort)
+    .filter((g) => !sourceFilter || entrySourceKey(g) === sourceFilter)
     .filter((g) => (tab === 'ready' ? !g.missing : tab === 'missing' ? g.missing : tab === 'favorites' ? g.favorite : collectionId !== null ? g.collections.includes(collectionId) : true))
     .filter((g) => !consoleFilter || g.console === consoleFilter)
     .filter((g) => !q || g.shownTitle.toLowerCase().includes(q))
@@ -96,6 +104,9 @@ export function Library() {
             <Button onClick={async () => { if (await confirmDialog(t('collection.confirmDelete', { name: current.name }))) void deleteCollection(current.id) }}>{t('collection.delete')}</Button>
             <Button variant="primary" onClick={() => openDialog({ kind: 'editor', collectionId: current.id })}>{t('collection.addGames')}</Button>
           </>}
+          <select className="collection-select" value={sort} aria-label={t('sort.label')} onChange={(e) => setLibraryView({ sort: e.target.value as LibrarySort })}>
+            {LIBRARY_SORTS.map((k) => <option key={k} value={k}>{t(`sort.${k}`)}</option>)}
+          </select>
           {!current && hasScanFolders && <Button disabled={busy} onClick={() => void scan()}>{t('library.scan')}</Button>}
           {!current && <span className="menu-wrap">
             <Button variant="primary" disabled={busy} onClick={(e) => { e.stopPropagation(); setMenu(!menu) }}>+ {t('addGame')}</Button>
@@ -109,6 +120,14 @@ export function Library() {
           </span>}
         </div>
       </div>
+      {(sources.length > 1 || sort !== 'title') && (
+        <div className="row lib-sources">
+          {sources.length > 1 && <>
+            <Pill active={!sourceFilter} onClick={() => setLibraryView({ sourceFilter: null })}>{t('filter.allSources')}</Pill>
+            {sources.map(([k, n]) => <Pill key={k} active={sourceFilter === k} onClick={() => setLibraryView({ sourceFilter: k })}>{k === 'rom' ? t('filter.rom') : SOURCE_LABELS[k] ?? k} · {n}</Pill>)}
+          </>}
+        </div>
+      )}
       {libraryConsoles.length > 1 && (
         <div className="row lib-consoles">
           <Pill active={!consoleFilter} onClick={() => setConsoleFilter(null)}>{t('filter.allConsoles')}</Pill>
