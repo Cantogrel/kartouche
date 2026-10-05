@@ -117,8 +117,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tag-state { background: #2a2f3a; }
 .tag-ok { background: #1f5a34; border-color: #2e7d4a; color: #d8f5e2; }
 .tag-busy { background: #5a4a1f; border-color: #7d672e; color: #f5e8d8; }
-.dl-col { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
-.dl-col .tag { margin: 0; text-align: center; }
+/* Le tag P2P flotte au-dessus du bouton : il ne doit pas agrandir la rangée (sinon tout ce qui est à gauche remonte). */
+.dl-col { position: relative; display: flex; }
+.dl-col .tag { position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); margin: 0; text-align: center; }
 .tag-p2p { background: #1f5a34; border-color: #2e7d4a; color: #d8f5e2; }
 .bp-btn .tag-p2p { margin: 0 0 0 8px; }
 .mins { position: absolute; left: 8px; bottom: 12px; font-size: 11px; background: rgba(0,0,0,.6); padding: 1px 6px; border-radius: 4px; }
