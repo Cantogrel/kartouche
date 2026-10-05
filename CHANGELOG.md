@@ -3,6 +3,18 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.2.5
+
+- Téléchargements : la fiche d'un jeu (classique et Big Picture) garde le bouton bloqué avec l'avancement quand on la
+  quitte puis la rouvre pendant un téléchargement, même si plusieurs sources existent.
+- Un voile clair qui se remplit comme une barre de progression apparaît sur la tuile du jeu et sur sa ligne dans la liste
+  de gauche pendant un téléchargement.
+- Big Picture : les jeux en cours de téléchargement s'affichent dans la bibliothèque (ils disparaissent si le
+  téléchargement est annulé ou échoue) ; recherche au clavier physique ; fiche de jeu plus large, boutons sur une seule
+  ligne quand l'écran le permet ; curseur de la souris masqué après quelques secondes d'inactivité.
+- Catalogue : nouveau tri aléatoire (la flèche circulaire relance le tirage) ; la flèche du tri par titre pointe vers le
+  bas pour A→Z.
+
 ## 0.2.4
 
 - Mises à jour et DLC (Switch, 3DS, PS3, Wii U, PS Vita) : ils sont identifiés par l'identifiant natif lu dans le fichier,

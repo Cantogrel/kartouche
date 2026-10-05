@@ -1,6 +1,6 @@
 {
   "name": "romvault",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Bibliothèque de jeux d'émulation pour Windows",
   "main": "./out/main/index.js",
   "private": true,
