@@ -13,10 +13,26 @@ const getJson: Json = async (url) => {
 const TTL_MS = 90 * 24 * 3600 * 1000
 const MISS_TTL_MS = 24 * 3600 * 1000
 
-/** Introduction de l'article Wikipédia consacré au jeu, dans la langue demandée ; null s'il n'y en a pas de sûr. */
+/** Mot qui désigne un jeu vidéo dans chaque langue : ajouté à la recherche Wikipédia pour tomber sur l'article du jeu plutôt que sur son sujet. */
+const GAME_WORD: Record<string, string> = { fr: 'jeu vidéo', en: 'video game', es: 'videojuego', de: 'Videospiel', it: 'videogioco', pt: 'jogo eletrónico', zh: '电子游戏', ja: 'ビデオゲーム' }
+/** Garde-fous : le texte parle bien d'un jeu vidéo (dans l'une des langues gérées), et n'est pas une page d'homonymie. */
+const IS_GAME = /\bjeu\b|video ?game|videojuego|videospiel|videogioco|\bjogo\b|电子游戏|游戏|ゲーム/i
+const IS_DISAMBIGUATION = /peut désigner|may (also )?refer to|homonymie|puede referirse|bezeichnet|può riferirsi|pode referir|可以指/i
+/** Longueur maximale d'une description : coupée à la fin d'une phrase, pour ne pas finir au milieu d'un mot. */
+export const MAX_SUMMARY = 1800
+
+/** Coupe `text` à la dernière fin de phrase avant `max` caractères (le texte entier s'il est plus court). */
+export function capAtSentence(text: string, max = MAX_SUMMARY): string {
+  if (text.length <= max) return text
+  const cut = text.slice(0, max)
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '), cut.lastIndexOf('.\n'))
+  return end > max * 0.5 ? cut.slice(0, end + 1) : cut.trimEnd() + '…'
+}
+
+/** Introduction de l'article Wikipédia consacré au jeu (jusqu'à 10 phrases), dans la langue demandée ; null s'il n'y en a pas de sûr. */
 export async function wikipediaSummary(name: string, lang: string, get: Json = getJson): Promise<string | null> {
   const api = `https://${lang}.wikipedia.org/w/api.php`
-  const search = await get(`${api}?action=query&list=search&srsearch=${encodeURIComponent(`${name} jeu vidéo`)}&srlimit=4&format=json`) as
+  const search = await get(`${api}?action=query&list=search&srsearch=${encodeURIComponent(`${name} ${GAME_WORD[lang] ?? GAME_WORD['en']}`)}&srlimit=4&format=json`) as
     { query?: { search?: { title: string }[] } } | null
   const want = matchKey(name)
   // Le titre de l'article doit correspondre au jeu (« The Witcher 3 : Wild Hunt » ≈ « The Witcher 3: Wild Hunt »), pas seulement lui ressembler.
@@ -25,11 +41,28 @@ export async function wikipediaSummary(name: string, lang: string, get: Json = g
   const hits = (search?.query?.search ?? []).filter(ok)
   const hit = hits.find((r) => !/[([]/.test(r.title)) ?? hits[0]
   if (!hit) return null
-  const page = await get(`${api}?action=query&prop=extracts&exintro=1&explaintext=1&exsentences=5&redirects=1&titles=${encodeURIComponent(hit.title)}&format=json`) as
+  const page = await get(`${api}?action=query&prop=extracts&exintro=1&explaintext=1&exsentences=10&redirects=1&titles=${encodeURIComponent(hit.title)}&format=json`) as
     { query?: { pages?: Record<string, { extract?: string }> } } | null
   const text = Object.values(page?.query?.pages ?? {})[0]?.extract?.trim()
   // Garde-fou : une page d'homonymie ou un article sans rapport n'est pas une description de jeu vidéo.
-  return text && /\bjeu\b|video game/i.test(text) && !/peut désigner|may refer to|homonymie/i.test(text) ? text : null
+  return text && IS_GAME.test(text) && !IS_DISAMBIGUATION.test(text) ? capAtSentence(text) : null
+}
+
+/** En deçà, l'article Wikipédia est un résumé trop court pour valoir mieux qu'un texte de fournisseur bien plus long. */
+export const SHORT_WIKI = 250
+
+/**
+ * Quelle description garder. `wiki` : intro Wikipédia dans la langue demandée ; `provider` : résumé des fournisseurs (IGDB, en anglais).
+ *  - anglais : Wikipédia seulement s'il est nettement plus complet (15 % de plus) que le texte du fournisseur ;
+ *  - autre langue : l'article Wikipédia (écrit par des humains), sauf s'il est très court devant un texte fournisseur bien plus long : on tente alors la
+ *    traduction de ce dernier (le résumé Wikipédia reste le repli) ;
+ *  - sans article : traduction du texte du fournisseur (anglais : le texte du fournisseur tel quel).
+ */
+export function chooseSummary(wiki: string | null, provider: string | undefined, lang: string): 'wiki' | 'provider' | 'translate' {
+  if (!wiki) return provider && lang !== 'en' ? 'translate' : 'provider'
+  if (!provider) return 'wiki'
+  if (lang === 'en') return wiki.length >= provider.length * 1.15 ? 'wiki' : 'provider'
+  return wiki.length < SHORT_WIKI && provider.length > wiki.length * 1.5 ? 'translate' : 'wiki'
 }
 
 /** Découpe en morceaux de 450 caractères maximum, à la fin d'une phrase (limite de l'API de traduction). */
@@ -65,8 +98,7 @@ export async function machineTranslate(text: string, lang: string, get: Json = g
  */
 export async function localizeDetails(db: DatabaseSync, game: CatalogGame, base: Promise<GameDetails | null>, lang: string,
   io: { get?: Json } = {}): Promise<GameDetails | null> {
-  if (lang === 'en') return base
-  const key = `l10n2-${lang}`
+  const key = `l10n3-${lang}`
   const row = db.prepare('SELECT json, fetched_at FROM game_meta WHERE game_id = ? AND provider = ?').get(game.id, key) as { json: string; fetched_at: number } | undefined
   let hit: { text: string; source: 'wikipedia' | 'machine' } | null | undefined
   if (row) {
@@ -79,9 +111,16 @@ export async function localizeDetails(db: DatabaseSync, game: CatalogGame, base:
   const details = await base
   if (hit === undefined) {
     const wiki = await wikiP
-    const text = wiki ?? (details?.summary ? await machineTranslate(details.summary, lang, io.get).catch(() => null) : null)
-    if (!wiki && details?.summary && !text) failed = true
-    hit = text ? { text, source: wiki ? 'wikipedia' : 'machine' } : null
+    const choice = chooseSummary(wiki, details?.summary, lang)
+    let text: string | null = null
+    let source: 'wikipedia' | 'machine' = 'wikipedia'
+    if (choice === 'wiki') text = wiki
+    else if (choice === 'translate' && details?.summary) {
+      const translated = await machineTranslate(details.summary, lang, io.get).catch(() => null)
+      if (translated) { text = translated; source = 'machine' } else if (wiki) text = wiki
+      else failed = true // quota ou réseau : pas de verdict définitif, on réessaiera
+    }
+    hit = text ? { text, source } : null
     if (!failed) db.prepare('INSERT INTO game_meta (game_id, provider, json, fetched_at) VALUES (?, ?, ?, ?) ON CONFLICT(game_id, provider) DO UPDATE SET json = excluded.json, fetched_at = excluded.fetched_at')
       .run(game.id, key, JSON.stringify(hit), Date.now())
   }
