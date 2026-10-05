@@ -273,16 +273,15 @@ function MenuFocus(): null {
   return null
 }
 
-const LANGS: LanguageSetting[] = ['auto', 'en', 'fr']
-
 /** Réglages utiles à la manette : langue, démarrage, émulateurs (installer / état), quitter. Le reste (clés API, dossiers…) reste au mode classique. */
 function BpSettings({ onExit }: { onExit: () => void }) {
-  const { settings, update } = useSettings()
+  const { settings, update, languages } = useSettings()
   const { list, progress, errors, install } = useEmulators()
-  const langName = (l: LanguageSetting): string => (l === 'auto' ? t('settings.langAuto') : l === 'en' ? 'English' : 'Français')
+  const langs: LanguageSetting[] = ['auto', ...languages.map((l) => l.code)]
+  const langName = (l: LanguageSetting): string => (l === 'auto' ? t('settings.langAuto') : languages.find((x) => x.code === l)?.name ?? l)
   return (
     <div className="bp-settings">
-      <button data-nav className="bp-row" onClick={() => void update({ language: LANGS[(LANGS.indexOf(settings.language) + 1) % LANGS.length] })}>
+      <button data-nav className="bp-row" onClick={() => void update({ language: langs[(langs.indexOf(settings.language) + 1) % langs.length] })}>
         <span>{t('settings.language')}</span><strong>{langName(settings.language)}</strong>
       </button>
       <button data-nav className="bp-row" onClick={() => void update({ startInBigPicture: !settings.startInBigPicture })}>

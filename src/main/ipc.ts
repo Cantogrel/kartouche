@@ -34,6 +34,9 @@ import { isConnectorId } from '@shared/connectors'
 import { addExecutables, updateExeLaunch } from './library/addExe'
 import { getLaunchSpec } from './library/external'
 import { EXE_PICK_EXTENSIONS } from '@shared/exeEntry'
+import { listUserLanguages, importUserLanguage, removeUserLanguage } from './i18n/userLanguages'
+import { langTemplate } from '../shared/lang'
+import enStrings from '../../locales/en.json'
 import { clearCustomImage, customArtDir, removeEntryArt, setCustomImage } from './library/customArt'
 import { downscaleImage } from './library/customArtResize'
 import { clearAllOverrides, clearOverride, getOverrides, setOverride } from './library/overrides'
@@ -54,7 +57,7 @@ import { autoInstallFirmware } from './bios/official'
 import { isRunning, launchGame, openEmulator, runningCount, stopAllGames, stopGame, stopGameAndWait } from './emulators/launcher'
 import { dirname, join } from 'node:path'
 import { existsSync, mkdirSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { rm, writeFile } from 'node:fs/promises'
 
 /** Ordre de la cascade de fiches enrichies. */
 const PROVIDERS: MetadataProvider[] = [igdb, tgdb]
@@ -101,6 +104,22 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('update:pendingChangelog', () => pendingChangelog(db))
   handle('settings:get', () => loadUserSettings(db))
   handle('settings:set', (patch) => saveSettings(db, patch))
+  handle('lang:user', () => listUserLanguages(paths.dataDir))
+  handle('lang:import', async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = { properties: ['openFile'] as 'openFile'[], filters: [{ name: 'Kartouche language', extensions: ['json'] }] }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled || !r.filePaths[0] ? null : importUserLanguage(paths.dataDir, r.filePaths[0])
+  })
+  handle('lang:remove', (code) => removeUserLanguage(paths.dataDir, code))
+  handle('lang:exportTemplate', async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    const opts = { defaultPath: 'kartouche-language-template.json', filters: [{ name: 'JSON', extensions: ['json'] }] }
+    const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+    if (r.canceled || !r.filePath) return false
+    await writeFile(r.filePath, langTemplate(enStrings))
+    return true
+  })
   handle('paths:chooseDataDir', async () => {
     const win = BrowserWindow.getFocusedWindow()
     const opts = { properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[], defaultPath: paths.dataDir }
