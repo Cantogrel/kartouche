@@ -84,10 +84,12 @@ describe('lancement d’un exécutable ajouté à la main', () => {
     expect(isRunning(a)).toBe(false)
   })
 
-  it('refuse proprement : exécutable disparu, lancement par adresse de launcher pas encore pris en charge', async () => {
+  it('refuse proprement : exécutable disparu, adresse de launcher non autorisée', async () => {
     expect(await launch(addExe('Disparu', 'x', join(dir, 'absent.exe')))).toEqual({ ok: false, error: 'noFile' })
+    // Adresse qui n'est pas celle d'un launcher connu : jamais ouverte (le lancement par launcher a ses tests dans launcherUri.test.ts, avec de faux processus).
     const uri = upsertExternalEntry(db, { kind: 'launcher', source: 'steam', nativeId: '10', title: 'Steam', launch: { type: 'uri', uri: 'steam://rungameid/10' } })
     if (!uri.ok) throw new Error('refusé')
+    db.prepare('UPDATE library SET launch = ? WHERE id = ?').run(JSON.stringify({ type: 'uri', uri: 'http://exemple.invalid/x' }), uri.id)
     expect(await launch(uri.id)).toEqual({ ok: false, error: 'unsupported' })
     expect(await launch(9999)).toEqual({ ok: false, error: 'noFile' })
   })

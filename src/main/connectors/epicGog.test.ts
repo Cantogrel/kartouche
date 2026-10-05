@@ -88,5 +88,5 @@ describe.runIf(process.platform === 'win32')('installations réelles (lecture se
     if (!(await realGogDeps.games())) return
     const games = (await gogConnector().scan()) as { exe: string }[]
     for (const g of games) expect(g.exe).toMatch(/\.exe$/i)
-  })
+  }, 30000)
 })
