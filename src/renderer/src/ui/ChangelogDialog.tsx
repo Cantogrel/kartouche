@@ -16,10 +16,18 @@ function parseItems(notes: string): string[] {
   return items
 }
 
-/** Met en gras une éventuelle étiquette de tête (« Corrigé : », « Catalogue : »…), seule mise en forme que porte ce markdown. */
+/** Mise en forme inline du markdown source : `**gras**` et `` `code` ``. */
+function inline(text: string): ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/).filter(Boolean).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**') && part.length > 4 ? <strong key={i}>{part.slice(2, -2)}</strong>
+      : part.startsWith('`') && part.endsWith('`') && part.length > 2 ? <code key={i}>{part.slice(1, -1)}</code>
+        : part)
+}
+
+/** Met en gras une éventuelle étiquette de tête non balisée (« Corrigé : », « Catalogue : »…), puis applique la mise en forme inline. */
 function renderItem(text: string): ReactNode {
-  const m = /^([^:]{2,24}) : (.*)$/.exec(text)
-  return m ? <><strong>{m[1]} :</strong> {m[2]}</> : text
+  const m = !text.startsWith('**') ? /^([^:*`]{2,24}) : (.*)$/.exec(text) : null
+  return m ? <><strong>{m[1]} :</strong> {inline(m[2])}</> : inline(text)
 }
 
 /** Rendue une fois dans App : popup automatique après mise à jour, ou rouverte depuis Paramètres → À propos. */
