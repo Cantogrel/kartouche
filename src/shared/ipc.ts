@@ -2,6 +2,7 @@ import type { Settings } from './settings'
 import type { Collection, ImportRequest, ImportResult, LibraryContentItem, LibraryEntry, LibraryProgress, SbiImportResult, GameStats } from './library'
 import type { GameMedia } from './media'
 import type { CustomEmulatorState, SaveEmulatorResult } from './customEmulators'
+import type { EmulatorOption } from './emulatorChoice'
 import type { EntryOverrides, OverrideField, OverrideImageField, OverrideTextField, SetImageResult } from './overrides'
 import type { AchievementsResult } from './achievements'
 import type { BackupInfo, SaveInfo } from './saves'
@@ -58,6 +59,12 @@ export interface IpcChannels {
   'images:cancel': { req: { kind: 'card' | 'tile' | 'hero' | 'icon'; gameId: number }; res: void }
   'library:list': { req: void; res: LibraryEntry[] }
   /** Valeurs modifiées par l'utilisateur sur un jeu de la bibliothèque (voir shared/overrides.ts) ; vide si rien n'est modifié. */
+  /** Émulateurs qui savent lancer ce jeu (« Jouer avec… »), celui choisi pour lui, son défaut de console et celui qui sera utilisé. */
+  'emulators:options': { req: number; res: { options: EmulatorOption[]; chosen: string | null; consoleDefault: string | null; effective: string | null } }
+  /** Choisit l'émulateur d'UN jeu (null = suivre le défaut de sa console) ; refusé s'il ne sait pas lancer ce jeu. */
+  'emulators:choose': { req: { entryId: number; emulatorId: string | null }; res: boolean }
+  /** Définit l'émulateur par défaut d'une console (null = l'émulateur intégré) ; refusé s'il ne sait pas la lancer. */
+  'emulators:setDefault': { req: { console: string; emulatorId: string | null }; res: boolean }
   /** Émulateurs ajoutés par l'utilisateur (voir shared/customEmulators.ts), avec l'état de leur exécutable. */
   'customEmulators:list': { req: void; res: CustomEmulatorState[] }
   /** Ajoute (sans `id`) ou modifie (avec `id`) un émulateur ; l'exécutable doit exister. */
