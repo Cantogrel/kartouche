@@ -16,6 +16,13 @@ describe('validateSourceList', () => {
     if (result.ok) expect(result.document.entries).toHaveLength(1)
   })
 
+  it('accepte les listes qui portent l’ancien ou le nouveau nom de format (romvault/kartouche.sourcelist/v1)', () => {
+    // Le format est identifié par `schemaVersion`, pas par un nom : un champ `format` d'un export RomVault 0.2.x ne doit rien casser.
+    for (const format of ['romvault.sourcelist/v1', 'kartouche.sourcelist/v1']) {
+      expect(validateSourceList({ ...valid(), format }).ok).toBe(true)
+    }
+  })
+
   it('rejette un schemaVersion inconnu', () => {
     const doc = { ...valid(), schemaVersion: 2 }
     const result = validateSourceList(doc)

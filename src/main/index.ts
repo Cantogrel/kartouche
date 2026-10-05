@@ -11,10 +11,11 @@ import { getImage, type ImageKind } from './catalog/images'
 import { getGame, rebuildDerived } from './catalog/catalogStore'
 import { loadSettings } from './db/settingsStore'
 import { initUpdater } from './updater'
+import { migrateLegacyUserData } from './legacy'
 import { loadWindowState, saveWindowState, type WindowState } from './windowState'
 
-// Images du catalogue servies depuis le cache disque : rvimg://card|tile|hero|icon/<id du jeu> (vignette catalogue, tuile bibliothèque, bannière, icône)
-protocol.registerSchemesAsPrivileged([{ scheme: 'rvimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
+// Images du catalogue servies depuis le cache disque : kimg://card|tile|hero|icon/<id du jeu> (vignette catalogue, tuile bibliothèque, bannière, icône)
+protocol.registerSchemesAsPrivileged([{ scheme: 'kimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 
 /** Faux si les bornes sauvegardées tombent hors de tout écran actuellement branché (moniteur externe débranché…). */
 function onScreen(b: { x?: number; y?: number; width: number; height: number }): boolean {
@@ -59,6 +60,9 @@ let mainWindow: BrowserWindow | null = null
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
+  // Ancien nom du produit (RomVault) : reprend bootstrap.json et le stockage local, avant que Chromium ouvre le sien.
+  migrateLegacyUserData(app.getPath('userData'), [join(app.getPath('appData'), 'RomVault')])
+
   app.on('second-instance', () => {
     if (!mainWindow) return
     if (mainWindow.isMinimized()) mainWindow.restore()
@@ -101,7 +105,7 @@ if (!app.requestSingleInstanceLock()) {
       const iconDir = join(paths.cache, 'images', 'icon')
       readdir(iconDir).then((files) => Promise.all(files.filter((f) => f.endsWith('.miss')).map((f) => rm(join(iconDir, f))))).catch(() => { /* dossier pas encore créé : rien à nettoyer */ })
     }
-    protocol.handle('rvimg', async (req) => {
+    protocol.handle('kimg', async (req) => {
       const u = new URL(req.url)
       const game = getGame(db, Number(u.pathname.split('/').filter(Boolean)[0]))
       const kind: ImageKind = u.hostname === 'hero' || u.hostname === 'icon' || u.hostname === 'tile' ? u.hostname : 'card'

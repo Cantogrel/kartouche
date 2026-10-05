@@ -70,7 +70,7 @@ const IMG_LIMIT = 4000
  * Appels réseau limités à `MAX_PARALLEL` en parallèle : une page de catalogue déclenche des dizaines de résolutions d'images.
  * Les tâches en attente sont servies dernière arrivée d'abord : en faisant défiler, ce sont les tuiles à l'écran maintenant (les plus récemment
  * demandées) qui passent avant celles déjà dépassées, au lieu d'attendre derrière tout ce qui a été demandé plus haut.
- * `signal` (celui de la requête `rvimg://`) permet d'abandonner tôt une tâche dont la tuile a déjà disparu (filtres
+ * `signal` (celui de la requête `kimg://`) permet d'abandonner tôt une tâche dont la tuile a déjà disparu (filtres
  * changés très vite) : en attente, elle ne consomme jamais un des 4 emplacements ; déjà lancée, `fetchImage` coupe
  * la requête réseau en cours au lieu de tourner jusqu'à son terme (jusqu'à 30 s) et de retarder les suivantes.
  */

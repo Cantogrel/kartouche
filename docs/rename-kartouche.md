@@ -37,8 +37,8 @@ Règle : tout ce que l'utilisateur voit devient **Kartouche**. Tout identifiant 
 |---|---|---|---|
 | `romvault.db` (fichier de base) | `src/main/index.ts:72`, `src/main/ipc.ts:101` | **CONSERVER** | Nom interne, jamais montré ; le renommer ne rapporte rien et expose à un échec de migration |
 | `appId` | `electron-builder.yml` | **CONSERVER** | voir §2 |
-| `romvault.sourcelist/v1` (format JSON des listes de sources) | `src/shared/sourceList.ts`, `Settings.tsx:271`, locales, `CLAUDE.md`, validation | **ACCEPTER LES DEUX** ; l'aide et les exemples affichent `kartouche.sourcelist/v1` | Les listes déjà importées ou partagées par les utilisateurs portent l'ancien identifiant |
-| Protocole `rvimg://` | `index.html` (CSP), `index.ts`, `ui/index.tsx`, `ConsoleTile.tsx`, commentaires | **RENOMMER** en `kimg://` | Non persisté (ni base ni réglages) ; aucune compatibilité à garder |
+| `romvault.sourcelist/v1` (nom du format JSON des listes) | `Settings.tsx`, locales, `CLAUDE.md` | **RENOMMÉ** `kartouche.sourcelist/v1` dans l'aide et les exemples | **Correction de l'audit** : ce nom n'est qu'un libellé de documentation. La validation ne lit que `schemaVersion` (=1) et ignore les champs inconnus : une liste qui porte l'un ou l'autre nom, ou aucun, est acceptée (test de non-régression dans `validate.test.ts`). |
+| Protocole `rvimg://` (**fait**) | `index.html` (CSP), `index.ts`, `ui/index.tsx`, `ConsoleTile.tsx`, commentaires | **RENOMMER** en `kimg://` | Non persisté (ni base ni réglages) ; aucune compatibilité à garder |
 | Type `RomVaultApi` | `src/shared/ipc.ts:190`, `preload/index.ts`, `env.d.ts` | **RENOMMER** `KartoucheApi` | Interne |
 | `BiosFound.source: 'romvault'` | `src/shared/bios.ts:106`, `bios.ts:88` | **RENOMMER** (`'app'`) après vérification qu'aucun libellé ne l'utilise comme clé | Valeur calculée à la volée, non persistée |
 | Variables `ROMVAULT_HASH`, `ROMVAULT_REAL_EMU` | `index.ts:35`, `package.json`, tests réels | **RENOMMER** `KARTOUCHE_*` | Développement seulement |
@@ -72,7 +72,7 @@ Autres points :
 | Sujet | Décision |
 |---|---|
 | Dossier d'installation | Avec le même `appId`, la mise à jour reste dans l'ancien dossier (`…\RomVault`) : l'exécutable devient `Kartouche.exe` dans un dossier encore nommé RomVault. Une installation neuve ira dans `…\Kartouche`. Documenté, accepté. |
-| `userData` (`%APPDATA%\<nom>`) | Le nom change avec `productName` : `bootstrap.json` (chemin de données choisi par l'utilisateur) et le stockage local de Chromium ne seront plus retrouvés. Migration au 1er lancement : si l'ancien dossier `%APPDATA%\RomVault` existe et pas le nouveau, copier `bootstrap.json` et `Local Storage`. |
+| `userData` (`%APPDATA%\<nom>`) | Le nom change avec `productName` : `bootstrap.json` (chemin de données choisi par l'utilisateur) et le stockage local de Chromium ne seront plus retrouvés. **Fait** (`src/main/legacy.ts`, appelé avant `whenReady`) : copie `bootstrap.json` et `Local Storage` depuis `%APPDATA%\RomVault` (jamais déplacés, jamais écrasés, idempotent). Vérifié sur un vrai lancement : `Local Storage` repris dans le profil isolé. |
 | Raccourcis | Le désinstalleur de l'ancienne version retire le raccourci `RomVault`, le nouvel installateur crée `Kartouche`. À vérifier. |
 | Proxy Cloudflare `romvault-proxy.mathc83.workers.dev` (`src/shared/proxy.ts`, `server/`) | **CONSERVER l'URL** : les versions 0.2.x installées l'appellent encore, et un nouveau worker demanderait de recréer les secrets (clés). Renommer les commentaires seulement. Un `kartouche-proxy` pourra venir plus tard avec les deux en service. |
 | Mise à jour automatique | Les installations 0.2.x pointent vers `Cantogrel/romvault` ; GitHub redirige vers le dépôt renommé. À tester avant publication. |

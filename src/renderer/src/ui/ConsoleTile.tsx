@@ -27,7 +27,7 @@ export function GameIcon({ gameId, console: cons }: { gameId: number | null; con
     <span className="game-icon">
       {!ok && <ConsoleTile id={cons} />}
       {gameId !== null && (!state || state.id !== gameId || state.ok) && (
-        <img key={gameId} className="game-icon-img" alt="" loading="lazy" src={`rvimg://icon/${gameId}`} style={{ opacity: ok ? 1 : 0 }}
+        <img key={gameId} className="game-icon-img" alt="" loading="lazy" src={`kimg://icon/${gameId}`} style={{ opacity: ok ? 1 : 0 }}
           onLoad={() => setState({ id: gameId, ok: true })} onError={() => setState({ id: gameId, ok: false })} />
       )}
     </span>
