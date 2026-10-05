@@ -26,13 +26,13 @@ interface Opened { gameId: number | null; entryId?: number }
 /** Dernière tuile ouverte : le focus y revient à la fermeture de la fiche. */
 let lastOpened: string | null = null
 
-function Tile({ id, gameId, entryId, title, cons, dim, fav, pinned, state, onOpen }: { id: string; gameId: number | null; entryId?: number; title: string; cons: string; dim?: boolean; fav?: boolean; pinned?: boolean; state?: 'installed' | 'library' | 'downloading'; onOpen: () => void }) {
+function Tile({ id, gameId, entryId, title, art, cons, dim, fav, pinned, state, onOpen }: { id: string; gameId: number | null; entryId?: number; title: string; /** image personnelle de la jaquette (chemin relatif) */ art?: string; cons: string; dim?: boolean; fav?: boolean; pinned?: boolean; state?: 'installed' | 'library' | 'downloading'; onOpen: () => void }) {
   const tag = <Badge>{label(cons)}</Badge>
   const name = <span className="card-title">{title}</span>
   return (
     <button data-nav data-tile={id} data-entry={entryId} className={`bp-tile${dim ? ' dim' : ''}`} onClick={() => { lastOpened = id; onOpen() }}>
-      {gameId !== null
-        ? <Cover className="cover-fill" gameId={gameId} title={title} kind="tile">{name}{tag}</Cover>
+      {gameId !== null || art
+        ? <Cover className="cover-fill" gameId={gameId} art={art} title={title} kind="tile">{name}{tag}</Cover>
         : <div className="cover-fill" style={artStyle(title)}>{name}{tag}</div>}
       <DownloadVeil gameId={gameId} />
       {fav && <span className="fav-mark">♥</span>}
@@ -84,10 +84,10 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   useEffect(() => { void useLibrary.getState().refresh(); window.api.window.fullscreen(true); return () => window.api.window.fullscreen(false) }, [])
   const go = (s: Section): void => { setSection(s); setConsoleTab('all'); setQuery(''); setLimit(PAGE) }
 
-  const playable = useMemo(() => entries.filter((e) => !e.missing).sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0) || a.title.localeCompare(b.title)), [entries])
+  const playable = useMemo(() => entries.filter((e) => !e.missing).sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0) || a.shownTitle.localeCompare(b.shownTitle)), [entries])
   const q = query.trim().toLowerCase()
   const libraryConsoles = useMemo(() => orderConsolesByRecency(playable), [playable])
-  const libShown = playable.filter((e) => (consoleTab === 'all' || e.console === consoleTab) && (!q || e.title.toLowerCase().includes(q)))
+  const libShown = playable.filter((e) => (consoleTab === 'all' || e.console === consoleTab) && (!q || e.shownTitle.toLowerCase().includes(q)))
 
   // Jeux en cours de téléchargement : visibles dans la bibliothèque (entrée sans fichier, ou jeu pas encore ajouté) tant que le job existe —
   // annulé ou échoué, il quitte le store et disparaît d'ici.
@@ -101,7 +101,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dlKey, entries])
   const matches = (title: string, cons: string): boolean => (consoleTab === 'all' || cons === consoleTab) && (!q || title.toLowerCase().includes(q))
-  const dlEntries = entries.filter((e) => e.missing && e.gameId !== null && downloadingGames.has(e.gameId) && matches(e.title, e.console))
+  const dlEntries = entries.filter((e) => e.missing && e.gameId !== null && downloadingGames.has(e.gameId) && matches(e.shownTitle, e.console))
   const dlGames = [...downloadingGames].filter((id) => !entries.some((e) => e.gameId === id) && dlCatalog[id] && matches(dlCatalog[id].name, dlCatalog[id].console)).map((id) => dlCatalog[id])
 
   // Catalogue : recherche côté principal (la même que la page classique), triée par popularité.
@@ -177,7 +177,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   const openEntry = (e: LibraryEntry): void => setOpened({ gameId: e.gameId, entryId: e.id })
   const openedEntry = opened?.entryId !== undefined ? entries.find((e) => e.id === opened.entryId) : undefined
   const playing = entries.find((e) => running.includes(e.id))
-  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} entryId={e.id} title={e.title} cons={e.console} fav={e.favorite} pinned={e.pinned} onOpen={() => openEntry(e)} />)
+  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} entryId={e.id} title={e.shownTitle} art={e.art.cover} cons={e.console} fav={e.favorite} pinned={e.pinned} onOpen={() => openEntry(e)} />)
   const searchable = section === 'library' || section === 'catalog'
   // Clavier physique : on tape directement la recherche (le clavier virtuel reste pour la manette).
   useTypeText(query, (v) => { setQuery(v); setLimit(PAGE) }, searchable && !overlay && !inGame)
@@ -221,7 +221,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
 
         {section === 'library' && (playable.length + dlEntries.length + dlGames.length === 0 ? <p className="empty">{t('bp.empty')}</p> : libShown.length + dlEntries.length + dlGames.length === 0 ? <p className="empty">{t('library.noMatch')}</p> : (
           <div className="bp-grid">
-            {dlEntries.map((e) => <Tile key={`d${e.id}`} id={`d${e.id}`} gameId={e.gameId} entryId={e.id} title={e.title} cons={e.console} state="downloading" onOpen={() => openEntry(e)} />)}
+            {dlEntries.map((e) => <Tile key={`d${e.id}`} id={`d${e.id}`} gameId={e.gameId} entryId={e.id} title={e.shownTitle} art={e.art.cover} cons={e.console} state="downloading" onOpen={() => openEntry(e)} />)}
             {dlGames.map((g) => <Tile key={`dg${g.id}`} id={`dg${g.id}`} gameId={g.id} title={g.name} cons={g.console} state="downloading" onOpen={() => setOpened({ gameId: g.id })} />)}
             {libTiles(libShown, 'l')}
           </div>
@@ -253,7 +253,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
           </div>
         </div>
       )}
-      {inGame && <div className="bp-overlay solid"><div className="bp-playing"><h2>{t('bp.inGame', { title: playing?.title ?? '' })}</h2><div className="muted">{t('play.quitHint')}</div></div></div>}
+      {inGame && <div className="bp-overlay solid"><div className="bp-playing"><h2>{t('bp.inGame', { title: playing?.shownTitle ?? '' })}</h2><div className="muted">{t('play.quitHint')}</div></div></div>}
     </div>
   )
 }

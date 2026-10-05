@@ -8,6 +8,8 @@ import { useSettings } from '@/store/settings'
 import { emulatorForConsole } from '@shared/emulators'
 import { platformLabel } from '@shared/consoles'
 import { canonicalGenre, genreLabel } from '@shared/genres'
+import { baseViewFrom, resolveView } from '@shared/overrides'
+import { useEntryOverrides } from '@/store/overrides'
 import { formatSize } from '@shared/format'
 import { isTorrentSource } from '@shared/uriKind'
 import type { CatalogGame, GameDetails } from '@shared/catalog'
@@ -57,11 +59,16 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   useEffect(() => { if (confirmStop) focusEl(navItems()[0]) }, [confirmStop])
   useEffect(() => { if (pickingSource) focusEl(navItems()[0]) }, [pickingSource])
 
-  const title = game?.name ?? owned?.title ?? ''
+  // Fiche ouverte depuis la bibliothèque (`entry`) : les modifications de l'utilisateur s'appliquent, comme en mode classique. Depuis le catalogue, la fiche reste celle d'origine.
+  const overrides = useEntryOverrides(entry)
+  const origTitle = game?.name ?? owned?.title ?? ''
+  const view = entry ? resolveView(baseViewFrom(game, details, origTitle), overrides) : null
+  const title = view?.title ?? origTitle
   const cons = game?.console ?? owned?.console ?? ''
-  const year = game?.year ?? details?.releaseYear
-  const developer = game?.developer ?? details?.developer
-  const genres = [...new Set([game?.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
+  const year = view ? view.year ?? undefined : game?.year ?? details?.releaseYear
+  const developer = view ? view.developer ?? undefined : game?.developer ?? details?.developer
+  const summary = view ? view.description ?? undefined : details?.summary
+  const genres = entry && overrides.genre !== undefined ? [overrides.genre] : [...new Set([game?.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
   const launch = async (): Promise<void> => {
     if (!owned) return
     if (def && installed === false) { setError(t('play.notInstalled')); return }
@@ -69,7 +76,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
     if (!r.ok && r.error === 'otherRunning') {
       const otherId = useEmulators.getState().running.find((id) => id !== owned.id)
       const other = otherId !== undefined ? useLibrary.getState().entries.find((e) => e.id === otherId) : undefined
-      if (otherId !== undefined) { setConfirmStop({ otherId, title: other?.title ?? '' }); return }
+      if (otherId !== undefined) { setConfirmStop({ otherId, title: other?.shownTitle ?? '' }); return }
     }
     setError(r.ok ? null : t(`play.${r.error ?? 'spawn'}`) + (r.detail && r.error === 'spawn' ? ` (${r.detail})` : ''))
   }
@@ -85,7 +92,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
     if (useDownloads.getState().jobs[id]) return
     setSourceId(id)
     setError(null)
-    const r = await startDownload(id, title, gameId ?? undefined)
+    const r = await startDownload(id, origTitle, gameId ?? undefined)
     if (r.ok) await useLibrary.getState().refresh()
   }
   const clickDownload = (): void => {
@@ -95,8 +102,8 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   return (
     <div className="bp-overlay">
       <div className="bp-detail" data-focus-root>
-        {gameId !== null
-          ? <Cover className="bp-detail-cover" gameId={gameId} title={title} kind="tile" />
+        {gameId !== null || entry?.art.cover
+          ? <Cover className="bp-detail-cover" gameId={gameId} art={entry?.art.cover} title={title} kind="tile" />
           : <div className="bp-detail-cover" style={artStyle(title)} />}
         <div className="bp-detail-body">
           <h2>{title}</h2>
@@ -104,7 +111,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
           <div className="muted">{[year && t('game.released', { d: String(year) }), details?.publisher && t('game.publishedBy', { p: details.publisher }), developer && t('game.developedBy', { p: developer })].filter(Boolean).join(' · ')}</div>
           {genres.length > 0 && <div className="tags">{genres.map((g) => <Tag key={g}>{g}</Tag>)}</div>}
           {/* Pas de data-nav : texte informatif seulement, déjà défilable au stick droit (cf. scrollWithRightStick) sans jamais recevoir le focus. */}
-          {details?.summary && <div className="bp-summary" data-scroll>{details.summary}</div>}
+          {summary && <div className="bp-summary" data-scroll>{summary}</div>}
           {(error || dlError) && <div className="bp-error">{error ?? `${t('download.failedHeader')} ${dlError}`}</div>}
           <div className="bp-actions">
             {playable && (running
