@@ -4,6 +4,7 @@ import type { GameMedia } from './media'
 import type { CustomEmulatorState, SaveEmulatorResult } from './customEmulators'
 import type { EmulatorOption } from './emulatorChoice'
 import type { EntryOverrides, OverrideField, OverrideImageField, OverrideTextField, SetImageResult } from './overrides'
+import type { ConnectorStatus, ScanReport } from './connectors'
 import type { AddExeResult } from './exeEntry'
 import type { LaunchSpec } from './launch'
 import type { AchievementsResult } from './achievements'
@@ -75,6 +76,11 @@ export interface IpcChannels {
   'customEmulators:delete': { req: string; res: void }
   /** Ouvre l'émulateur seul (sans jeu), pour vérifier qu'il démarre ; faux si l'exécutable est introuvable. */
   'customEmulators:open': { req: string; res: boolean }
+  /** Launchers pris en charge : détectés sur ce PC ? activés ? combien de jeux ? */
+  'connectors:list': { req: void; res: ConnectorStatus[] }
+  'connectors:setEnabled': { req: { id: string; enabled: boolean }; res: void }
+  /** Analyse un launcher (`id`) ou tous ceux qui sont activés (sans `id`) et met la bibliothèque à jour. */
+  'connectors:scan': { req: string | undefined; res: ScanReport[] }
   /** Ajoute des exécutables (.exe/.bat/.cmd/.lnk) comme jeux ; sans chemins, ouvre le sélecteur. */
   'library:addExe': { req: string[] | undefined; res: AddExeResult }
   /** Spécification de lancement d'une entrée non-ROM ; null pour une ROM. */

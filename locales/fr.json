@@ -570,5 +570,16 @@
   "exe.f.cwd": "Dossier de travail",
   "exe.cwdHint": "Par défaut : le dossier de l'exécutable",
   "exe.err.launch": "Exécutable invalide ou déjà utilisé par un autre jeu.",
-  "exe.local": "Exécutable local (hors catalogue)"
+  "exe.local": "Exécutable local (hors catalogue)",
+  "settings.launchers": "Launchers",
+  "launchers.hint": "Importe les jeux déjà installés par vos launchers. Kartouche lit seulement la liste des jeux installés dans les fichiers du launcher : aucun identifiant, mot de passe ni compte n'est lu, et rien n'est envoyé.",
+  "launchers.none": "Aucun launcher n'est pris en charge pour l'instant.",
+  "launchers.detected": "Détecté",
+  "launchers.notDetected": "Non détecté sur ce PC",
+  "launchers.games": "{n} jeu(x)",
+  "launchers.scanning": "Analyse…",
+  "launchers.rescan": "Analyser",
+  "launchers.report": "{found} jeu(x) trouvé(s), {added} ajouté(s), {dup} déjà présent(s) ailleurs.",
+  "launchers.absent": "Launcher introuvable.",
+  "launchers.error": "Lecture impossible : {error}"
 }

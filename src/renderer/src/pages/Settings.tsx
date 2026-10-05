@@ -14,8 +14,9 @@ import { useChangelog } from '@/store/changelog'
 import { useEmulators } from '@/store/emulators'
 import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSetting } from '@shared/settings'
 import { formatSize } from '@shared/format'
+import { LaunchersSection } from '@/ui/LaunchersSection'
 
-const SECTIONS = ['general', 'appearance', 'emulation', 'sources', 'about', 'danger'] as const
+const SECTIONS = ['general', 'appearance', 'emulation', 'sources', 'launchers', 'about', 'danger'] as const
 type Section = (typeof SECTIONS)[number]
 
 const isSection = (s: string | undefined): s is Section => (SECTIONS as readonly string[]).includes(s ?? '')
@@ -175,6 +176,8 @@ export function Settings() {
             <p className="muted">{t('settings.reduceMotionHint')}</p>
           </>
         )}
+
+        {section === 'launchers' && <LaunchersSection />}
 
         {section === 'sources' && (
           <>

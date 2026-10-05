@@ -428,3 +428,7 @@ input[type='range'] { accent-color: var(--accent); max-width: 320px; }
 .playwith-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px; }
 
 .exe-note { cursor: pointer; margin: 8px 0; }
+
+.launcher-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.launcher-row .check { display: flex; align-items: center; gap: 8px; min-width: 200px; }
+.launcher-report { flex-basis: 100%; }

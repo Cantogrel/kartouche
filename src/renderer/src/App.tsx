@@ -37,7 +37,7 @@ export default function App() {
   const started = useRef(false)
   const startBp = useSettings((s) => s.settings.startInBigPicture)
   useEffect(() => { if (ready && !started.current) { started.current = true; if (startBp) setBigPicture(true) } }, [ready, startBp, setBigPicture])
-  useEffect(() => { void load(); void useLibrary.getState().refresh(); void useEmulators.getState().refresh(); void useCustomEmulators.getState().refresh(); return useEmulators.getState().listen() }, [load])
+  useEffect(() => { void load(); void useLibrary.getState().refresh(); void useEmulators.getState().refresh(); void useCustomEmulators.getState().refresh(); void window.api.invoke('connectors:scan', undefined).then((r) => (r.some((x) => x.added > 0 || x.gone > 0) ? useLibrary.getState().refresh() : undefined)); return useEmulators.getState().listen() }, [load])
   // Barre d'état : un téléchargement démarré depuis une fiche continue, et doit y rester visible, même après avoir changé de page.
   useEffect(() => useDownloads.getState().listen(), [])
   // Mises à jour : état tenu à jour partout (pas seulement pendant que Paramètres est monté), et changelog de la

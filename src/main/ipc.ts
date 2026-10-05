@@ -28,6 +28,8 @@ import { deleteCustomEmulator, getCustomEmulator, listCustomEmulators, saveCusto
 import { spawn } from 'node:child_process'
 import { chooseEmulator, emulatorOptions, resolveEmulatorId } from '@shared/emulatorChoice'
 import { buildCustomCommand, formatCommand } from '@shared/customEmulators'
+import { listConnectors, scanConnectors } from './connectors'
+import { isConnectorId } from '@shared/connectors'
 import { addExecutables, updateExeLaunch } from './library/addExe'
 import { getLaunchSpec } from './library/external'
 import { EXE_PICK_EXTENSIONS } from '@shared/exeEntry'
@@ -229,6 +231,12 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
       icon: async (p) => { const img = await app.getFileIcon(p, { size: 'large' }); return img.isEmpty() ? null : img.toPNG() }
     })
   })
+  handle('connectors:list', () => listConnectors(db))
+  handle('connectors:setEnabled', ({ id, enabled }) => {
+    if (!isConnectorId(id)) return
+    saveSettings(db, { connectors: { ...loadUserSettings(db).connectors, [id]: enabled } })
+  })
+  handle('connectors:scan', (id) => scanConnectors(db, id))
   handle('library:launchSpec', (id) => getLaunchSpec(db, id))
   handle('library:setLaunch', ({ id, ...patch }) => updateExeLaunch(db, id, patch))
   handle('customEmulators:pickExe', async () => {

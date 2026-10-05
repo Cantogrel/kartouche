@@ -570,5 +570,16 @@
   "exe.f.cwd": "Working folder",
   "exe.cwdHint": "Default: the executable's folder",
   "exe.err.launch": "Invalid executable, or already used by another game.",
-  "exe.local": "Local executable (not in the catalog)"
+  "exe.local": "Local executable (not in the catalog)",
+  "settings.launchers": "Launchers",
+  "launchers.hint": "Imports the games your launchers have already installed. Kartouche only reads the list of installed games from the launcher's files: no login, password or account data is read, and nothing is sent.",
+  "launchers.none": "No launcher is supported yet.",
+  "launchers.detected": "Detected",
+  "launchers.notDetected": "Not detected on this PC",
+  "launchers.games": "{n} game(s)",
+  "launchers.scanning": "Scanning…",
+  "launchers.rescan": "Scan",
+  "launchers.report": "{found} game(s) found, {added} added, {dup} already present elsewhere.",
+  "launchers.absent": "Launcher not found.",
+  "launchers.error": "Could not read: {error}"
 }
