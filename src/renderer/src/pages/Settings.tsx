@@ -15,6 +15,7 @@ import { useEmulators } from '@/store/emulators'
 import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSetting } from '@shared/settings'
 import { formatSize } from '@shared/format'
 import { LaunchersSection } from '@/ui/LaunchersSection'
+import { HomeLayoutEditor } from '@/ui/HomeLayoutEditor'
 
 const SECTIONS = ['general', 'appearance', 'emulation', 'sources', 'launchers', 'about', 'danger'] as const
 type Section = (typeof SECTIONS)[number]
@@ -174,6 +175,7 @@ export function Settings() {
               <input type="checkbox" checked={settings.reduceMotion} onChange={(e) => void update({ reduceMotion: e.target.checked })} /> {t('settings.reduceMotion')}
             </label>
             <p className="muted">{t('settings.reduceMotionHint')}</p>
+            <HomeLayoutEditor />
           </>
         )}
 
