@@ -13,7 +13,9 @@ import type { GameSource } from '@shared/sourceList'
 import { useLibrary } from '@/store/library'
 import { useEntryOverrides } from '@/store/overrides'
 import { useDialog } from '@/ui/CollectionDialogs'
-import { GameMediaSection } from '@/ui/GameMedia'
+import { MediaSections, useGameMedia } from '@/ui/GameMedia'
+import { Section } from '@/ui/Section'
+import { StatsPanel } from '@/ui/GameStats'
 import { baseViewFrom, resolveView } from '@shared/overrides'
 import { useDownloads } from '@/store/downloads'
 import { openEntryMenuAt } from '@/ui/EntryMenu'
@@ -40,6 +42,7 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
   }, [id])
   // Fiche ouverte depuis la bibliothèque (`entry`) : les modifications de l'utilisateur s'appliquent. Depuis le catalogue, la fiche reste celle d'origine.
   const overrides = useEntryOverrides(entry)
+  const media = useGameMedia(game ? game.id : null)
   useEffect(() => { if (game) setPageTitle(entry ? entry.shownTitle : game.name) }, [game, entry?.shownTitle, setPageTitle])
   if (game === undefined) return null
   if (game === null) return <div className="content"><p className="muted">{t('game.notFound')}</p></div>
@@ -53,7 +56,8 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
   // Genre principal du catalogue d'abord, puis ceux de la fiche (dédoublonnés après traduction).
   const genres = entry && overrides.genre !== undefined ? [overrides.genre] : [...new Set([game.genre, ...(details?.genres ?? []).map((g) => canonicalGenre(g))].filter((g): g is string => !!g))].map((g) => genreLabel(g, lang))
   return (
-    <div className="content nopad">
+    <div className="content nopad detail-page">
+      {entry?.art.background && <div className="detail-backdrop" aria-hidden style={{ backgroundImage: `url(kimg://custom/${entry.art.background})` }} />}
       <Cover className="hero" kind="hero" gameId={game.id} art={entry?.art.banner} title={shownName}>
         <div className="hero-title">{shownName}</div>
         <div className="hero-bar">
@@ -74,18 +78,29 @@ export function CatalogGameDetail({ id, entry }: { id: number; entry?: LibraryEn
       <div className="detail">
         <DownloadFailureNotice sources={sources} />
         {owned && !owned.missing && <QuickExitNotice entryId={owned.id} />}
-        <div className="panel">
-          {year && <div><strong>{t('game.released', { d: String(year) })}</strong></div>}
-          <div className="muted">{[details?.publisher && t('game.publishedBy', { p: details.publisher }), developer && t('game.developedBy', { p: developer })].filter(Boolean).join(' · ')}</div>
-          <div className="tags">{genres.map((x) => <Tag key={x}>{x}</Tag>)}<Tag>{platformLabel(game.console)}</Tag></div>
-          {owned && <LibraryFile entry={owned} />}
-          {loadingDetails && !details && <><span className="skeleton" style={{ width: '90%' }} /><span className="skeleton" style={{ width: '80%' }} /><span className="skeleton" style={{ width: '55%' }} /></>}
-          {summary && (<><h3>{t('game.about')}</h3><p>{summary}</p>{!summaryIsMine && details && <p className="muted">{details.summarySource === 'wikipedia' ? t('game.summaryWikipedia') : details.summarySource === 'machine' ? t('game.summaryMachine') : t('game.source', { p: details.provider.split('+')[0].toUpperCase() })}</p>}</>)}
+        <div className="detail-grid">
+          <div className="detail-main">
+            {(loadingDetails && !details) || summary ? (
+              <Section id="about" title={t('game.about')}>
+                {loadingDetails && !details && !summary && <><span className="skeleton" style={{ width: '90%' }} /><span className="skeleton" style={{ width: '80%' }} /><span className="skeleton" style={{ width: '55%' }} /></>}
+                {summary && (<><p className="about-text">{summary}</p>{!summaryIsMine && details && <p className="muted">{details.summarySource === 'wikipedia' ? t('game.summaryWikipedia') : details.summarySource === 'machine' ? t('game.summaryMachine') : t('game.source', { p: details.provider.split('+')[0].toUpperCase() })}</p>}</>)}
+              </Section>
+            ) : null}
+            <MediaSections media={media} />
+          </div>
+          <div className="detail-side">
+            <Section id="info" title={t('info.title')}>
+              {year && <div><strong>{t('game.released', { d: String(year) })}</strong></div>}
+              <div className="muted">{[details?.publisher && t('game.publishedBy', { p: details.publisher }), developer && t('game.developedBy', { p: developer })].filter(Boolean).join(' \u00b7 ')}</div>
+              <div className="tags">{genres.map((x) => <Tag key={x}>{x}</Tag>)}<Tag>{platformLabel(game.console)}</Tag></div>
+              {owned && <LibraryFile entry={owned} />}
+            </Section>
+            {owned && <StatsPanel entry={owned} />}
+            {owned && !owned.missing && <SavesPanel entry={owned} />}
+            {owned && <ContentPanel entry={owned} />}
+            {owned && !owned.missing && <AchievementsPanel entry={owned} />}
+          </div>
         </div>
-        <GameMediaSection gameId={game.id} />
-        {owned && !owned.missing && <SavesPanel entry={owned} />}
-        {owned && <ContentPanel entry={owned} />}
-        {owned && !owned.missing && <AchievementsPanel entry={owned} />}
       </div>
     </div>
   )

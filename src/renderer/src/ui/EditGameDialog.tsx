@@ -13,7 +13,7 @@ import { baseViewFrom, YEAR_MAX, YEAR_MIN, type BaseView, type EntryOverrides, t
  */
 
 const TEXT_FIELDS: readonly OverrideTextField[] = ['title', 'description', 'genre', 'year', 'developer']
-const IMAGE_FIELDS: readonly OverrideImageField[] = ['cover', 'icon', 'banner']
+const IMAGE_FIELDS: readonly OverrideImageField[] = ['cover', 'icon', 'banner', 'background']
 /** Image d'origine (catalogue) qui correspond à chaque image personnelle, pour l'aperçu. */
 const ORIGINAL_KIND: Record<OverrideImageField, 'tile' | 'icon' | 'hero'> = { cover: 'tile', icon: 'icon', banner: 'hero', background: 'hero' }
 

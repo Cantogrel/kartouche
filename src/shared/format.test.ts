@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatSize } from './format'
+import { formatMinutes, formatSize } from './format'
 
 describe('formatSize', () => {
   it('garde toujours 3 chiffres significatifs, unité adaptée', () => {
@@ -21,5 +21,17 @@ describe('formatSize', () => {
     expect(formatSize(0)).toBe('0 B')
     expect(formatSize(-5)).toBe('0 B')
     expect(formatSize(NaN)).toBe('0 B')
+  })
+})
+
+describe('formatMinutes', () => {
+  it('affiche minutes, heures, ou les deux', () => {
+    expect(formatMinutes(0)).toBe('0 min')
+    expect(formatMinutes(45)).toBe('45 min')
+    expect(formatMinutes(60)).toBe('1 h')
+    expect(formatMinutes(125)).toBe('2 h 05')
+    expect(formatMinutes(150)).toBe('2 h 30')
+    expect(formatMinutes(-5)).toBe('0 min')
+    expect(formatMinutes(Number.NaN)).toBe('0 min')
   })
 })
