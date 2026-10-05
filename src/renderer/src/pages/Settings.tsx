@@ -14,6 +14,7 @@ import { useChangelog } from '@/store/changelog'
 import { useEmulators } from '@/store/emulators'
 import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSetting } from '@shared/settings'
 import { formatSize } from '@shared/format'
+import { AppearanceAdvanced } from '@/ui/AppearanceAdvanced'
 import { LaunchersSection } from '@/ui/LaunchersSection'
 import { HomeLayoutEditor } from '@/ui/HomeLayoutEditor'
 
@@ -175,6 +176,7 @@ export function Settings() {
               <input type="checkbox" checked={settings.reduceMotion} onChange={(e) => void update({ reduceMotion: e.target.checked })} /> {t('settings.reduceMotion')}
             </label>
             <p className="muted">{t('settings.reduceMotionHint')}</p>
+            <AppearanceAdvanced />
             <HomeLayoutEditor />
           </>
         )}

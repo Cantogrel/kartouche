@@ -18,6 +18,9 @@
 }
 /* L'accent « Blanc » (par défaut) n'est visible que sur fond sombre : en clair il redevient un accent sombre-sur-clair. */
 :root[data-theme='light'][data-accent='white'] { --accent: #17171a; --accent-fg: #fff; }
+/* Contraste renforcé : texte plus net, bordures plus marquées. */
+:root.high-contrast { --text: #fff; --text-muted: #c9c9ce; --border: rgba(255,255,255,.35); --border-strong: rgba(255,255,255,.6); }
+:root.high-contrast[data-theme='light'] { --text: #000; --text-muted: #2b2b30; --border: rgba(0,0,0,.45); --border-strong: rgba(0,0,0,.75); }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--text); font: 14px/1.4 var(--font); overflow: hidden; user-select: none; }

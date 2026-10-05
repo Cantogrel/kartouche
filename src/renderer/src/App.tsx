@@ -1,3 +1,4 @@
+import { RADIUS_PX, readableOn } from '@shared/appearance'
 import { useEffect, useRef, useState } from 'react'
 import { t } from '@/i18n'
 import { useSettings } from '@/store/settings'
@@ -48,7 +49,7 @@ export default function App() {
   // Thème clair/sombre : réglage 'auto' suivi en direct si l'OS change de thème pendant que l'app tourne.
   useEffect(() => useSettings.getState().listen(), [])
 
-  const { uiScale, accent, reduceMotion } = useSettings((s) => s.settings)
+  const { uiScale, accent, reduceMotion, accentColor, radius, highContrast } = useSettings((s) => s.settings)
   const theme = useSettings((s) => s.theme)
   useEffect(() => {
     const el = document.documentElement
@@ -58,7 +59,13 @@ export default function App() {
     // Aligne le rendu natif (case à cocher, <select>, ascenseur) sur le thème choisi plutôt que sur celui de l'OS.
     el.style.colorScheme = theme
     el.classList.toggle('reduce-motion', reduceMotion)
-  }, [uiScale, accent, theme, reduceMotion])
+    el.classList.toggle('high-contrast', highContrast)
+    // Accent personnel : surcharge l'accent prédéfini ; le texte posé dessus est choisi pour rester lisible.
+    if (accentColor) { el.style.setProperty('--accent', accentColor); el.style.setProperty('--accent-fg', readableOn(accentColor)) }
+    else { el.style.removeProperty('--accent'); el.style.removeProperty('--accent-fg') }
+    el.style.setProperty('--radius', `${RADIUS_PX[radius][0]}px`)
+    el.style.setProperty('--radius-lg', `${RADIUS_PX[radius][1]}px`)
+  }, [uiScale, accent, theme, reduceMotion, accentColor, radius, highContrast])
 
   if (!ready) return null
   if (bigPicture) return <BigPicture onExit={() => setBigPicture(false)} />
