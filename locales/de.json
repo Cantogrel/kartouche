@@ -472,6 +472,8 @@
   "update.viewChangelog": "Neuerungen anzeigen ({v})",
   "changelog.title": "Neu in {v}",
   "changelog.empty": "Keine Versionshinweise für dieses Update.",
+  "changelog.prev": "Vorherige Version",
+  "changelog.next": "Nächste Version",
   "footer.installing": "{name} wird installiert",
   "footer.removing": "{name} wird deinstalliert",
   "footer.firmware": "Firmware für {name} wird installiert",

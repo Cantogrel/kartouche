@@ -220,6 +220,8 @@ export interface IpcChannels {
   'update:install': { req: void; res: void }
   /** Notes de la dernière mise à jour installée (pour le bouton « voir le changelog » des Paramètres) ; null si aucune. */
   'update:lastChangelog': { req: void; res: UpdateChangelog }
+  /** Notes des versions précédentes de la série de `version` (jusqu'à x.y.0), de la plus récente à la plus ancienne. */
+  'update:olderChangelogs': { req: string; res: { version: string; notes: string }[] }
   /** Comme `update:lastChangelog`, mais seulement si ce changelog n'a pas déjà été montré pour la version en cours ; le marque montré. */
   'update:pendingChangelog': { req: void; res: UpdateChangelog }
   /** Vide le cache réutilisable (téléchargements en attente/échoués, archives d'installation d'émulateurs, scripts

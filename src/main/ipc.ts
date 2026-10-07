@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { IpcChannel, IpcChannels, AppPaths } from '@shared/ipc'
 import { loadSettings, loadUserSettings, saveSettings } from './db/settingsStore'
 import { setDataDir } from './paths'
-import { checkForUpdate, downloadUpdate, installUpdate, lastChangelog, pendingChangelog, updateState } from './updater'
+import { checkForUpdate, downloadUpdate, installUpdate, lastChangelog, olderChangelogs, pendingChangelog, updateState } from './updater'
 import { catalogCount, getGame, queryCatalog } from './catalog/catalogStore'
 import { syncCatalog } from './catalog/sync'
 import { getDetails, providerStatus, type MetadataProvider } from './catalog/providers'
@@ -103,6 +103,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('update:download', () => downloadUpdate())
   handle('update:install', () => installUpdate())
   handle('update:lastChangelog', () => lastChangelog(db))
+  handle('update:olderChangelogs', (version) => olderChangelogs(version))
   handle('update:pendingChangelog', () => pendingChangelog(db))
   handle('settings:get', () => loadUserSettings(db))
   handle('settings:set', (patch) => saveSettings(db, patch))
