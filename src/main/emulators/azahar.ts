@@ -42,11 +42,11 @@ export function azaharRenderer(gpu: Gpu, displayHeight: number): Record<string, 
 }
 
 /**
- * Disposition : « Large Screen » (2) — l'écran du haut en grand, celui du bas en petit dans un coin, les deux visibles —, rien d'autre de modifié
+ * Disposition : « Hybrid Screen » (5) — un écran en grand et les deux écrans en petit à côté, ce qui remplit au mieux un écran 16:9 —, rien d'autre de modifié
  * (pas d'espace entre les écrans, tailles proportionnées par Azahar). Changer de disposition (F10, toutes les dispositions y compris un seul
  * écran), échanger les écrans (F9) et les pivoter (F8) sont des raccourcis natifs d'Azahar, déjà actifs.
  */
-export const AZAHAR_LAYOUT: Record<string, string | number | boolean> = { layout_option: 2 }
+export const AZAHAR_LAYOUT: Record<string, string | number | boolean> = { layout_option: 5 }
 
 /** Audio : moteur et périphérique « Auto » (suit le périphérique par défaut de Windows), volume 100 %, étirement actif ; ni latence ni mode exclusif forcés. */
 export const AZAHAR_AUDIO: Record<string, string | number | boolean> = { output_type: 0, output_device: 'Auto', volume: 1, enable_audio_stretching: true }

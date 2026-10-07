@@ -7,8 +7,8 @@ import { igdbImageUrl, youtubeEmbedUrl, type GameMedia } from '@shared/media'
 type Item = { kind: 'trailer'; id: string; name: string } | { kind: 'image'; id: string }
 
 /**
- * « Médias » en plein écran, à la manette : bandes-annonces puis captures dans un seul visionneur. ◀ ▶ (ou LB/RB) passent d'un média au suivant,
- * A met une vidéo en pause / la reprend, B ferme. Une vidéo se lance toute seule.
+ * « Médias » en plein écran, à la manette : bandes-annonces puis captures dans un seul visionneur. Le stick droit (gauche/droite) ou LB/RB passent d'un média au
+ * suivant ; le stick gauche et la croix restent réservés au focus des boutons. A met une vidéo en pause / la reprend, B ferme. Une vidéo se lance toute seule.
  */
 export function BpMediaViewer({ media, onClose }: { media: Pick<GameMedia, 'trailers' | 'screenshots' | 'artworks'>; onClose: () => void }) {
   const items = useMemo<Item[]>(() => [
@@ -27,12 +27,25 @@ export function BpMediaViewer({ media, onClose }: { media: Pick<GameMedia, 'trai
   const step = (d: number): void => { setIndex((i) => (i + d + items.length) % items.length); setPaused(false) }
   useEffect(() => pushLayer((a) => {
     if (a === 'back') { onClose(); return true }
-    if ((a === 'prev' || a === 'left') && items.length > 1) { step(-1); return true }
-    if ((a === 'next' || a === 'right') && items.length > 1) { step(1); return true }
+    if (a === 'prev' && items.length > 1) { step(-1); return true }
+    if (a === 'next' && items.length > 1) { step(1); return true }
     return false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [items.length])
   useEffect(() => { focusEl(navItems()[0]) }, [])
+  // Stick droit (axe 2, horizontal) : un média par poussée, comme un appui sur LB/RB ; il ne sert pas au focus.
+  useEffect(() => {
+    if (items.length < 2) return
+    let held = 0
+    const id = window.setInterval(() => {
+      let x = 0
+      for (const pad of navigator.getGamepads()) { const v = pad?.axes[2] ?? 0; if (Math.abs(v) > Math.abs(x)) x = v }
+      const dir = x > 0.6 ? 1 : x < -0.6 ? -1 : 0
+      if (dir !== held) { held = dir; if (dir) step(dir) }
+    }, 50)
+    return () => window.clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length])
   if (!item) return null
   const label = item.kind === 'trailer' ? item.name || t('media.trailer') : t('media.screenshot', { n: imageNumber, total: imageTotal })
   return (
