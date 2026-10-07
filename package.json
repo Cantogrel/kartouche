@@ -1,6 +1,6 @@
 {
   "name": "kartouche",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Bibliothèque de jeux d'émulation pour Windows",
   "main": "./out/main/index.js",
   "private": true,
