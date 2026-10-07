@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { spawn } from 'node:child_process'
 import { createWriteStream, existsSync } from 'node:fs'
-import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -92,13 +92,16 @@ async function installCores(def: EmulatorDef, dir: string, cache: string, report
   const cores = [...new Set(Object.values(RETROARCH_CORES))]
   const coresDir = join(dir, 'cores')
   await mkdir(coresDir, { recursive: true })
-  for (let i = 0; i < cores.length; i++) {
-    report({ id: def.id, phase: 'cores', done: i, total: cores.length, message: cores[i] })
-    const zip = join(cache, `${cores[i]}_libretro.dll.zip`)
-    await download(coreUrl(cores[i]), zip, () => {})
+  // Tous les cœurs en parallèle (téléchargement + extraction) : ils sont indépendants et le temps est surtout celui du réseau.
+  let finished = 0
+  report({ id: def.id, phase: 'cores', done: 0, total: cores.length })
+  await Promise.all(cores.map(async (core) => {
+    const zip = join(cache, `${core}_libretro.dll.zip`)
+    await download(coreUrl(core), zip, () => {})
     await extract(zip, coresDir)
     await rm(zip, { force: true })
-  }
+    report({ id: def.id, phase: 'cores', done: ++finished, total: cores.length, message: core })
+  }))
 }
 
 /**
@@ -129,8 +132,13 @@ export async function installEmulator(db: DatabaseSync, def: EmulatorDef, paths:
     await extract(archive, tmp)
     await rm(archive, { force: true })
     const dest = join(paths.emulators, id)
-    await mkdir(dest, { recursive: true })
-    await cp(await flattenRoot(tmp), dest, { recursive: true, force: true })
+    const root = await flattenRoot(tmp)
+    // Première installation : le dossier extrait est déplacé d'un coup (même volume) au lieu de copier des milliers de fichiers (RetroArch). Mise à jour : copie par-dessus.
+    const moved = !existsSync(dest) && await rename(root, dest).then(() => true, () => false)
+    if (!moved) {
+      await mkdir(dest, { recursive: true })
+      await cp(root, dest, { recursive: true, force: true })
+    }
     await rm(tmp, { recursive: true, force: true })
     const exe = await findExe(dest, def.exe)
     if (!exe) throw new Error(`${def.exe[0]} introuvable après l'installation`)
@@ -155,6 +163,11 @@ export async function installEmulator(db: DatabaseSync, def: EmulatorDef, paths:
 export async function uninstallEmulator(db: DatabaseSync, id: string): Promise<void> {
   const r = getRow(db, id)
   if (!r) return
-  if (!r.custom) await rm(r.dir, { recursive: true, force: true })
+  if (!r.custom) {
+    // Le dossier est d'abord déplacé (instantané) puis supprimé en arrière-plan : effacer des milliers de fichiers (RetroArch) prend plusieurs secondes.
+    const trash = `${r.dir}.del-${Date.now()}`
+    if (await rename(r.dir, trash).then(() => true, () => false)) void rm(trash, { recursive: true, force: true }).catch(() => {})
+    else await rm(r.dir, { recursive: true, force: true })
+  }
   deleteEmulator(db, id)
 }

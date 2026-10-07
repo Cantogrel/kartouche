@@ -19,7 +19,7 @@ const acceptedFiles = (def: EmulatorDef): string => extensionsForConsoles(def.co
 const mb = (n: number): string => (n / 1048576).toFixed(n > 10485760 ? 0 : 1)
 
 export function Emulators() {
-  const { list, loaded, progress, errors, latest, checking, refresh, install, uninstall, locate, check } = useEmulators()
+  const { list, loaded, progress, removing, errors, latest, checking, refresh, install, uninstall, locate, check } = useEmulators()
   useEffect(() => { void refresh() }, [refresh])
   const state = (id: string) => list.find((e) => e.id === id)
   const customs = useCustomEmulators((s) => s.list)
@@ -38,14 +38,21 @@ export function Emulators() {
         {EMULATORS.filter((d) => emulatorMaker(d) === maker).sort((a, b) => emulatorRank(a) - emulatorRank(b)).map((def) => {
           const s = state(def.id)
           const p = progress[def.id]
+          const rm = !!removing[def.id]
           const newer = latest[def.id]
           const update = !!s?.version && !!newer && newer !== s.version && (compareVersions(newer, s.version) > 0 || !/^[\d.]+$/.test(newer))
-          const status = !loaded ? '' : p ? t('emu.installing') : !s?.installed ? t('status.notInstalled') : s.missing ? t('emu.missing') : update ? t('emu.updateAvailable', { v: newer ?? '' }) : t('status.installed')
+          const status = !loaded ? '' : rm ? t('emu.removing') : p ? t('emu.installing') : !s?.installed ? t('status.notInstalled') : s.missing ? t('emu.missing') : update ? t('emu.updateAvailable', { v: newer ?? '' }) : t('status.installed')
           return (
             <div key={def.id} className="emu-card">
               <h3>{def.name}{MANUAL_PAD_EMULATORS.includes(def.id) && <span className="emu-warn" title={t('emu.manualPadHint')} aria-label={t('emu.manualPadHint')}>⚠</span>}</h3>
               <div className="muted">{consoleNames(def)}{s?.version ? ` · ${s.version}` : ''}{s?.custom ? ` · ${t('emu.custom')}` : ''}</div>
               <div className="muted emu-exts">{t('emu.acceptedFiles', { list: acceptedFiles(def) })}</div>
+              {rm && (
+                <div style={{ marginTop: 12 }}>
+                  <ProgressBar value={100} />
+                  <div className="muted">{t('emu.removing')}</div>
+                </div>
+              )}
               {p && (
                 <div style={{ marginTop: 12 }}>
                   <ProgressBar value={p.phase === 'download' && p.total ? (p.done / p.total) * 100 : p.phase === 'cores' && p.total ? (p.done / p.total) * 100 : 100} />
@@ -67,7 +74,7 @@ export function Emulators() {
                       <Button onClick={() => void window.api.invoke('emulators:open', { id: def.id, what: 'dir' })}>{t('emu.folder')}</Button>
                       {biosSlotsFor(def.id).some((x) => x.kind === 'bios') && <Button onClick={() => void window.api.invoke('emulators:open', { id: def.id, what: 'bios' })}>{t('emu.biosFolder')}</Button>}
                       {(update || s.missing) && !s.custom && <Button variant="primary" onClick={() => void install(def.id)}>{t(s.missing ? 'emu.reinstall' : 'emu.update')}</Button>}
-                      <Button onClick={async () => { if (await confirmDialog(t(s.custom ? 'emu.confirmForget' : 'emu.confirmRemove', { name: def.name }))) void uninstall(def.id) }}>{t(s.custom ? 'emu.forget' : 'emu.remove')}</Button>
+                      <Button disabled={rm} onClick={async () => { if (!rm && await confirmDialog(t(s.custom ? 'emu.confirmForget' : 'emu.confirmRemove', { name: def.name }))) void uninstall(def.id) }}>{t(s.custom ? 'emu.forget' : 'emu.remove')}</Button>
                     </>
                   )}
                   {!s?.installed && !p && (

@@ -6,6 +6,10 @@ interface EmulatorsState {
   loaded: boolean
   progress: Record<string, EmulatorProgress>
   errors: Record<string, string>
+  /** Émulateurs en cours de désinstallation : le bouton est bloqué et la barre d'état l'indique. */
+  removing: Record<string, true>
+  /** Firmware installé seul (bouton « Installer automatiquement »), hors installation de l'émulateur : tâche en cours dans la barre d'état. */
+  firmware: Record<string, EmulatorProgress>
   latest: Record<string, string | null>
   checking: boolean
   /** Jeux (ids de la bibliothèque) actuellement ouverts dans un émulateur. */
@@ -27,7 +31,7 @@ interface EmulatorsState {
 }
 
 export const useEmulators = create<EmulatorsState>((set, get) => ({
-  list: [], loaded: false, progress: {}, errors: {}, latest: {}, checking: false, running: [], launching: [], quickExits: {},
+  list: [], loaded: false, progress: {}, errors: {}, removing: {}, firmware: {}, latest: {}, checking: false, running: [], launching: [], quickExits: {},
   refresh: async () => {
     const [list, running] = await Promise.all([window.api.invoke('emulators:list'), window.api.invoke('game:running')])
     set({ list, running, loaded: true })
@@ -43,10 +47,16 @@ export const useEmulators = create<EmulatorsState>((set, get) => ({
     })
     await get().refresh()
   },
-  uninstall: async (id) => { await window.api.invoke('emulators:uninstall', id); await get().refresh() },
-  uninstallAll: async () => {
-    for (const e of get().list.filter((e) => e.installed)) await window.api.invoke('emulators:uninstall', e.id)
+  uninstall: async (id) => {
+    if (get().removing[id]) return
+    set((s) => ({ removing: { ...s.removing, [id]: true } }))
+    try { await window.api.invoke('emulators:uninstall', id) } finally {
+      set((s) => { const removing = { ...s.removing }; delete removing[id]; return { removing } })
+    }
     await get().refresh()
+  },
+  uninstallAll: async () => {
+    for (const e of get().list.filter((e) => e.installed)) await get().uninstall(e.id)
   },
   locate: async (id) => { if (await window.api.invoke('emulators:locate', id)) await get().refresh() },
   check: async () => {
@@ -78,7 +88,14 @@ export const useEmulators = create<EmulatorsState>((set, get) => ({
     return { quickExits }
   }),
   listen: () => {
-    const off1 = window.api.on('emulators:progress', (p) => set((s) => (s.progress[p.id] ? { progress: { ...s.progress, [p.id]: p } } : s)))
+    const off1 = window.api.on('emulators:progress', (p) => set((s) => {
+      if (s.progress[p.id]) return { progress: { ...s.progress, [p.id]: p } }
+      // Hors installation de l'émulateur : c'est le firmware officiel installé seul ; la tâche s'arrête à « done » (émis quoi qu'il arrive).
+      const firmware = { ...s.firmware }
+      if (p.phase === 'done' || p.phase === 'error') delete firmware[p.id]
+      else firmware[p.id] = p
+      return { firmware }
+    }))
     const off2 = window.api.on('game:session', (g) => {
       set((s) => ({
         running: g.running ? [...new Set([...s.running, g.entryId])] : s.running.filter((x) => x !== g.entryId),
