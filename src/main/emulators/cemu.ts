@@ -214,15 +214,27 @@ ${entries}
  * de doigt sur l'écran tactile du GamePad (natif Cemu, pas de mapping). Un commentaire marque le fichier comme écrit par Kartouche : Cemu
  * le réécrit sans ce commentaire dès que l'utilisateur retouche ses réglages, et Kartouche n'y touche alors plus jamais.
  */
-export function cemuProfileXml(kind: PadKind): string {
+export function cemuProfileXml(kind: PadKind, xinputSlot = 0): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!-- romvault:cemu-profile=${kind} -->
 <emulated_controller>
   <type>${TYPE_NAME[kind]}</type>${kind === 'gamepad' ? '\n  <toggle_display>0</toggle_display>' : ''}
 ${controllerBlock(kind, 'Keyboard', 'keyboard', 'Keyboard', 0.25, Object.fromEntries(Object.keys(IDS[kind]).map((c) => [c, KEYBOARD[c]])))}
-${controllerBlock(kind, 'XInput', '0', 'Controller 1', 0.15, Object.fromEntries(Object.keys(XINPUT).map((c) => [c, XINPUT[c]])))}
+${controllerBlock(kind, 'XInput', String(xinputSlot), 'Controller 1', 0.15, Object.fromEntries(Object.keys(XINPUT).map((c) => [c, XINPUT[c]])))}
 </emulated_controller>
 `
+}
+
+/**
+ * Manette XInput du profil Kartouche : l'emplacement de celle qu'on utilise (Sunshine en ajoute de virtuelles, la première n'est pas forcément la bonne).
+ * Un profil retouché par l'utilisateur (marqueur disparu) n'est jamais touché.
+ */
+export async function applyCemuPad(dir: string, xinputSlot: number): Promise<void> {
+  const file = join(dir, 'controllerProfiles', 'controller0.xml')
+  const current = await readFile(file, 'utf8').catch(() => null)
+  if (current === null || !MARKER.test(current)) return
+  const next = current.replace(/(<api>XInput<\/api>\s*<uuid>)\d(<\/uuid>)/, `$1${xinputSlot}$2`)
+  if (next !== current) await writeFile(file, next)
 }
 
 /**

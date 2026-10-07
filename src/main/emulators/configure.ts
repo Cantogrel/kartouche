@@ -648,6 +648,41 @@ const SDL_NAMES: Record<string, string> = {
   RUp: 'SDL-0/-RightY', RDown: 'SDL-0/+RightY', RLeft: 'SDL-0/-RightX', RRight: 'SDL-0/+RightX',
   LargeMotor: 'SDL-0/LargeMotor', SmallMotor: 'SDL-0/SmallMotor'
 }
+const SDL_PADS = [0, 1, 2, 3]
+
+/**
+ * Ajoute les manettes SDL 1 à 3 à chaque liaison `SDL-0/…` de `[Pad1]` (clé répétée = plusieurs liaisons), pour une installation faite avant que la manette 0 seule ne pose problème.
+ * Idempotent ; le clavier, les moteurs de vibration et ce que l'utilisateur a mis sur d'autres manettes ne sont pas touchés.
+ */
+export function expandSdlPads(text: string): string {
+  const nl = text.includes('\r\n') ? '\r\n' : '\n'
+  const lines = text.split(/\r?\n/)
+  const head = lines.findIndex((l) => l.trim() === '[Pad1]')
+  if (head < 0) return text
+  let end = lines.findIndex((l, i) => i > head && /^\s*\[/.test(l))
+  if (end < 0) end = lines.length
+  const section = lines.slice(head + 1, end)
+  const out: string[] = []
+  for (const line of section) {
+    out.push(line)
+    const m = /^(\s*)([A-Za-z0-9]+)(\s*=\s*)SDL-0\/(.+?)\s*$/.exec(line)
+    if (!m || /Motor$/.test(m[2])) continue
+    for (const i of SDL_PADS.slice(1)) {
+      const added = `${m[1]}${m[2]}${m[3]}SDL-${i}/${m[4]}`
+      if (!section.some((l) => l.trim() === added.trim())) out.push(added)
+    }
+  }
+  return [...lines.slice(0, head + 1), ...out, ...lines.slice(end)].join(nl)
+}
+
+/** DuckStation (settings.ini) et PCSX2 (inis/PCSX2.ini) : la manette utilisée peut être n'importe laquelle des quatre premières. */
+export async function applyPsPads(file: string): Promise<void> {
+  const text = await readText(file)
+  if (!text) return
+  const next = expandSdlPads(text)
+  if (next !== text) await writeFile(file, next)
+}
+
 /** Liaisons de la manette PlayStation : le clavier d'origine de l'émulateur puis la manette (clé répétée = plusieurs liaisons). */
 const psPad = (arrows: [string, string, string, string], enter: string): Record<string, string | readonly string[]> => {
   const kb: Record<string, string> = {
@@ -657,7 +692,8 @@ const psPad = (arrows: [string, string, string, string], enter: string): Record<
     LUp: 'Keyboard/W', LRight: 'Keyboard/D', LDown: 'Keyboard/S', LLeft: 'Keyboard/A', RUp: 'Keyboard/T', RRight: 'Keyboard/H', RDown: 'Keyboard/G', RLeft: 'Keyboard/F'
   }
   const out: Record<string, string | readonly string[]> = {}
-  for (const [k, key] of Object.entries(kb)) out[k] = [key, SDL_NAMES[k]]
+  // Clavier, puis les manettes SDL 0 à 3 : Sunshine ajoute des manettes virtuelles, la manette utilisée n'est pas forcément la première (voir padChoice.ts).
+  for (const [k, key] of Object.entries(kb)) out[k] = [key, ...SDL_PADS.map((i) => SDL_NAMES[k].replace('SDL-0', `SDL-${i}`))]
   out.LargeMotor = SDL_NAMES.LargeMotor
   out.SmallMotor = SDL_NAMES.SmallMotor
   return out
