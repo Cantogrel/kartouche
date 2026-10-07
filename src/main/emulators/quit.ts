@@ -32,7 +32,24 @@ while ($true) {
 }
 `
 
-const SLOTS_SCRIPT = `${XINPUT_TYPE}$found = @()
+// Manette sur laquelle on appuie : une ligne « emplacement » à chaque nouvel appui (bouton, gâchette ou stick franchement incliné). Sondé toutes les 100 ms, s'arrête avec Kartouche.
+const ACTIVITY_SCRIPT = `param([int]$ParentPid)
+${XINPUT_TYPE}$last = @(-1, -1, -1, -1)
+while ($true) {
+  if (-not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { exit }
+  for ($i = 0; $i -lt 4; $i++) {
+    $s = New-Object XI+ST
+    if ([XI]::XInputGetState($i, [ref]$s) -ne 0) { $last[$i] = -1; continue }
+    $p = $s.Pad
+    $active = ($p.Buttons -ne 0) -or ($p.LT -gt 100) -or ($p.RT -gt 100) -or ([math]::Abs($p.LX) -gt 16000) -or ([math]::Abs($p.LY) -gt 16000) -or ([math]::Abs($p.RX) -gt 16000) -or ([math]::Abs($p.RY) -gt 16000)
+    if ($active -and $s.Packet -ne $last[$i]) { Write-Output $i }
+    $last[$i] = $s.Packet
+  }
+  Start-Sleep -Milliseconds 100
+}
+`
+
+const SLOTS_SCRIPT =`${XINPUT_TYPE}$found = @()
 for ($i = 0; $i -lt 4; $i++) {
   $s = New-Object XI+ST
   if ([XI]::XInputGetState($i, [ref]$s) -eq 0) { $found += $i }
@@ -142,6 +159,15 @@ export async function anyGamepadConnected(cacheDir: string): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', HID_PADS_SCRIPT], { windowsHide: true, timeout: 8000 }, (err, stdout) => resolve(!err && String(stdout).includes('PAD')))
   })
+}
+
+/** Surveille les manettes : `onPress(emplacement)` à chaque appui sur l'une d'elles. Renvoie la fonction d'arrêt. */
+export async function watchPadActivity(cacheDir: string, onPress: (slot: number) => void): Promise<() => void> {
+  const file = await scriptFile(cacheDir, 'xinput-activity.ps1', ACTIVITY_SCRIPT)
+  const child = spawn('powershell.exe', [...PS_ARGS, file, '-ParentPid', String(process.pid)], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
+  child.stdout.on('data', (d) => { for (const m of String(d).matchAll(/^([0-3])\s*$/gm)) onPress(Number(m[1])) })
+  child.on('error', () => {})
+  return () => { child.kill() }
 }
 
 /** Surveille la manette pendant une partie ; `onChord` est appelé quand Retour + Start sont maintenus. Renvoie la fonction d'arrêt. */

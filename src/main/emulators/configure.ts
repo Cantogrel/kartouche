@@ -551,6 +551,16 @@ export async function applyEdenGameConfig(dir: string, titleId: string | null | 
   if (!existsSync(file)) await writeIni(file, patch, '=')
 }
 
+/** melonDS ne lit qu'un joystick SDL, désigné par son rang (`JoystickID`) : celui de la manette à lire, réécrit à chaque lancement. */
+export async function applyMelondsPad(dir: string, joystickId: number | null): Promise<void> {
+  if (joystickId === null) return
+  const file = join(dir, 'melonDS.toml')
+  const text = await readText(file)
+  if (!text) return
+  const next = setTomlKeys(text, 'Instance0', { JoystickID: joystickId })
+  if (next !== text) await writeFile(file, next)
+}
+
 /**
  * Disposition d'écrans propre au jeu (code de jeu de la ROM), appliquée avant son lancement puis restaurée au lancement d'un autre jeu :
  * melonDS n'a qu'une configuration globale. L'état (disposition d'origine, valeurs appliquées) est gardé à côté de melonDS.toml ; une valeur

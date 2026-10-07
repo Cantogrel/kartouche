@@ -8,11 +8,12 @@ import { basename, dirname, join } from 'node:path'
 import { buildArgs, emulatorById, emulatorForConsole, type EmulatorDef, type GameSession, type LaunchResult, type QuickExit } from '@shared/emulators'
 import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
+import { preferActive, rankAmong, startPadTracker } from './padChoice'
 import { anyGamepadConnected, closeGracefully, connectedXInputPads, connectedXInputSlots, watchQuitChord } from './quit'
 import { emulatorEnv } from './sdlEnv'
 import { applyCemuControls } from './cemu'
 import { isVWiiWrapper, readWuaFiles } from '../library/content/wua'
-import { applyDolphinFastDiscExclusion, applyDolphinPad, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyEdenPad, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
+import { applyDolphinFastDiscExclusion, applyDolphinPad, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyMelondsPad, applyEdenPad, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
 import { loadSettings } from '../db/settingsStore'
 import { backupSaves, cemuMlcDir, learnCemuKey, prepareRetroarch, readDiscId, snapshotCemuSaves } from '../saves/saves'
 import { identifyGame } from '../saves/identify'
@@ -177,6 +178,9 @@ async function readNcsdTitleId(path: string): Promise<string | null> {
   try { const b = Buffer.alloc(0x110); await fh.read(b, 0, b.length, 0); return ncsdTitleId(b) } finally { await fh.close() }
 }
 
+/** Surveille les manettes dès l'ouverture de Kartouche : celle utilisée juste avant le lancement d'un jeu est celle que l'émulateur doit lire. */
+export const watchPads = startPadTracker
+
 export const isRunning = (entryId: number): boolean => running.has(entryId)
 
 /** Ferme le jeu proprement. */
@@ -257,7 +261,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
   try {
     // Dolphin invalide toute liaison qui cite un périphérique absent : la manette branchée est écrite à chaque lancement.
     if (def.id === 'dolphin') {
-      const slots = await connectedXInputSlots(cacheDir)
+      const slots = preferActive(await connectedXInputSlots(cacheDir), (s) => s)
       const gameId = await readDiscId(romPath)
       await applyDolphinPad(row.dir, slots.length ? slots[0] : null, { console: entry.console, gameId }).catch(() => {})
       // FastDiscSpeed est activé globalement (voir configureDolphin) ; quelques jeux (liste d'exclusion) en ont besoin
@@ -270,10 +274,14 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       await applyAzaharGameConfig(row.dir, (await readNcsdTitleId(romPath).catch(() => null)) ?? entry.title_id).catch(() => {})
     }
     // melonDS : disposition d'écrans propre au jeu (code de jeu de la ROM) si une exception est connue, sinon retour à la disposition d'origine.
+    // melonDS et RetroArch ne lisent qu'une manette pour le joueur 1 : la dernière sur laquelle on a appuyé (voir padChoice.ts), pas forcément la première branchée.
+    const padSlots = def.id === 'melonds' || def.id === 'retroarch' ? await connectedXInputSlots(cacheDir) : []
+    const padSlot = preferActive(padSlots, (s) => s)[0] ?? null
+    if (def.id === 'melonds') await applyMelondsPad(row.dir, padSlot === null ? null : rankAmong(padSlots, padSlot)).catch(() => {})
     if (def.id === 'melonds') await applyMelondsGame(row.dir, await readNdsCode(romPath).catch(() => null)).catch(() => {})
     // Eden : manette XInput si branchée, sinon clavier ; configuration propre au jeu seulement si une exception est connue (Title ID).
     if (def.id === 'eden') {
-      await applyEdenPad(row.dir, (await connectedXInputPads(cacheDir))[0] ?? null).catch(() => {})
+      await applyEdenPad(row.dir, preferActive(await connectedXInputPads(cacheDir), (p) => p.slot)[0] ?? null).catch(() => {})
       await applyEdenGameConfig(row.dir, entry.title_id).catch(() => {})
     }
     // PPSSPP : réglages propres au jeu (DISC_ID lu sur l'ISO) seulement si une exception est connue ; manettes et clavier : défauts natifs de PPSSPP, rien à écrire.
@@ -289,7 +297,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     // RPCS3 : sans profil de manette il n'en utilise aucune. Manette XInput (à son emplacement réel), sinon manette Sony native, sinon clavier ; réglages propres au jeu seulement si
     // une exception est connue (numéro de série lu sur le disque).
     if (def.id === 'rpcs3') {
-      const slots = await connectedXInputSlots(cacheDir)
+      const slots = preferActive(await connectedXInputSlots(cacheDir), (s) => s)
       const pad = slots.length ? { kind: 'xinput' as const, slot: slots[0] } : await detectSonyPad().then((kind) => (kind ? { kind } : null)).catch(() => null)
       await applyRpcs3Pad(row.dir, pad).catch(() => {})
       await applyRpcs3Game(row.dir, await readPs3Serial(romPath).catch(() => null)).catch(() => {})
@@ -297,7 +305,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     // Cemu : Pro Controller par défaut, profil GamePad pour les jeux qui l'exigent (profil de l'utilisateur jamais touché).
     if (def.id === 'cemu') await applyCemuControls(row.dir, entry.title, basename(entry.path)).catch(() => {})
     // RetroArch range ses sauvegardes et états dans le dossier de données de Kartouche (par jeu, hors de l'installation).
-    if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot).catch(() => {})
+    if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot, padSlot).catch(() => {})
     // DuckStation n'écrit rien sur la sortie standard : sans ça, un jeu qui se ferme tout seul ne laisse aucune trace exploitable.
     if (def.id === 'duckstation') {
       await ensureDuckstationLogging(row.dir).catch(() => {})
