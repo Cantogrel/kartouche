@@ -15,6 +15,8 @@ const clamp = (n: number): number => Math.min(1, Math.max(0, n))
 export function StatusBar() {
   const [sync, setSync] = useState<SyncProgress | null>(null)
   const emu = useEmulators((s) => s.progress)
+  const removing = useEmulators((s) => s.removing)
+  const firmware = useEmulators((s) => s.firmware)
   const libBusy = useLibrary((s) => s.busy)
   const libProgress = useLibrary((s) => s.progress)
   const downloads = useDownloads((s) => s.jobs)
@@ -25,6 +27,11 @@ export function StatusBar() {
   for (const p of Object.values(emu)) {
     const fraction = p.total > 0 ? p.done / p.total : null
     jobs.push({ label: t('footer.installing', { name: emulatorById(p.id)?.name ?? p.id }) + (fraction !== null ? ` ${Math.round(fraction * 100)} %` : ' …'), fraction })
+  }
+  for (const id of Object.keys(removing)) jobs.push({ label: `${t('footer.removing', { name: emulatorById(id)?.name ?? id })} …`, fraction: null })
+  for (const p of Object.values(firmware)) {
+    const fraction = p.phase === 'download' && p.total > 0 ? p.done / p.total : null
+    jobs.push({ label: t('footer.firmware', { name: emulatorById(p.id)?.name ?? p.id }) + (fraction !== null ? ` ${Math.round(fraction * 100)} %` : ' …'), fraction })
   }
   for (const d of Object.values(downloads)) {
     const fraction = d.phase === 'downloading' && d.total > 0 ? d.done / d.total : null
