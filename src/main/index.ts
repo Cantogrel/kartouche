@@ -11,6 +11,7 @@ import { getImage, type ImageKind } from './catalog/images'
 import { getGame, rebuildDerived } from './catalog/catalogStore'
 import { loadSettings } from './db/settingsStore'
 import { initUpdater } from './updater'
+import { watchPads } from './emulators/launcher'
 import { pruneCustomArt, readCustomArt } from './library/customArt'
 import { EMBED_REFERER, needsEmbedReferer } from './embedHeaders'
 import { migrateLegacyUserData, removeLegacyUpdaterCache, retireLegacyUserData } from './legacy'
@@ -119,6 +120,8 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['https://www.youtube-nocookie.com/*'] }, (details, callback) => {
       callback({ requestHeaders: needsEmbedReferer(details.url, details.resourceType) ? { ...details.requestHeaders, Referer: EMBED_REFERER } : details.requestHeaders })
     })
+    // Manette utilisée en dernier (la vraie ou celle de Moonlight) : c'est celle que les émulateurs doivent lire (voir padChoice.ts).
+    watchPads(join(paths.cache, 'tools'))
     // Images personnelles qui n'ont plus d'entrée (arrêt brutal, remise à zéro…) : retirées au démarrage, sans bloquer l'ouverture.
     void pruneCustomArt(db, paths.dataDir).catch(() => undefined)
     protocol.handle('kimg', async (req) => {

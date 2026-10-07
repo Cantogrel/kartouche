@@ -349,7 +349,7 @@ export async function deleteGameSaves(db: DatabaseSync, savesRoot: string, entry
  * RetroArch : range sauvegardes et états dans le dossier de données de Kartouche (par jeu, hors de l'installation).
  * Les fichiers déjà présents dans les anciens dossiers de l'installation y sont recopiés une fois.
  */
-export async function prepareRetroarch(dir: string, savesRoot: string): Promise<void> {
+export async function prepareRetroarch(dir: string, savesRoot: string, padSlot: number | null = null): Promise<void> {
   const cfg = join(dir, 'retroarch.cfg')
   const root = retroarchSavesRoot(savesRoot)
   const wanted = { savefile_directory: join(root, 'saves'), savestate_directory: join(root, 'states') }
@@ -361,6 +361,7 @@ export async function prepareRetroarch(dir: string, savesRoot: string): Promise<
   await mkdir(wanted.savefile_directory, { recursive: true })
   await mkdir(wanted.savestate_directory, { recursive: true })
   const text = existsSync(cfg) ? await readFile(cfg, 'utf8') : ''
-  const next = patchCfg(text, wanted)
+  // Manette du joueur 1 : celle sur laquelle on vient d'appuyer (pilote XInput de RetroArch : l'indice est l'emplacement XInput).
+  const next = patchCfg(text, padSlot === null ? wanted : { ...wanted, input_player1_joypad_index: padSlot })
   if (next !== text) await writeFile(cfg, next)
 }
