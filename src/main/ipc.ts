@@ -55,6 +55,7 @@ import { getRow, listEmulators, saveEmulator } from './emulators/emulatorStore'
 import { biosStatus, importBiosFile, removeBios } from './bios/bios'
 import { BIOS_SLOTS } from '@shared/bios'
 import { autoInstallFirmware } from './bios/official'
+import { bringKartoucheToFront } from './refocus'
 import { isRunning, launchGame, openEmulator, runningCount, stopAllGames, stopGame, stopGameAndWait } from './emulators/launcher'
 import { dirname, join } from 'node:path'
 import { existsSync, mkdirSync } from 'node:fs'
@@ -483,7 +484,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('game:play', (entryId) => launchGame(db, entryId, (s) => {
     broadcast('game:session', s)
     if (s.running) { if (!globalShortcut.isRegistered(QUIT_KEY)) globalShortcut.register(QUIT_KEY, stopAllGames) }
-    else if (runningCount() === 0) globalShortcut.unregister(QUIT_KEY)
+    else if (runningCount() === 0) { globalShortcut.unregister(QUIT_KEY); bringKartoucheToFront(() => runningCount() === 0) }
   }, join(paths.cache, 'tools'), paths.saves, paths.roms))
   handle('game:stop', (entryId) => stopGame(entryId))
   handle('game:stopAndWait', (entryId) => stopGameAndWait(entryId))
