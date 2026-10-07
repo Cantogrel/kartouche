@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { preferActive, rankAmong } from './padChoice'
-import { applyMelondsPad } from './configure'
+import { applyMelondsPad, expandSdlPads } from './configure'
+import { applyCemuPad, cemuProfileXml } from './cemu'
 
 describe('manette à lire', () => {
   it('met en premier la manette sur laquelle on a appuyé, le reste dans l\'ordre', () => {
@@ -25,5 +26,29 @@ describe('manette à lire', () => {
     expect(await readFile(join(dir, 'melonDS.toml'), 'utf8')).toBe('[Instance0]\nJoystickID = 2\nOther = 5\n\n[Instance0.Keyboard]\nA = 76\n')
     await applyMelondsPad(dir, null)
     expect(await readFile(join(dir, 'melonDS.toml'), 'utf8')).toContain('JoystickID = 2')
+  })
+})
+
+describe('manettes SDL de DuckStation et PCSX2', () => {
+  it('ajoute les manettes 1 à 3 à chaque liaison SDL-0 de [Pad1], une seule fois, sans toucher aux moteurs ni au clavier', () => {
+    const before = '[Main]\nA = 1\n\n[Pad1]\nType = DualShock2\nCross = Keyboard/K\nCross = SDL-0/A\nLargeMotor = SDL-0/LargeMotor\n\n[Other]\nCross = SDL-0/A\n'
+    const once = expandSdlPads(before)
+    expect(once).toBe('[Main]\nA = 1\n\n[Pad1]\nType = DualShock2\nCross = Keyboard/K\nCross = SDL-0/A\nCross = SDL-1/A\nCross = SDL-2/A\nCross = SDL-3/A\nLargeMotor = SDL-0/LargeMotor\n\n[Other]\nCross = SDL-0/A\n')
+    expect(expandSdlPads(once)).toBe(once)
+  })
+})
+
+describe('manette XInput de Cemu', () => {
+  it('change seulement l\'emplacement dans un profil Kartouche, jamais dans un profil retouché', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cemu-'))
+    await mkdir(join(dir, 'controllerProfiles'))
+    const file = join(dir, 'controllerProfiles', 'controller0.xml')
+    await writeFile(file, cemuProfileXml('pro'))
+    await applyCemuPad(dir, 2)
+    expect(await readFile(file, 'utf8')).toBe(cemuProfileXml('pro', 2))
+    await writeFile(file, cemuProfileXml('pro').replace(/<!--.*?-->\n/, ''))
+    const edited = await readFile(file, 'utf8')
+    await applyCemuPad(dir, 1)
+    expect(await readFile(file, 'utf8')).toBe(edited)
   })
 })
