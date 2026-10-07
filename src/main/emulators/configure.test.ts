@@ -510,7 +510,7 @@ describe('configuration automatique des émulateurs', () => {
     await configureEmulator('melonds', dir, ctx({ lang: 'en', displayHeight: 2160 }))
     expect(read('melonDS.toml')).toContain('[3D]\nRenderer = 2')
   })
-  it('melonDS : OpenGL à l’échelle de l’écran, Natural + Auto, pixels nets, audio 100 %, manette et raccourcis', async () => {
+  it('melonDS : OpenGL à l’échelle de l’écran, Hybride + Auto, pixels nets, audio 100 %, manette et raccourcis', async () => {
     await configureEmulator('melonds', dir, ctx({ gpu: { vulkan: true, tier: 'high' } }))
     const t = read('melonDS.toml')
     expect(t).toContain('[3D]\nRenderer = 2')
@@ -518,7 +518,7 @@ describe('configuration automatique des émulateurs', () => {
     expect(t).toContain('UseGL = true')
     expect(t).toContain('Threaded = true')
     const win = tomlSection(t, 'Instance0.Window0')
-    expect(win).toMatchObject({ ScreenLayout: '0', ScreenSizing: '3', ScreenGap: '8', ScreenFilter: 'false', IntegerScaling: 'false', ScreenRotation: '0' })
+    expect(win).toMatchObject({ ScreenLayout: '3', ScreenSizing: '3', ScreenGap: '8', ScreenFilter: 'false', IntegerScaling: 'false', ScreenRotation: '0' })
     expect(tomlSection(t, 'Instance0.Audio').Volume).toBe('256')
     // Manette : indices SDL XInput, DS positionnelle (A à droite = bouton B), croix = hat 0.
     const pad = tomlSection(t, 'Instance0.Joystick')
@@ -552,14 +552,14 @@ describe('configuration automatique des émulateurs', () => {
     expect(tomlSection(read('melonDS.toml'), 'Instance0.Window0')).toMatchObject({ ScreenLayout: '2', ScreenRotation: '1' })
     // Autre jeu : retour à Natural / 0°.
     await applyMelondsGame(dir, 'ZZZZ', table)
-    expect(tomlSection(read('melonDS.toml'), 'Instance0.Window0')).toMatchObject({ ScreenLayout: '0', ScreenRotation: '0' })
+    expect(tomlSection(read('melonDS.toml'), 'Instance0.Window0')).toMatchObject({ ScreenLayout: '3', ScreenRotation: '0' })
     expect(existsSync(join(dir, 'romvault-melonds-layout.json'))).toBe(false)
     // L'utilisateur change la disposition pendant la partie : elle est gardée au lancement suivant.
     await applyMelondsGame(dir, 'HOTL', table)
-    const toml = read('melonDS.toml').replace('ScreenLayout = 2', 'ScreenLayout = 3')
+    const toml = read('melonDS.toml').replace('ScreenLayout = 2', 'ScreenLayout = 1')
     writeFileSync(join(dir, 'melonDS.toml'), toml)
     await applyMelondsGame(dir, 'ZZZZ', table)
-    expect(tomlSection(read('melonDS.toml'), 'Instance0.Window0')).toMatchObject({ ScreenLayout: '3', ScreenRotation: '0' })
+    expect(tomlSection(read('melonDS.toml'), 'Instance0.Window0')).toMatchObject({ ScreenLayout: '1', ScreenRotation: '0' })
     expect(ndsGameCode(Buffer.concat([Buffer.alloc(12), Buffer.from('ADMJ'), Buffer.alloc(8)]))).toBe('ADMJ')
     expect(ndsGameCode(Buffer.alloc(32))).toBeNull()
   })
@@ -583,7 +583,7 @@ describe('configuration automatique des émulateurs', () => {
     expect(t).toContain('use_disk_shader_cache=true')
     expect(t).toContain('async_shader_compilation=true')
     expect(t).toContain('resolution_factor=5')
-    expect(t).toContain('layout_option=2')
+    expect(t).toContain('layout_option=5')
     expect(t).toContain('output_device=Auto')
     expect(t).toContain('volume=1')
     // Clavier d'Azahar (profil 1, index 0) actif tant qu'aucune manette n'est branchée ; profil manette présent, souris = tactile et mouvement émulé.

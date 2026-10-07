@@ -46,6 +46,25 @@ export function ppssppGraphics(gpu: Gpu, displayHeight: number): Record<string, 
  * `GameVolume = 100`, tampon par défaut) ; ne rien écrire laisse intact un réglage personnel déjà présent.
  */
 
+// --- Manettes -----------------------------------------------------------------------------------------------------------
+
+/**
+ * `controls.ini` ne lie par défaut que la manette XInput n°0 (périphérique 20, « 20-96 » = Croix). Avec les manettes virtuelles de Sunshine, la manette utilisée est souvent
+ * une autre (1 à 3) : chaque liaison `20-<touche>` reçoit donc aussi `21-`, `22-` et `23-`. Idempotent ; clavier, manettes SDL (10) et liaisons déjà présentes intacts.
+ */
+export function expandXInputPads(text: string): string {
+  return text.replace(/^([^\r\n=]+=\s*)(.*)$/gm, (line, head: string, value: string) => {
+    const tokens = value.split(',').map((t) => t.trim()).filter(Boolean)
+    const add: string[] = []
+    for (const t of tokens) {
+      const m = /^20-(\d+)$/.exec(t)
+      if (!m) continue
+      for (const d of [21, 22, 23]) if (!tokens.includes(`${d}-${m[1]}`) && !add.includes(`${d}-${m[1]}`)) add.push(`${d}-${m[1]}`)
+    }
+    return add.length ? `${head}${[...tokens, ...add].join(',')}` : line
+  })
+}
+
 // --- Exceptions par jeu -------------------------------------------------------------------------------------------------
 
 /**

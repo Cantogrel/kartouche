@@ -13,7 +13,7 @@ import { anyGamepadConnected, closeGracefully, connectedXInputPads, connectedXIn
 import { emulatorEnv } from './sdlEnv'
 import { applyCemuControls, applyCemuPad } from './cemu'
 import { isVWiiWrapper, readWuaFiles } from '../library/content/wua'
-import { applyDolphinFastDiscExclusion, applyDolphinPad, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyMelondsPad, applyPsPads, applyEdenPad, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
+import { applyDolphinFastDiscExclusion, applyDolphinPad, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyMelondsPad, applyPpssppPads, migrateHybridLayout, applyPsPads, applyEdenPad, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
 import { loadSettings } from '../db/settingsStore'
 import { backupSaves, cemuMlcDir, learnCemuKey, prepareRetroarch, readDiscId, snapshotCemuSaves } from '../saves/saves'
 import { identifyGame } from '../saves/identify'
@@ -288,6 +288,8 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       await applyEdenGameConfig(row.dir, entry.title_id).catch(() => {})
     }
     // PPSSPP : réglages propres au jeu (DISC_ID lu sur l'ISO) seulement si une exception est connue ; manettes et clavier : défauts natifs de PPSSPP, rien à écrire.
+    if (def.id === 'ppsspp') await applyPpssppPads(row.dir).catch(() => {})
+    if (def.id === 'melonds' || def.id === 'azahar') await migrateHybridLayout(def.id, row.dir).catch(() => {})
     if (def.id === 'ppsspp') await applyPpssppGame(row.dir, await readPspDiscId(romPath).catch(() => null)).catch(() => {})
     // PCSX2 : réglages propres au jeu (série + CRC de l'exécutable lus sur le disque) seulement si une exception est connue ; les autres jeux n'en reçoivent jamais.
     // Cartes mémoire dédiées au jeu (une par slot) : sans elles, tous les jeux écrivent dans les deux mêmes cartes partagées (voir pcsx2Cards.ts).

@@ -29,11 +29,11 @@ export function melondsRendering(gpu: Gpu, displayHeight: number): { renderer: n
 }
 
 /**
- * Fenêtre principale (`Instance0.Window0`) : disposition Natural (0), dimensionnement Auto (3 : melonDS adapte les deux écrans à la
+ * Fenêtre principale (`Instance0.Window0`) : disposition Hybrid (3 : un écran en grand, les deux en petit à côté, ce qui remplit au mieux un écran 16:9), dimensionnement Auto (3 : melonDS adapte les deux écrans à la
  * fenêtre), petit espace entre les écrans, pixels nets (pas de filtre bilinéaire), pas de mise à l'échelle entière (elle laisserait des
  * bandes). Aucune taille de fenêtre n'est imposée : tout suit l'écran du PC.
  */
-export const MELONDS_WINDOW: TomlValues = { ScreenLayout: 0, ScreenSizing: 3, ScreenGap: 8, ScreenFilter: false, IntegerScaling: false, ScreenRotation: 0, ScreenSwap: false }
+export const MELONDS_WINDOW: TomlValues = { ScreenLayout: 3, ScreenSizing: 3, ScreenGap: 8, ScreenFilter: false, IntegerScaling: false, ScreenRotation: 0, ScreenSwap: false }
 
 // --- Contrôles ----------------------------------------------------------------------------------------------------------
 

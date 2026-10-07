@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { preferActive, rankAmong } from './padChoice'
-import { applyMelondsPad, expandSdlPads } from './configure'
+import { applyMelondsPad, expandSdlPads, migrateHybridLayout } from './configure'
+import { expandXInputPads } from './ppsspp'
 import { applyCemuPad, cemuProfileXml } from './cemu'
 
 describe('manette à lire', () => {
@@ -50,5 +51,31 @@ describe('manette XInput de Cemu', () => {
     const edited = await readFile(file, 'utf8')
     await applyCemuPad(dir, 1)
     expect(await readFile(file, 'utf8')).toBe(edited)
+  })
+})
+
+describe('PPSSPP : manettes XInput 0 à 3', () => {
+  it('ajoute 21, 22 et 23 à chaque liaison 20-…, sans toucher au reste, une seule fois', () => {
+    const before = '[ControlMapping]\nUp = 1-19,20-19,10-19\nAnalog limiter = 1-60\nPause = 1-111,20-4034,20-3,10-109\n'
+    const once = expandXInputPads(before)
+    expect(once).toBe('[ControlMapping]\nUp = 1-19,20-19,10-19,21-19,22-19,23-19\nAnalog limiter = 1-60\nPause = 1-111,20-4034,20-3,10-109,21-4034,22-4034,23-4034,21-3,22-3,23-3\n')
+    expect(expandXInputPads(once)).toBe(once)
+  })
+})
+
+describe('disposition hybride', () => {
+  it('passe melonDS et Azahar à l\'hybride une fois, seulement depuis l\'ancienne valeur', async () => {
+    const m = await mkdtemp(join(tmpdir(), 'melon-'))
+    await writeFile(join(m, 'melonDS.toml'), '[Instance0.Window0]\nScreenLayout = 0\nScreenGap = 8\n')
+    await migrateHybridLayout('melonds', m)
+    expect(await readFile(join(m, 'melonDS.toml'), 'utf8')).toContain('ScreenLayout = 3')
+    await writeFile(join(m, 'melonDS.toml'), '[Instance0.Window0]\nScreenLayout = 0\n')
+    await migrateHybridLayout('melonds', m)
+    expect(await readFile(join(m, 'melonDS.toml'), 'utf8')).toContain('ScreenLayout = 0')
+    const a = await mkdtemp(join(tmpdir(), 'azahar-'))
+    await mkdir(join(a, 'user', 'config'), { recursive: true })
+    await writeFile(join(a, 'user', 'config', 'qt-config.ini'), '[Layout]\nlayout_option\default=false\nlayout_option=2\n')
+    await migrateHybridLayout('azahar', a)
+    expect(await readFile(join(a, 'user', 'config', 'qt-config.ini'), 'utf8')).toContain('layout_option=5')
   })
 })

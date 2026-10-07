@@ -7,7 +7,7 @@ import { DEFAULT_GPU, type Gpu } from './gpu'
 import { RETROARCH_CORE_CONFIG, retroarchAudio, retroarchVideo } from './retroarch'
 import { DUCKSTATION_GAME_OVERRIDES, duckstationGpu } from './duckstation'
 import { RPCS3_GAME_OVERRIDES, isRomvaultInput, rpcs3ConfigYaml, rpcs3InputYaml, type PadKind } from './rpcs3'
-import { PPSSPP_GAME_OVERRIDES, ppssppGraphics } from './ppsspp'
+import { PPSSPP_GAME_OVERRIDES, expandXInputPads, ppssppGraphics } from './ppsspp'
 import { vita3kRenderer } from './vita3k'
 import { PCSX2_GAME_OVERRIDES, PCSX2_PROFILE_NAMES, pcsx2Gs, type Ps2Game } from './pcsx2'
 import { AZAHAR_AUDIO, AZAHAR_GAME_OVERRIDES, AZAHAR_LAYOUT, azaharRenderer } from './azahar'
@@ -455,6 +455,37 @@ export async function applyPpssppGame(dir: string, discId: string | null | undef
   if (!patch) return
   const file = join(dir, 'memstick', 'PSP', 'SYSTEM', `${discId!.toUpperCase()}_ppsspp.ini`)
   if (!existsSync(file)) await writeIni(file, patch)
+}
+
+/** Manettes XInput 0 à 3 de PPSSPP (`controls.ini`, créé par PPSSPP au premier lancement) : la manette utilisée n'est pas forcément la première (voir `expandXInputPads`). */
+export async function applyPpssppPads(dir: string): Promise<void> {
+  const file = join(dir, 'memstick', 'PSP', 'SYSTEM', 'controls.ini')
+  const text = await readText(file)
+  if (!text) return
+  const next = expandXInputPads(text)
+  if (next !== text) await writeFile(file, next)
+}
+
+/**
+ * Passe une fois les installations existantes à la disposition hybride (écran principal en grand, les deux petits à côté) : melonDS (`ScreenLayout` 0 = naturelle → 3) et Azahar
+ * (`layout_option` 2 = grand écran → 5). Seulement si la valeur est encore celle écrite par Kartouche avant ; un marqueur évite de revenir sur un choix fait ensuite.
+ */
+export async function migrateHybridLayout(id: 'melonds' | 'azahar', dir: string): Promise<void> {
+  const marker = join(dir, 'kartouche-layout-hybrid')
+  if (existsSync(marker)) return
+  if (id === 'melonds') {
+    const file = join(dir, 'melonDS.toml')
+    const text = await readText(file)
+    if (!text) return // pas encore configuré : l'installation écrira déjà l'hybride
+    if (tomlSection(text, 'Instance0.Window0')['ScreenLayout'] === '0') await writeFile(file, setTomlKeys(text, 'Instance0.Window0', { ScreenLayout: 3 }))
+  } else {
+    const file = join(dir, 'user', 'config', 'qt-config.ini')
+    const text = await readText(file)
+    if (!text) return
+    const next = text.replace(/^layout_option=2\s*$/m, 'layout_option=5')
+    if (next !== text) await writeFile(file, next)
+  }
+  await writeFile(marker, '')
 }
 
 /**
