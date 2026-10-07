@@ -53,6 +53,26 @@ function localNotes(version: string): string | null {
   return rest.slice(0, next === -1 ? undefined : next).trim()
 }
 
+const versionParts = (v: string): number[] => v.split('.').map((n) => Number(n) || 0)
+function compareVersions(a: string, b: string): number {
+  const x = versionParts(a), y = versionParts(b)
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0)
+  return 0
+}
+
+/**
+ * Notes des versions précédentes de la même série, de la plus récente à la plus ancienne, jusqu'à la dernière version majeure (x.y.0 : 0.3.1 remonte jusqu'à 0.3.0).
+ * Lues dans CHANGELOG.md ; une version sans section est ignorée.
+ */
+export function olderChangelogs(version: string): { version: string; notes: string }[] {
+  const [major, minor] = versionParts(version)
+  const floor = `${major}.${minor}.0`
+  return [...changelogMd.matchAll(/^##\s*v?(\d+\.\d+\.\d+)\b/gm)].map((m) => m[1])
+    .filter((v) => compareVersions(v, version) < 0 && compareVersions(v, floor) >= 0)
+    .sort((a, b) => compareVersions(b, a))
+    .flatMap((v) => { const notes = localNotes(v); return notes ? [{ version: v, notes }] : [] })
+}
+
 /**
  * Renseigne le changelog depuis le fichier local dès qu'on tourne sur une version pas encore vue : contrairement à
  * `update-downloaded` (déclenché seulement par la mise à jour automatique in-app via GitHub Releases), ça marche

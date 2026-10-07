@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { t } from '@/i18n'
 import { useChangelog } from '@/store/changelog'
 import { Modal } from '@/ui/CollectionDialogs'
@@ -33,14 +33,35 @@ function renderItem(text: string): ReactNode {
 /** Rendue une fois dans App : popup automatique après mise à jour, ou rouverte depuis Paramètres → À propos. */
 export function ChangelogDialog() {
   const { open, data, close } = useChangelog()
+  const [older, setOlder] = useState<{ version: string; notes: string }[]>([])
+  /** Position dans [version en cours, ...versions précédentes] : 0 = la version affichée à l'ouverture. */
+  const [at, setAt] = useState(0)
+  useEffect(() => {
+    setAt(0)
+    setOlder([])
+    if (!open || !data) return
+    let live = true
+    void window.api.invoke('update:olderChangelogs', data.version).then((list) => { if (live) setOlder(list) })
+    return () => { live = false }
+  }, [open, data])
   if (!open || !data) return null
-  const items = data.notes ? parseItems(data.notes) : []
+  const pages = [data, ...older]
+  const shown = pages[Math.min(at, pages.length - 1)]
+  const items = shown.notes ? parseItems(shown.notes) : []
   return (
-    <Modal title={t('changelog.title', { v: data.version })} onClose={close}>
+    <Modal title={t('changelog.title', { v: shown.version })} onClose={close}>
       {items.length
         ? <ul className="modal-list changelog-notes">{items.map((item, i) => <li key={i}>{renderItem(item)}</li>)}</ul>
         : <div className="modal-list changelog-notes">{t('changelog.empty')}</div>}
-      <div className="row modal-actions"><Button variant="primary" onClick={close}>{t('dialog.close')}</Button></div>
+      <div className="row modal-actions">
+        {pages.length > 1 && (
+          <div className="row" style={{ marginRight: 'auto' }}>
+            <Button onClick={() => setAt(at + 1)} disabled={at >= pages.length - 1}>◀ {t('changelog.prev')}</Button>
+            <Button onClick={() => setAt(at - 1)} disabled={at <= 0}>{t('changelog.next')} ▶</Button>
+          </div>
+        )}
+        <Button variant="primary" onClick={close}>{t('dialog.close')}</Button>
+      </div>
     </Modal>
   )
 }

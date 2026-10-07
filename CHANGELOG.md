@@ -3,6 +3,21 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.3.1
+
+- **Manettes avec Sunshine / Moonlight** : Sunshine ajoute des manettes virtuelles à Windows, et les émulateurs lisaient la première
+  manette branchée, parfois une manette au repos (jeu sans réaction). Kartouche retient maintenant la manette sur laquelle vous avez
+  appuyé en dernier : melonDS, RetroArch, Dolphin, RPCS3, Eden et Cemu lisent celle-là, DuckStation, PCSX2 et PPSSPP lient les
+  manettes 0 à 3. La manette Xbox, la manette virtuelle de Moonlight et la Switch Pro restent utilisables à tout moment.
+- **DS et 3DS** : disposition hybride par défaut (un écran en grand, les deux en petit à côté), adaptée aux écrans 16:9. Les installations
+  existantes y passent une fois, sauf si vous aviez déjà choisi une autre disposition.
+- **Big Picture** : à la fermeture d'un jeu (Retour + Start), Kartouche reprend le focus au lieu de laisser la barre des tâches visible
+  et la manette inactive. Dans les médias d'une fiche, le **stick droit** passe au média suivant ou précédent ; le stick gauche et la croix
+  déplacent de nouveau le focus entre les boutons.
+- **Émulateurs** : la désinstallation est immédiate, avec un bouton bloqué et une tâche en cours en bas ; l'installation automatique du firmware
+  PS3 et PS Vita apparaît aussi comme tâche en cours ; l'installation de RetroArch est plus rapide (cœurs téléchargés en parallèle).
+- **Changelog** : boutons pour revoir les notes des versions précédentes, jusqu'à la dernière version majeure.
+
 ## 0.3.0
 
 - **RomVault devient Kartouche** : nouveau nom et nouvelle icône (cartouche isométrique). Vos données sont reprises

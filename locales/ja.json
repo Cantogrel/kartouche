@@ -472,6 +472,8 @@
   "update.viewChangelog": "新機能を見る（{v}）",
   "changelog.title": "{v} の新機能",
   "changelog.empty": "このアップデートのリリースノートはありません。",
+  "changelog.prev": "前のバージョン",
+  "changelog.next": "次のバージョン",
   "footer.installing": "{name} をインストール中",
   "footer.removing": "{name} をアンインストール中",
   "footer.firmware": "{name} のファームウェアをインストール中",

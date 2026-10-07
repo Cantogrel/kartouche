@@ -472,6 +472,8 @@
   "update.viewChangelog": "查看更新内容（{v}）",
   "changelog.title": "{v} 的新内容",
   "changelog.empty": "此次更新没有发行说明。",
+  "changelog.prev": "上一版本",
+  "changelog.next": "下一版本",
   "footer.installing": "正在安装 {name}",
   "footer.removing": "正在卸载 {name}",
   "footer.firmware": "正在安装 {name} 固件",
