@@ -99,7 +99,12 @@ export function useNav(onAction: (a: PadAction, fromKeyboard: boolean) => void, 
     rep.update(heldNow(), performance.now())
     const fire = (a: PadAction, kb = false): void => {
       if (a === 'up' || a === 'down' || a === 'left' || a === 'right') moveFocus(a)
-      else if (a === 'accept') (document.activeElement as HTMLElement | null)?.click()
+      else if (a === 'accept') {
+        const el = document.activeElement as HTMLElement | null
+        // Retour de clic à la manette (le :active du CSS ne joue qu'à la souris) : le bouton s'enfonce un instant.
+        if (el?.classList.contains('bp-btn')) { el.classList.add('pressed'); window.setTimeout(() => el.classList.remove('pressed'), 140) }
+        el?.click()
+      }
       cb.current(a, kb)
     }
     const tick = (now: number): void => {

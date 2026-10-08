@@ -301,27 +301,41 @@ describe('Eden : config déjà sauvegardée par Eden', () => {
 })
 
 describe('Eden : applet Contrôleur', () => {
-  it("n'est jamais désactivée par Kartouche (Eden refait alors toutes les manettes lui-même)", async () => {
-    for (const pads of [[{ nintendo: 'switch-pro' as const }, { nintendo: 'joycon-pair' as const }], [{ nintendo: 'joycon-right' as const }], []]) {
-      const dir = await edenDir()
-      await applyEdenPads(dir, pads)
-      expect((await controls(dir))['disableControllerApplet']).toBeUndefined()
+  const off = async (pads: Parameters<typeof applyEdenPads>[1]): Promise<Record<string, string>> => {
+    const dir = await edenDir()
+    await applyEdenPads(dir, pads)
+    return controls(dir)
+  }
+  it('désactivée avec une Switch Pro ou une paire de Joy-Con (plus de fenêtre à chaque + ou -)', async () => {
+    for (const pads of [[{ nintendo: 'switch-pro' as const }], [{ nintendo: 'joycon-pair' as const }, { nintendo: 'switch-pro' as const }], [{ vid: 1, pid: 2, ver: 3 }, { nintendo: 'switch-pro' as const }]]) {
+      const c = await off(pads)
+      expect(c['disableControllerApplet']).toBe('true')
+      expect(c['disableControllerApplet\\default']).toBe('false')
     }
   })
 
-  it("rétablit l'option qu'une ancienne version de Kartouche avait désactivée, repérée par son marqueur", async () => {
-    const dir = await edenDir('disableControllerApplet\\default=false\ndisableControllerApplet=true\n')
-    await writeFile(join(dir, 'user', 'config', 'kartouche-applet-off'), '')
+  it("laissée active avec un Joy-Con seul (Eden le défait sinon), sans manette Nintendo ou sans manette", async () => {
+    for (const pads of [[{ nintendo: 'joycon-right' as const }], [{ nintendo: 'switch-pro' as const }, { nintendo: 'joycon-left' as const }], [{ vid: 1, pid: 2, ver: 3 }], []]) {
+      expect((await off(pads))['disableControllerApplet']).toBeUndefined()
+    }
+  })
+
+  it("rétablit l'option dès qu'elle ne convient plus (Joy-Con seul), repérée par le marqueur de Kartouche", async () => {
+    const dir = await edenDir()
     await applyEdenPads(dir, [{ nintendo: 'switch-pro' }])
+    expect((await controls(dir))['disableControllerApplet']).toBe('true')
+    await applyEdenPads(dir, [{ nintendo: 'joycon-right' }])
     expect((await controls(dir))['disableControllerApplet\\default']).toBe('true')
   })
 
   it("laisse tel quel un réglage fait par l'utilisateur (pas de marqueur)", async () => {
-    const dir = await edenDir('disableControllerApplet\\default=false\ndisableControllerApplet=true\n')
+    const dir = await edenDir(['disableControllerApplet\\default=false', 'disableControllerApplet=true', ''].join('\n'))
     await applyEdenPads(dir, [{ nintendo: 'switch-pro' }])
     const c = await controls(dir)
     expect(c['disableControllerApplet']).toBe('true')
     expect(c['disableControllerApplet\\default']).toBe('false')
+    await applyEdenPads(dir, [{ nintendo: 'joycon-right' }])
+    expect((await controls(dir))['disableControllerApplet']).toBe('true') // et on ne le rétablit pas non plus
   })
 })
 

@@ -36,6 +36,8 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   const [error, setError] = useState<string | null>(null)
   const running = useEmulators((s) => (owned ? s.running.includes(owned.id) : false))
   const play = useEmulators((s) => s.play)
+  // Lancement en cours (préparation avant l'ouverture de l'émulateur, de quelques secondes à plusieurs minutes pour un premier jeu Vita) : le bouton le dit et ignore les clics suivants.
+  const launching = useEmulators((s) => (owned ? s.launching.includes(owned.id) : false))
   // Le jeu a refusé les manettes branchées et Kartouche l'a fermé : le message explique quoi brancher (même texte qu'en mode classique, voir QuickExitNotice).
   const padRefused = useEmulators((s) => { const q = owned ? s.quickExits[owned.id] : undefined; return q?.immediate?.startsWith('padRefused') ? q.immediate : undefined })
   const def = emulatorForConsole(game?.console ?? owned?.console ?? '')
@@ -156,7 +158,8 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
           <div className="bp-actions">
             {playable && (running
               ? <button data-nav className="bp-btn primary" onClick={() => void window.api.invoke('game:stop', owned.id)}>■ {t('play.stop')}</button>
-              : <button data-nav className="bp-btn primary" onClick={() => void launch()}>▶ {t('play')}</button>)}
+              // aria-disabled plutôt que disabled : un bouton désactivé quitte la navigation et ferait perdre le focus à la manette.
+              : <button data-nav className={`bp-btn primary${launching ? ' busy' : ''}`} aria-disabled={launching} onClick={() => { if (!launching) void launch() }}>{launching ? t('play.launching') : `▶ ${t('play')}`}</button>)}
             {!owned && gameId !== null && <button data-nav className="bp-btn primary" onClick={() => void useLibrary.getState().add(gameId)}>+ {t('addToLibrary')}</button>}
             {downloadable && (downloading
               ? <button data-nav className="bp-btn" onClick={() => sourceId !== undefined && cancelDownload(sourceId)}>

@@ -2,20 +2,20 @@ import type { DatabaseSync } from 'node:sqlite'
 import { app } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, open, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { buildArgs, emulatorById, emulatorForConsole, type EmulatorDef, type GameSession, type LaunchResult, type QuickExit } from '@shared/emulators'
 import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
 import { connectedNintendoPids, lastUsedPad, preferActive, rankAmong, startPadTracker } from './padChoice'
-import { chooseDolphinPad } from './dolphinChoice'
+import { chooseDolphinPads } from './dolphinChoice'
 import { chooseEdenPads, edenRefusalReason, shouldCloseOnRefusal, type EdenPlayerPad } from './edenChoice'
 import { anyGamepadConnected, autoConfirmEdenApplet, closeGracefully, connectedXInputPads, connectedXInputSlots, watchQuitChord } from './quit'
 import { emulatorEnv } from './sdlEnv'
 import { applyCemuControls, applyCemuPad } from './cemu'
 import { isVWiiWrapper, readWuaFiles } from '../library/content/wua'
-import { applyDolphinFastDiscExclusion, applyDolphinPad, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyMelondsPad, applyPpssppPads, migrateHybridLayout, applyPsPads, applyEdenPads, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
+import { applyDolphinFastDiscExclusion, applyDolphinPads, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyMelondsPad, applyPpssppPads, migrateHybridLayout, applyPsPads, applyEdenPads, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
 import { loadSettings } from '../db/settingsStore'
 import { backupSaves, cemuMlcDir, learnCemuKey, prepareRetroarch, readDiscId, snapshotCemuSaves } from '../saves/saves'
 import { identifyGame } from '../saves/identify'
@@ -87,6 +87,10 @@ export async function resolveZippedRom(path: string, cacheDir: string): Promise<
   const entries = await readZip(path).catch(() => null)
   if (!entries || entries.length !== 1) return null
   const dest = join(cacheDir, 'extracted-rom', basename(entries[0].name))
+  // Déjà extrait par un lancement précédent : on le réutilise (3 Go de plus à écrire à chaque lancement, c'était 9 s d'attente pour Super Mario Galaxy). Il doit avoir la taille exacte de
+  // l'entrée et ne pas être plus ancien que l'archive (archive remplacée) ; une extraction interrompue laisse un fichier trop court, donc refait.
+  const [have, zipStat] = await Promise.all([stat(dest).catch(() => null), stat(path).catch(() => null)])
+  if (have && zipStat && have.size === entries[0].size && have.mtimeMs >= zipStat.mtimeMs) return dest
   await mkdir(dirname(dest), { recursive: true })
   return (await extractZipEntries(path, [{ entry: entries[0].name, dest }]).catch(() => false)) ? dest : null
 }
@@ -263,12 +267,11 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
   try {
     // Dolphin invalide toute liaison qui cite un périphérique absent : la manette branchée est écrite à chaque lancement.
     if (def.id === 'dolphin') {
-      const choice = await chooseDolphinPad(cacheDir).catch(() => ({ xinputSlot: null, nintendo: null }))
+      const players = await chooseDolphinPads(cacheDir).catch(() => [])
       const gameId = await readDiscId(romPath)
       // Trace du choix (dernière manette utilisée, manettes Nintendo vues) : sert à comprendre un « aucune commande » sans relancer le jeu.
-      void mkdir(join(cacheDir, 'tools'), { recursive: true }).then(() => writeFile(join(cacheDir, 'tools', 'dolphin-pad.log'), `${new Date().toISOString()} ${JSON.stringify({ choice, nintendo: connectedNintendoPids(), last: lastUsedPad() })}
-`, { flag: 'a' })).catch(() => {})
-      await applyDolphinPad(row.dir, choice.xinputSlot, { console: entry.console, gameId }, choice.nintendo).catch(() => {})
+      void mkdir(join(cacheDir, 'tools'), { recursive: true }).then(() => writeFile(join(cacheDir, 'tools', 'dolphin-pad.log'), `${new Date().toISOString()} ${JSON.stringify({ players, nintendo: connectedNintendoPids(), last: lastUsedPad() })}` + String.fromCharCode(10), { flag: 'a' })).catch(() => {})
+      await applyDolphinPads(row.dir, players, { console: entry.console, gameId }).catch(() => {})
       // FastDiscSpeed est activé globalement (voir configureDolphin) ; quelques jeux (liste d'exclusion) en ont besoin
       // désactivé pour démarrer correctement — réglage propre à ce jeu, réappliqué à chaque lancement.
       if (gameId) await applyDolphinFastDiscExclusion(row.dir, gameId).catch(() => {})

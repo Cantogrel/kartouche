@@ -7,7 +7,7 @@ import { deflateRawSync, crc32 } from 'node:zlib'
 import { migrate } from '../db/migrations'
 import { extractZipEntries, hashFile, readZip, readZipEntryText } from './hash'
 import { identify } from './identify'
-import { importPaths } from './importer'
+import { importPaths, unzipVerified } from './importer'
 import { addCatalogGame, clearLibrary, deleteAllRomFiles, importSbi, listLibrary, relinkUnmatched, removeEntry, saveDir, sbiPathFor } from './libraryStore'
 import { extensionsForConsoles, ROM_EXTENSIONS } from '@shared/library'
 
@@ -144,6 +144,36 @@ describe('import', () => {
     addGame('snes', 'Zip', 'zip', hex(crc32(data)), data.length)
     expect((await importPaths(db, [z], opt())).items[0]).toMatchObject({ status: 'added', console: 'snes', match: 'hash' })
     expect((await importPaths(db, [rom('mystere.iso', 'zzz')], opt())).items[0].status).toBe('ambiguous')
+  })
+  it('Wii/GameCube : un zip est décompressé à l’import et seul le jeu décompressé est gardé', async () => {
+    const data = Buffer.from('disque wii compresse')
+    const z = join(dir, 'Wii Game.zip'); writeFileSync(z, makeZip('Wii Game.rvz', data))
+    addGame('wii', 'Wii Game', 'wii game', hex(crc32(data)), data.length)
+    const r = await importPaths(db, [z], opt())
+    expect(r.items[0]).toMatchObject({ status: 'added', console: 'wii', match: 'hash' })
+    const row = db.prepare('SELECT path, size, crc FROM library').get() as { path: string; size: number; crc: string }
+    expect(row.path).toBe(join(dir, 'roms', 'wii', 'Wii Game.rvz'))
+    expect(readFileSync(row.path)).toEqual(data)
+    expect(row.crc).toBe(hex(crc32(data)))
+    expect(readdirSync(join(dir, 'roms', 'wii'))).toEqual(['Wii Game.rvz']) // ni zip ni fichier partiel
+    expect(existsSync(z)).toBe(true) // l’original de l’utilisateur n’est pas supprimé sans le demander
+  })
+  it('Wii/GameCube : avec « supprimer la source », le zip d’origine part aussi ; un zip corrompu n’est jamais gardé', async () => {
+    const data = Buffer.from('autre disque')
+    const z = join(dir, 'Autre.zip'); writeFileSync(z, makeZip('Autre.rvz', data))
+    addGame('wii', 'Autre', 'autre', hex(crc32(data)), data.length)
+    expect((await importPaths(db, [z], { ...opt(), deleteSource: true })).items[0].status).toBe('added')
+    expect(existsSync(z)).toBe(false)
+  })
+  it('unzipVerified : le fichier n’existe sous son nom qu’une fois son CRC et sa taille vérifiés', async () => {
+    const data = Buffer.from('contenu a verifier')
+    const zb = join(dir, 'V.zip'); writeFileSync(zb, makeZip('V.rvz', data))
+    const dest = join(dir, 'V.rvz')
+    expect(await unzipVerified(zb, 'V.rvz', dest, { crc: '12345678', size: data.length })).toBe(false) // CRC attendu faux
+    expect(await unzipVerified(zb, 'V.rvz', dest, { crc: hex(crc32(data)), size: data.length + 1 })).toBe(false) // taille fausse
+    expect(readdirSync(dir).filter((f) => f.startsWith('V.') && f !== 'V.zip')).toEqual([]) // ni fichier ni .part
+    expect(await unzipVerified(zb, 'V.rvz', dest, { crc: hex(crc32(data)), size: data.length })).toBe(true)
+    expect(readFileSync(dest)).toEqual(data)
   })
   it('emporte les pistes d’une feuille .cue et ne les importe pas seules', async () => {
     rom('Disc (Track 1).bin', 'track'); const cue = rom('Disc.cue', 'FILE "Disc (Track 1).bin" BINARY\n  TRACK 01 MODE2/2352\n')

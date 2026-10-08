@@ -1,7 +1,10 @@
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { isUntouchedPadFile } from './configure'
+import { applyDolphinPads, isUntouchedPadFile } from './configure'
 import { dolphinNintendoGcPad, dolphinNintendoWiimote, dolphinWiimote, isKartoucheNintendoWiimote, isUntouchedWiimoteFile } from './dolphin'
-import { pickDolphinPad } from './dolphinChoice'
+import { pickDolphinPad, pickDolphinPads } from './dolphinChoice'
 
 describe('manette GameCube avec une manette Nintendo', () => {
   it('Switch Pro et paire : la disposition de la XInput, la manette en périphérique par défaut', () => {
@@ -116,5 +119,55 @@ describe('manette de Dolphin (joueur 1)', () => {
   })
   it('rien : clavier', () => {
     expect(pickDolphinPad([], [], null, order)).toEqual({ xinputSlot: null, nintendo: null })
+  })
+})
+
+describe('Dolphin à plusieurs joueurs', () => {
+  const xbox2 = { slot: 1, vid: 0x045e, pid: 0x02ff, ver: 1 }
+  it('une manette par joueur : la dernière utilisée en premier, les autres dans un ordre stable', () => {
+    const last = { source: 'hid' as const, pid: PID.pro }
+    expect(pickDolphinPads([xbox, xbox2], [PID.pro, PID.left, PID.right], last, order)).toEqual([
+      { xinputSlot: null, nintendo: { kind: 'switch-pro', port: 0 } },
+      { xinputSlot: 0, nintendo: null },
+      { xinputSlot: 1, nintendo: null },
+      { xinputSlot: null, nintendo: { kind: 'joycon-pair', port: 0 } }
+    ])
+  })
+  it('Joy-Con gauche seul ignoré, quatre joueurs au plus', () => {
+    expect(pickDolphinPads([], [PID.left], null, order)).toEqual([])
+    const many = [0, 1, 2, 3].map((slot) => ({ slot, vid: 0x045e, pid: 0x02ff, ver: 1 }))
+    expect(pickDolphinPads([...many, { slot: 4, vid: 0x045e, pid: 0x02ff, ver: 1 }], [PID.pro], null, order)).toHaveLength(4)
+  })
+  it('écrit une Wiimote par joueur, sans Wiimote 2 s’il n’y a qu’un joueur, et retire celles d’avant', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dolphin-'))
+    try {
+      const cfg = join(dir, 'User', 'Config')
+      mkdirSync(cfg, { recursive: true })
+      const wii = join(cfg, 'WiimoteNew.ini')
+      writeFileSync(wii, '[Wiimote2]\nSource = 1\nDevice = SDL/9/Vieille\n[BalanceBoard]\nDevice = DInput/0/Keyboard Mouse\n')
+      await applyDolphinPads(dir, [{ xinputSlot: null, nintendo: { kind: 'switch-pro', port: 0 } }, { xinputSlot: 1, nintendo: null }], { console: 'wii', gameId: 'RSPE01' })
+      const two = readFileSync(wii, 'utf8')
+      expect(two).toMatch(/\[Wiimote1\][\s\S]*Device = SDL\/0\/Nintendo Switch Pro Controller/)
+      expect(two).toMatch(/\[Wiimote2\][\s\S]*XInput\/1\/Gamepad/)
+      expect(two).not.toContain('Vieille')
+      expect(two).toContain('[BalanceBoard]')
+      await applyDolphinPads(dir, [{ xinputSlot: 0, nintendo: null }], { console: 'wii', gameId: 'RSPE01' })
+      expect(readFileSync(wii, 'utf8')).not.toContain('[Wiimote2]')
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+  it('manettes GameCube : une par joueur et SIDevice pour les joueurs présents', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dolphin-'))
+    try {
+      const cfg = join(dir, 'User', 'Config')
+      mkdirSync(cfg, { recursive: true })
+      await applyDolphinPads(dir, [{ xinputSlot: 0, nintendo: null }, { xinputSlot: null, nintendo: { kind: 'joycon-pair', port: 0 } }, { xinputSlot: null, nintendo: { kind: 'joycon-right', port: 0 } }], { console: 'gc', gameId: 'GZLP01' })
+      const gc = readFileSync(join(cfg, 'GCPadNew.ini'), 'utf8')
+      expect(gc).toMatch(/\[GCPad1\][\s\S]*XInput\/0\/Gamepad/)
+      expect(gc).toMatch(/\[GCPad2\][\s\S]*Device = SDL\/0\/Nintendo Switch Joy-Con \(L\/R\)/)
+      expect(gc).not.toContain('[GCPad3]') // le Joy-Con droit seul n'a pas de quoi faire une manette GameCube
+      const ini = readFileSync(join(cfg, 'Dolphin.ini'), 'utf8')
+      expect(ini).toMatch(/SIDevice1 = 6/)
+      expect(ini).toMatch(/SIDevice2 = 0/)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })
