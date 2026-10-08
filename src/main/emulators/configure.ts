@@ -13,6 +13,7 @@ import { PCSX2_GAME_OVERRIDES, PCSX2_PROFILE_NAMES, pcsx2Gs, type Ps2Game } from
 import { AZAHAR_AUDIO, AZAHAR_GAME_OVERRIDES, AZAHAR_LAYOUT, azaharRenderer } from './azahar'
 import { MELONDS_GAME_SCREENS, MELONDS_JOYSTICK, MELONDS_KEYBOARD, MELONDS_WINDOW, melondsRendering, planMelondsGame, tomlSection, type LayoutState, type ScreenOverride } from './melonds'
 import { EDEN_GAME_OVERRIDES, EDEN_KEYBOARD_PROFILE, edenBackend, edenResolution } from './eden'
+import { EDEN_NINTENDO_KEYS, edenNintendoProfile, isNintendoButtonA, type EdenNintendo } from './edenPads'
 import { dolphinGcPad, dolphinGraphics, dolphinWiimote, isUntouchedWiimoteFile, wiimoteKindFor } from './dolphin'
 
 /** Ce dont la configuration automatique a besoin : langue de l'app, taille de l'écran, dossier de BIOS de l'émulateur. */
@@ -540,28 +541,45 @@ export function isUntouchedEdenControls(text: string): boolean {
   const a = /^player_0_button_a=(.*)$/m.exec(text)
   if (!a) return true
   const v = a[1].trim().replace(/^"(.*)"$/, '$1')
-  return v.includes(XINPUT_GUID) || /^engine:sdl,port:0,guid:[0-9a-f]{28}7801,button:1$/.test(v)
+  return v.includes(XINPUT_GUID) || /^engine:sdl,port:0,guid:[0-9a-f]{28}7801,button:1$/.test(v) || isNintendoButtonA(v)
 }
+
+/** Vrai si les touches du joueur 1 sont celles d'un de nos profils Nintendo (Switch Pro, Joy-Con) : il faudra alors les remettre par défaut en changeant de profil. */
+function hasNintendoProfile(text: string): boolean {
+  const a = /^player_0_button_a=(.*)$/m.exec(text)
+  return !!a && isNintendoButtonA(a[1])
+}
+
+const resetKeys = (keys: readonly string[]): Record<string, boolean> => Object.fromEntries(keys.map((k) => [`${k}\\default`, true]))
 
 /** Manette XInput branchée : VID/PID/version de son interface HID (XInputGetCapabilitiesEx), tels que SDL les met dans son GUID ; 0 si illisibles. */
 export interface EdenPad { vid: number; pid: number; ver: number }
 
+/** Manette Nintendo à lire (Switch Pro, paire de Joy-Con, Joy-Con gauche ou droit seul) : voir `edenPads.ts`. */
+export interface EdenNintendoPad { nintendo: EdenNintendo }
+
 /**
- * Joueur 1 selon ce qui est branché, à chaque lancement : la manette XInput (liaisons SDL à son GUID, voir `sdlXInputGuid`) si une est
- * connectée, sinon clavier d'Eden. Un bouton d'Eden n'accepte qu'une seule liaison, d'où ce choix au lancement (comme pour Dolphin).
+ * Joueur 1 selon la manette choisie, à chaque lancement : la manette XInput (liaisons SDL à son GUID, voir `sdlXInputGuid`), une manette Nintendo (profil
+ * d'`edenPads.ts`, avec le type de manette qui va avec), sinon clavier d'Eden. Un bouton d'Eden n'accepte qu'une seule liaison, d'où ce choix au lancement (comme pour Dolphin).
  * Les liaisons de mouvement (gyroscope) ne sont jamais écrites : Eden garde les siennes, et une manette à gyroscope les expose.
  * Eden est lancé avec le pilote XInput de SDL imposé (voir `emulatorEnv` dans sdlEnv.ts), sans quoi le GUID changerait avec le pilote retenu.
  * Une manette configurée à la main dans Eden n'est plus jamais réécrite.
  */
-export async function applyEdenPad(dir: string, pad: EdenPad | null): Promise<void> {
+export async function applyEdenPad(dir: string, pad: EdenPad | EdenNintendoPad | null): Promise<void> {
   const file = edenConfig(dir)
   const text = await readText(file)
   if (!isUntouchedEdenControls(text)) return
-  if (pad) {
+  const nintendoBefore = hasNintendoProfile(text)
+  if (pad && 'nintendo' in pad) {
+    const p = edenNintendoProfile(pad.nintendo)
+    await writeIni(file, { Controls: { ...resetKeys(EDEN_NINTENDO_KEYS), ...qt(quoteLists({ ...p.keys, player_0_type: p.type })) } }, '=')
+  } else if (pad) {
     if (!pad.vid && !pad.pid) return // identifiants illisibles : on ne devine pas un GUID
-    await writeIni(file, { Controls: qt(edenControllerProfile(sdlXInputGuid(pad.vid, pad.pid, pad.ver))) }, '=')
-  } else if (/^player_0_button_a=.*guid:[0-9a-f]{28}7801/m.test(text) || text.includes(XINPUT_GUID)) {
-    await writeIni(file, { Controls: Object.fromEntries(Object.keys(edenControllerProfile('')).map((k) => [`${k}\\default`, true])) }, '=')
+    // Après un profil Nintendo : mouvement, Home, Capture, SL/SR et type de manette reviennent à leurs valeurs par défaut (le profil XInput ne les écrit pas).
+    const back = nintendoBefore ? { ...resetKeys(EDEN_NINTENDO_KEYS), 'player_0_type\\default': true } : {}
+    await writeIni(file, { Controls: { ...back, ...qt(edenControllerProfile(sdlXInputGuid(pad.vid, pad.pid, pad.ver))) } }, '=')
+  } else if (nintendoBefore || /^player_0_button_a=.*guid:[0-9a-f]{28}7801/m.test(text) || text.includes(XINPUT_GUID)) {
+    await writeIni(file, { Controls: { ...resetKeys([...Object.keys(edenControllerProfile('')), ...EDEN_NINTENDO_KEYS]), ...(nintendoBefore ? { 'player_0_type\\default': true } : {}) } }, '=')
   }
 }
 

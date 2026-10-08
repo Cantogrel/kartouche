@@ -9,6 +9,7 @@ import { buildArgs, emulatorById, emulatorForConsole, type EmulatorDef, type Gam
 import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
 import { preferActive, rankAmong, startPadTracker } from './padChoice'
+import { chooseEdenPad } from './edenChoice'
 import { anyGamepadConnected, closeGracefully, connectedXInputPads, connectedXInputSlots, watchQuitChord } from './quit'
 import { emulatorEnv } from './sdlEnv'
 import { applyCemuControls, applyCemuPad } from './cemu'
@@ -282,9 +283,9 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     if (def.id === 'pcsx2') await applyPsPads(join(row.dir, 'inis', 'PCSX2.ini')).catch(() => {})
     if (def.id === 'melonds') await applyMelondsPad(row.dir, padSlot === null ? null : rankAmong(padSlots, padSlot)).catch(() => {})
     if (def.id === 'melonds') await applyMelondsGame(row.dir, await readNdsCode(romPath).catch(() => null)).catch(() => {})
-    // Eden : manette XInput si branchée, sinon clavier ; configuration propre au jeu seulement si une exception est connue (Title ID).
+    // Eden : la manette à lire (dernière utilisée, sinon XInput, Switch Pro, Joy-Con ; voir edenChoice.ts), sinon clavier ; configuration propre au jeu seulement si une exception est connue (Title ID).
     if (def.id === 'eden') {
-      await applyEdenPad(row.dir, preferActive(await connectedXInputPads(cacheDir), (p) => p.slot)[0] ?? null).catch(() => {})
+      await applyEdenPad(row.dir, await chooseEdenPad(cacheDir)).catch(() => {})
       await applyEdenGameConfig(row.dir, entry.title_id).catch(() => {})
     }
     // PPSSPP : réglages propres au jeu (DISC_ID lu sur l'ISO) seulement si une exception est connue ; manettes et clavier : défauts natifs de PPSSPP, rien à écrire.
