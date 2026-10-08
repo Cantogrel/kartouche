@@ -46,3 +46,19 @@ export function classifyPads(raw: readonly RawPad[], last: LastUsed | null = nul
     .forEach((h, i) => out.push({ id: `other:${h.vid.toString(16)}:${h.pid.toString(16)}:${i}`, kind: 'other', name: h.name, slot: null, wireless: h.wireless, lastUsed: false }))
   return out
 }
+
+const KIND_ORDER: DetectedPad['kind'][] = ['xinput', 'switch-pro', 'joycon-pair', 'joycon-left', 'joycon-right']
+
+/**
+ * La manette que les émulateurs doivent lire : la dernière sur laquelle on a appuyé, sinon la première d'après l'ordre XInput (comme avant l'arrivée des manettes
+ * Nintendo), Switch Pro, paire de Joy-Con, Joy-Con seul. Null s'il n'y a rien d'utilisable (clavier).
+ */
+export function chooseMainPad(pads: readonly DetectedPad[]): DetectedPad | null {
+  const used = pads.find((p) => p.lastUsed && p.kind !== 'other')
+  if (used) return used
+  for (const kind of KIND_ORDER) {
+    const found = pads.find((p) => p.kind === kind)
+    if (found) return found
+  }
+  return null
+}

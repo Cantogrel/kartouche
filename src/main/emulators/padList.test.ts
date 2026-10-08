@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RawPad } from '@shared/pads'
-import { classifyPads } from './padList'
+import { chooseMainPad, classifyPads } from './padList'
 
 // XInput expose l'interface XUSB (045E:02FF), RawGameController l'identité réelle de la manette (045E:02EA) : relevé sur une Xbox One.
 const xbox = (slot: number): RawPad => ({ source: 'xinput', slot, vid: 0x045e, pid: 0x02ff })
@@ -73,5 +73,35 @@ describe('liste des manettes', () => {
   it('un Joy-Con seul est « utilisé » seulement si c\'est bien lui qui a répondu', () => {
     expect(classifyPads([left], { source: 'hid', pid: 0x2006 })[0].lastUsed).toBe(true)
     expect(classifyPads([left], { source: 'hid', pid: 0x2007 })[0].lastUsed).toBe(false)
+  })
+})
+
+describe('manette à lire en priorité', () => {
+  const pick = (raw: RawPad[], last = null as Parameters<typeof classifyPads>[1]): string | undefined => chooseMainPad(classifyPads(raw, last))?.kind
+
+  it('rien de branché : clavier', () => {
+    expect(pick([])).toBeUndefined()
+  })
+
+  it("sans information, XInput d'abord (comportement d'avant), puis Pro, paire, Joy-Con seul", () => {
+    expect(pick([pro, xbox(0)])).toBe('xinput')
+    expect(pick([left, right, pro])).toBe('switch-pro')
+    expect(pick([left, right])).toBe('joycon-pair')
+    expect(pick([left])).toBe('joycon-left')
+    expect(pick([right])).toBe('joycon-right')
+  })
+
+  it('la dernière manette utilisée passe devant, quelle que soit sa famille', () => {
+    expect(pick([xbox(0), pro], { source: 'hid', pid: 0x2009 })).toBe('switch-pro')
+    expect(pick([xbox(0), pro], { source: 'xinput', slot: 0 })).toBe('xinput')
+    expect(pick([xbox(0), left, right], { source: 'hid', pid: 0x2007 })).toBe('joycon-pair')
+  })
+
+  it("une dernière utilisée qui n'est plus branchée est ignorée", () => {
+    expect(pick([xbox(0)], { source: 'hid', pid: 0x2009 })).toBe('xinput')
+  })
+
+  it("une manette HID inconnue n'est jamais choisie", () => {
+    expect(pick([hid(0x054c, 0x0ce6, 'Wireless Controller')])).toBeUndefined()
   })
 })

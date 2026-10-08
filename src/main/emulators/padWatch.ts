@@ -89,7 +89,8 @@ export async function watchPadList(cacheDir: string, onChange: (raw: RawPad[]) =
 // Rapports « complets » (0x30) des manettes Nintendo, lus sur l'interface HID sans la verrouiller (partage lecture/écriture, lecture seule) : octet 3 = boutons du Joy-Con droit,
 // octet 4 = Moins (bit 0) et Plus (bit 1), octet 5 = boutons du Joy-Con gauche, octets 6 à 11 = les deux sticks (12 bits chacun). Relevé sur de vraies manettes, voir le vault
 // (projects/romvault/manettes-nintendo-phase0). Sorties : « ACT <pid> » (bouton ou stick franchement actionné, au plus 4 par seconde et par manette) et « CHORD 1/0 »
-// (Moins + Plus tenus ensemble : sur la Pro, ou Moins du Joy-Con gauche + Plus du Joy-Con droit ; un Joy-Con seul ne peut pas les tenir tous les deux).
+// (Moins + Plus tenus ensemble : sur la Pro, ou Moins du Joy-Con gauche + Plus du Joy-Con droit ; un Joy-Con seul ne peut pas les tenir tous les deux), et « DEV <pid> 1/0 »
+// (manette Nintendo ouverte / perdue : sert à savoir ce qui est branché sans relancer de détection).
 const HID_SCRIPT = `param([int]$ParentPid)
 Add-Type @'
 using System;
@@ -142,6 +143,7 @@ public static class NHid {
       SafeFileHandle hh = h; string pth = path; ushort pid = a.pid; int ln = len;
       Thread t = new Thread(delegate() { Read(hh, pth, pid, ln); });
       t.IsBackground = true; t.Start();
+      Emit("DEV " + pid.ToString("x") + " 1");
     }
     SetupDiDestroyDeviceInfoList(set);
   }
@@ -169,6 +171,7 @@ public static class NHid {
     } finally {
       lock (gate) { if (pid == 0x2009) { proMinus = false; proPlus = false; } else if (pid == 0x2006) leftMinus = false; else if (pid == 0x2007) rightPlus = false; Chord(); }
       lock (open) { open.Remove(path); }
+      Emit("DEV " + pid.ToString("x") + " 0");
       h.Dispose();
     }
   }
@@ -180,7 +183,7 @@ while (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) {
 }
 `
 
-export type NintendoEvent = { type: 'active'; pid: number } | { type: 'chord'; down: boolean }
+export type NintendoEvent = { type: 'active'; pid: number } | { type: 'chord'; down: boolean } | { type: 'device'; pid: number; present: boolean }
 
 /** Une ligne de `HID_SCRIPT` ; null si ce n'est pas un évènement. */
 export function parseHidLine(line: string): NintendoEvent | null {
@@ -188,6 +191,8 @@ export function parseHidLine(line: string): NintendoEvent | null {
   if (a) return { type: 'active', pid: parseInt(a[1], 16) }
   const c = /^CHORD ([01])$/.exec(line)
   if (c) return { type: 'chord', down: c[1] === '1' }
+  const d = /^DEV ([0-9a-f]{1,4}) ([01])$/.exec(line)
+  if (d) return { type: 'device', pid: parseInt(d[1], 16), present: d[2] === '1' }
   return null
 }
 

@@ -13,6 +13,16 @@ let lastActive: number | null = null
 // Des deux familles (XInput et Nintendo, lu en HID), celle sur laquelle on a appuyé en dernier : sert à désigner « la dernière manette utilisée » dans la liste des manettes.
 let lastSource: 'xinput' | 'hid' | null = null
 let lastHidPid: number | null = null
+// Manettes Nintendo ouvertes par la lecture HID (PID -> nombre) : ce qui est branché, connu en permanence et sans coût au lancement d'un jeu.
+const nintendoPresent = new Map<number, number>()
+
+export function noteNintendoDevice(pid: number, present: boolean): void {
+  const n = Math.max(0, (nintendoPresent.get(pid) ?? 0) + (present ? 1 : -1))
+  if (n === 0) nintendoPresent.delete(pid); else nintendoPresent.set(pid, n)
+}
+
+/** PID des manettes Nintendo branchées (un PID par manette : deux Joy-Con gauches donnent deux fois 0x2006). */
+export const connectedNintendoPids = (): number[] => [...nintendoPresent].flatMap(([pid, n]) => Array<number>(n).fill(pid))
 
 export const noteActivePad = (slot: number): void => { lastActive = slot; lastSource = 'xinput' }
 export const noteActiveHid = (pid: number): void => { lastHidPid = pid; lastSource = 'hid' }
@@ -40,5 +50,5 @@ export function startPadTracker(cacheDir: string): void {
   started = true
   void watchPadActivity(cacheDir, noteActivePad).catch(() => { started = false })
   // Manettes Nintendo (Joy-Con, Switch Pro) : pas du XInput, lues en HID. Sans effet si aucune n'est branchée.
-  void watchNintendoHid(cacheDir, (e) => { if (e.type === 'active') noteActiveHid(e.pid); else setNintendoChord(e.down) }).catch(() => {})
+  void watchNintendoHid(cacheDir, (e) => { if (e.type === 'active') noteActiveHid(e.pid); else if (e.type === 'device') noteNintendoDevice(e.pid, e.present); else setNintendoChord(e.down) }).catch(() => {})
 }
