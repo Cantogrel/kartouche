@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { applyEdenPad, isUntouchedEdenControls } from './configure'
+import { applyEdenPad, applyEdenPads, isUntouchedEdenControls } from './configure'
 import { edenNintendoProfile, isNintendoButtonA, type EdenNintendo } from './edenPads'
-import { pickEdenPad } from './edenChoice'
+import { pickEdenPad, pickEdenPads } from './edenChoice'
 import { EDEN_REAL } from './edenReal.fixture'
 import type { XInputPad } from './quit'
 
@@ -109,7 +109,7 @@ describe('Eden : profil écrit au lancement', () => {
   })
 
   it('une manette configurée à la main dans Eden n\'est jamais réécrite, Nintendo ou non', async () => {
-    const mine = 'player_0_button_a\\default=false\nplayer_0_button_a="engine:keyboard,code:67,toggle:0"\nplayer_0_type\\default=false\nplayer_0_type=3\n'
+    const mine = 'player_0_button_a\\default=false\nplayer_0_button_a="engine:keyboard,code:90,toggle:0"\nplayer_0_type\\default=false\nplayer_0_type=3\n'
     const dir = await edenDir(mine)
     await applyEdenPad(dir, { nintendo: 'joycon-pair' })
     await applyEdenPad(dir, { vid: 0x045e, pid: 0x02ff, ver: 0 })
@@ -165,5 +165,162 @@ describe('Eden : quelle manette lire', () => {
     const a: XInputPad = { slot: 0, vid: 1, pid: 1, ver: 0 }
     const b: XInputPad = { slot: 1, vid: 2, pid: 2, ver: 0 }
     expect(pickEdenPad([a, b], [], { source: 'hid', pid: 0x2009 }, order)).toEqual({ vid: 2, pid: 2, ver: 0 })
+  })
+})
+
+describe('Eden : plusieurs joueurs', () => {
+  it("le profil d'un Joy-Con droit seul au joueur 2 est exactement celui qu'Eden a écrit pour le joueur 2", () => {
+    const p2 = edenNintendoProfile('joycon-right', 1)
+    const real = Object.fromEntries(EDEN_REAL['joycon-right'].map(([k, v]) => [k.replace('player_0_', 'player_1_'), v]))
+    expect({ ...p2.keys, player_1_type: String(p2.type) }).toEqual(real)
+  })
+
+  it('un profil par joueur, avec son type et sa présence', async () => {
+    const dir = await edenDir()
+    await applyEdenPads(dir, [{ vid: 0x045e, pid: 0x02ff, ver: 0 }, { nintendo: 'switch-pro' }, { nintendo: 'joycon-pair' }])
+    const c = await controls(dir)
+    expect(c['player_0_button_a']).toBe('engine:sdl,port:0,guid:030000005e040000ff02000000007801,button:1')
+    expect(c['player_1_button_a']).toBe('engine:sdl,port:0,guid:030000007e0500000920000000006803,button:1')
+    expect(c['player_1_type']).toBe('0')
+    expect(c['player_1_connected']).toBe('true')
+    expect(c['player_1_connected\\default']).toBe('false')
+    expect(c['player_2_button_a']).toBe('engine:joycon,guid:00000000000000000000000000000002,port:0,pad:2,button:2048')
+    expect(c['player_2_type']).toBe('1')
+    expect(c['player_2_connected']).toBe('true')
+    expect(c['player_3_connected']).toBeUndefined()
+    // le joueur 1 est toujours connecté par défaut : pas de réglage « connected » à écrire pour lui
+    expect(c['player_0_connected']).toBeUndefined()
+  })
+
+  it('deux manettes identiques : la deuxième prend le port 1', async () => {
+    const dir = await edenDir()
+    await applyEdenPads(dir, [{ vid: 0x045e, pid: 0x02ff, ver: 0, port: 0 }, { vid: 0x045e, pid: 0x02ff, ver: 0, port: 1 }])
+    const c = await controls(dir)
+    expect(c['player_0_button_a']).toContain('port:0,guid:030000005e040000ff02000000007801')
+    expect(c['player_1_button_a']).toContain('port:1,guid:030000005e040000ff02000000007801')
+    expect(c['player_1_lstick']).toContain('port:1')
+  })
+
+  it('un joueur qui disparaît revient par défaut, les autres restent', async () => {
+    const dir = await edenDir()
+    await applyEdenPads(dir, [{ nintendo: 'switch-pro' }, { nintendo: 'joycon-pair' }, { vid: 0x045e, pid: 0x02ff, ver: 0 }])
+    await applyEdenPads(dir, [{ nintendo: 'switch-pro' }])
+    const c = await controls(dir)
+    expect(c['player_0_button_a\\default']).toBe('false')
+    for (const k of ['player_1_button_a', 'player_1_type', 'player_1_connected', 'player_1_motionleft', 'player_2_button_a', 'player_2_connected']) expect(c[`${k}\\default`]).toBe('true')
+  })
+
+  it("un joueur configuré à la main n'est jamais réécrit, les autres le sont", async () => {
+    const mine = 'player_1_button_a\\default=false\nplayer_1_button_a="engine:keyboard,code:90,toggle:0"\nplayer_1_type\\default=false\nplayer_1_type=5\n'
+    const dir = await edenDir(mine)
+    await applyEdenPads(dir, [{ nintendo: 'switch-pro' }, { nintendo: 'joycon-pair' }, { nintendo: 'joycon-left' }])
+    const c = await controls(dir)
+    expect(c['player_1_button_a']).toBe('engine:keyboard,code:90,toggle:0')
+    expect(c['player_1_type']).toBe('5')
+    expect(c['player_0_button_a']).toContain('engine:sdl')
+    expect(c['player_2_button_a']).toContain('engine:joycon')
+    expect(c['player_2_type']).toBe('2')
+  })
+
+  it('jamais plus de huit joueurs', async () => {
+    const dir = await edenDir()
+    await applyEdenPads(dir, Array.from({ length: 10 }, () => ({ nintendo: 'switch-pro' as const })))
+    const c = await controls(dir)
+    expect(c['player_7_button_a']).toBeDefined()
+    expect(c['player_8_button_a']).toBeUndefined()
+  })
+})
+
+describe('Eden : attribution des joueurs', () => {
+  const pro = [0x2009]
+  const pair = [0x2006, 0x2007]
+  const pad = (slot: number, vid = 0x045e, pid = 0x02ff): XInputPad => ({ slot, vid, pid, ver: 0 })
+
+  it('sans information : XInput, Switch Pro, paire de Joy-Con', () => {
+    expect(pickEdenPads([pad(0)], [...pro, ...pair], null)).toEqual([
+      { vid: 0x045e, pid: 0x02ff, ver: 0, port: 0 }, { nintendo: 'switch-pro', port: 0 }, { nintendo: 'joycon-pair', port: 0 }
+    ])
+  })
+
+  it("le joueur 1 est la dernière manette utilisée, les autres suivent dans l'ordre stable", () => {
+    expect(pickEdenPads([pad(0)], [...pro, ...pair], { source: 'hid', pid: 0x2007 })).toEqual([
+      { nintendo: 'joycon-pair', port: 0 }, { vid: 0x045e, pid: 0x02ff, ver: 0, port: 0 }, { nintendo: 'switch-pro', port: 0 }
+    ])
+    expect(pickEdenPads([pad(0)], [...pro, ...pair], { source: 'hid', pid: 0x2009 })[0]).toEqual({ nintendo: 'switch-pro', port: 0 })
+  })
+
+  it('une paire de Joy-Con est une seule manette, deux Joy-Con de même côté deux manettes', () => {
+    expect(pickEdenPads([], pair, null)).toEqual([{ nintendo: 'joycon-pair', port: 0 }])
+    expect(pickEdenPads([], [0x2006, 0x2006], null)).toEqual([{ nintendo: 'joycon-left', port: 0 }, { nintendo: 'joycon-left', port: 1 }])
+    expect(pickEdenPads([], [0x2006, 0x2006, 0x2007], null)).toEqual([{ nintendo: 'joycon-pair', port: 0 }, { nintendo: 'joycon-left', port: 0 }])
+  })
+
+  it('manettes XInput identiques : port par rang ; identités différentes : chacune son port 0', () => {
+    expect(pickEdenPads([pad(0), pad(1)], [], null)).toEqual([
+      { vid: 0x045e, pid: 0x02ff, ver: 0, port: 0 }, { vid: 0x045e, pid: 0x02ff, ver: 0, port: 1 }
+    ])
+    expect(pickEdenPads([pad(0), pad(1, 0x045e, 0x028e)], [], null).map((p) => ('port' in p ? p.port : -1))).toEqual([0, 0])
+  })
+
+  it('plusieurs XInput dont une « dernière utilisée » : elle passe en premier', () => {
+    expect(pickEdenPads([pad(0), pad(1, 0x045e, 0x028e)], [], { source: 'xinput', slot: 1 })).toEqual([
+      { vid: 0x045e, pid: 0x028e, ver: 0, port: 0 }, { vid: 0x045e, pid: 0x02ff, ver: 0, port: 0 }
+    ])
+  })
+
+  it("joueur seul avec plusieurs manettes allumées : la première est celle qu'il tient (dernière utilisée)", () => {
+    expect(pickEdenPad([pad(0)], [...pro, ...pair], { source: 'hid', pid: 0x2009 })).toEqual({ nintendo: 'switch-pro' })
+  })
+
+  it('rien : pas de joueur (clavier)', () => {
+    expect(pickEdenPads([], [], null)).toEqual([])
+  })
+})
+
+describe('Eden : config déjà sauvegardée par Eden', () => {
+  // Constaté sur le vrai Eden : à sa première sauvegarde il écrit la touche par défaut de CHAQUE joueur avec « default=false ».
+  const SAVED = [1, 2, 3].map((n) => `player_${n}_button_a\\default=false\nplayer_${n}_button_a="engine:keyboard,code:67,toggle:0"\nplayer_${n}_type\\default=true\nplayer_${n}_type=0\nplayer_${n}_connected\\default=true\nplayer_${n}_connected=false\n`).join('')
+
+  it('les touches clavier par défaut des autres joueurs ne sont pas prises pour un réglage de l\'utilisateur', async () => {
+    const dir = await edenDir(SAVED)
+    await applyEdenPads(dir, [{ nintendo: 'switch-pro' }, { nintendo: 'joycon-right' }])
+    const c = await controls(dir)
+    expect(c['player_1_button_a']).toContain('engine:joycon,guid:00000000000000000000000000000002,port:0,pad:2,button:2048')
+    expect(c['player_1_type']).toBe('3')
+    expect(c['player_1_connected']).toBe('true')
+    expect(c['player_1_connected\\default']).toBe('false')
+  })
+
+  it('un joueur sans manette garde ses touches par défaut et reste absent', async () => {
+    const dir = await edenDir(SAVED)
+    await applyEdenPads(dir, [{ nintendo: 'switch-pro' }])
+    const c = await controls(dir)
+    expect(c['player_1_connected']).toBe('false')
+    expect(c['player_1_button_a']).toBe('engine:keyboard,code:67,toggle:0')
+  })
+})
+
+describe('Eden : applet Contrôleur', () => {
+  it("n'est jamais désactivée par Kartouche (Eden refait alors toutes les manettes lui-même)", async () => {
+    for (const pads of [[{ nintendo: 'switch-pro' as const }, { nintendo: 'joycon-pair' as const }], [{ nintendo: 'joycon-right' as const }], []]) {
+      const dir = await edenDir()
+      await applyEdenPads(dir, pads)
+      expect((await controls(dir))['disableControllerApplet']).toBeUndefined()
+    }
+  })
+
+  it("rétablit l'option qu'une ancienne version de Kartouche avait désactivée, repérée par son marqueur", async () => {
+    const dir = await edenDir('disableControllerApplet\\default=false\ndisableControllerApplet=true\n')
+    await writeFile(join(dir, 'user', 'config', 'kartouche-applet-off'), '')
+    await applyEdenPads(dir, [{ nintendo: 'switch-pro' }])
+    expect((await controls(dir))['disableControllerApplet\\default']).toBe('true')
+  })
+
+  it("laisse tel quel un réglage fait par l'utilisateur (pas de marqueur)", async () => {
+    const dir = await edenDir('disableControllerApplet\\default=false\ndisableControllerApplet=true\n')
+    await applyEdenPads(dir, [{ nintendo: 'switch-pro' }])
+    const c = await controls(dir)
+    expect(c['disableControllerApplet']).toBe('true')
+    expect(c['disableControllerApplet\\default']).toBe('false')
   })
 })

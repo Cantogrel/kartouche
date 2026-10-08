@@ -11,7 +11,8 @@ import { getImage, type ImageKind } from './catalog/images'
 import { getGame, rebuildDerived } from './catalog/catalogStore'
 import { loadSettings } from './db/settingsStore'
 import { initUpdater } from './updater'
-import { watchPads } from './emulators/launcher'
+import { runningCount, watchPads } from './emulators/launcher'
+import { setPadActivityGate } from './emulators/padChoice'
 import { pruneCustomArt, readCustomArt } from './library/customArt'
 import { EMBED_REFERER, needsEmbedReferer } from './embedHeaders'
 import { migrateLegacyUserData, removeLegacyUpdaterCache, retireLegacyUserData } from './legacy'
@@ -121,6 +122,8 @@ if (!app.requestSingleInstanceLock()) {
       callback({ requestHeaders: needsEmbedReferer(details.url, details.resourceType) ? { ...details.requestHeaders, Referer: EMBED_REFERER } : details.requestHeaders })
     })
     // Manette utilisée en dernier (la vraie ou celle de Moonlight) : c'est celle que les émulateurs doivent lire (voir padChoice.ts).
+    // Pendant une partie, les appuis ne changent pas la manette « dernière utilisée » : le joueur 1 est celle qui a lancé le jeu, pas celle qui a appuyé en dernier à plusieurs.
+    setPadActivityGate(() => runningCount() === 0)
     watchPads(join(paths.cache, 'tools'))
     // Images personnelles qui n'ont plus d'entrée (arrêt brutal, remise à zéro…) : retirées au démarrage, sans bloquer l'ouverture.
     void pruneCustomArt(db, paths.dataDir).catch(() => undefined)
