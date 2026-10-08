@@ -35,7 +35,7 @@ Retour + Start (XInput) ou **Moins + Plus** maintenus 1,5 s : sur la Switch Pro,
 
 ## Dolphin (`dolphin.ts`, `dolphinChoice.ts`, `configure.ts`)
 
-Joueur 1 seulement pour l'instant (Wiimote 1, manette GameCube 1). Même règle qu'Eden pour la manette principale (`pickDolphinPad`, qui réutilise `pickEdenPads`) ; une XInput principale garde exactement l'ancien profil (clavier + XInput). Dolphin lit les manettes Nintendo en SDL (HIDAPI) : périphériques `SDL/<rang>/Nintendo Switch Pro Controller`, `…Joy-Con (L/R)` (SDL réunit une paire en un seul périphérique), `…Joy-Con (R)`.
+**Une manette par joueur, jusqu'à 4** (Wiimote 1 à 4, manettes GameCube 1 à 4 avec `SIDevice1-3` dans Dolphin.ini) : `pickDolphinPads` réutilise `pickEdenPads` (joueur 1 = dernière utilisée, les autres dans un ordre stable ; Joy-Con gauche seul ignoré, Joy-Con droit seul ignoré en GameCube), `applyDolphinPads` écrit une section par joueur et retire celles du lancement précédent. Joueur 2 et suivants vérifiés sur matériel (Wii Sports). Pour la manette du joueur 1 : une XInput principale garde exactement l'ancien profil (clavier + XInput). Dolphin lit les manettes Nintendo en SDL (HIDAPI) : périphériques `SDL/<rang>/Nintendo Switch Pro Controller`, `…Joy-Con (L/R)` (SDL réunit une paire en un seul périphérique), `…Joy-Con (R)`.
 
 - **Wii, Switch Pro** : la disposition de la Wiimote avec une XInput (`dolphinWiimote`), noms SDL par position, la manette en périphérique par défaut (les liaisons clavier sont retirées : sur un périphérique SDL elles invalideraient l'expression entière). B = gâchette du fond (ZR) ou bouton du bas, Z du Nunchuk = bouton de devant (R). Pointeur au stick droit en relatif, zone morte 15 % (contre la dérive), recentrage sur le clic du stick.
 - **Wii, paire de Joy-Con** : Joy-Con droit = Wiimote, gauche = Nunchuk. Pointeur au gyroscope (`IMUIR`, recentrage sur R, jamais `IRPassthrough`), vibreur `Motor R`, zone morte 15 % sur le stick du Nunchuk. Profil fait à la main dans Dolphin puis repris tel quel.
@@ -49,6 +49,14 @@ Joueur 1 seulement pour l'instant (Wiimote 1, manette GameCube 1). Même règle 
 
 Une manette Nintendo qui vient d'être allumée envoie un rapport « simple » (id 0x3F) tant qu'aucun programme ne l'a initialisée (LED qui clignotent). `HID_SCRIPT` le lit aussi, sinon ses appuis ne comptaient pas pour la « dernière manette utilisée ». Les LED s'attribuent quand Chromium interroge les manettes (`navigator.getGamepads()` dans les Paramètres ou le Big Picture) : ce n'est pas la détection PowerShell.
 
+### Applet Contrôleur d'Eden : ne plus l'ouvrir à chaque + / -
+
+Ce sont les jeux qui rappellent l'applet (journal Eden : « Initializing Controller Applet » à chaque appui sur + ou - dans un menu à plusieurs joueurs), et la fenêtre gelait le jeu à chaque fois, y compris pendant la fermeture à la manette (Moins + Plus). `applyEdenPads` écrit donc `[UI] disableControllerApplet=true` (marqueur `kartouche-applet-off` pour le rétablir) quand les manettes assignées comptent au moins une manette Nintendo et AUCUN Joy-Con seul (Eden refait alors Pro / paire, ce qui est déjà le cas) ; avec un Joy-Con seul l'applet reste active et validée par `autoConfirmEdenApplet`. XInput seule : inchangé. Un réglage fait à la main n'est jamais touché. Vérifié sur Mario Kart 8 (Pro, paire).
+
+## Jeux Wii / GameCube en .zip
+
+Dolphin ne lit pas les .zip. `importPaths` décompresse (UNE fois, `UNZIP_ON_IMPORT` = wii, gc) un zip d'une seule ROM vers `roms/<console>/`, vérifie CRC et taille (`unzipVerified`, jamais de fichier sous son vrai nom avant) et ne garde que le jeu décompressé (le zip d'origine n'est supprimé que si « supprimer la source », ou s'il était déjà dans le dossier de ROMs). Les jeux déjà importés en zip restent des zips : `resolveZippedRom` réutilise le fichier déjà extrait dans le cache (taille exacte, pas plus ancien que l'archive) au lieu de réextraire 3 Go à chaque lancement (Galaxy : 20 s → 8 s).
+
 ## Autres émulateurs
 
-Le principe (une manette par joueur, joueur 1 = dernière utilisée) est voulu pour tous. Aujourd'hui seul Eden le met en œuvre pour plusieurs joueurs ; Dolphin ne gère que le joueur 1 ; les autres émulateurs restent à faire.
+Le principe (une manette par joueur, joueur 1 = dernière utilisée) est voulu pour tous. Eden et Dolphin le mettent en œuvre ; les autres émulateurs restent à faire.

@@ -134,6 +134,9 @@ export function dolphinWiimote(device: string | null, kind: WiimoteKind): IniPat
 
 export type DolphinNintendo = 'switch-pro' | 'joycon-pair' | 'joycon-right'
 
+/** Manette d'un joueur de Dolphin : une XInput (emplacement) ou une manette Nintendo (type et rang parmi les manettes de même type). */
+export interface DolphinPlayerPad { xinputSlot: number | null; nintendo: { kind: DolphinNintendo; port: number } | null }
+
 /** Nom du périphérique SDL dans Dolphin (`SDL/<rang parmi les manettes de même nom>/<nom>`) ; la paire de Joy-Con est UN périphérique (SDL les réunit). */
 export function dolphinNintendoDevice(kind: DolphinNintendo, port = 0): string {
   const name = kind === 'switch-pro' ? 'Nintendo Switch Pro Controller' : kind === 'joycon-pair' ? 'Nintendo Switch Joy-Con (L/R)' : 'Nintendo Switch Joy-Con (R)'

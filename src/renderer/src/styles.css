@@ -230,6 +230,10 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .bp-tab.active { background: var(--active); color: var(--text-strong); }
 .bp-search { min-width: 260px; text-align: left; }
 .bp-btn.primary { background: var(--accent); color: var(--accent-fg); font-weight: 700; }
+/* Retour de clic : le bouton s'enfonce (souris et manette, voir useNav) ; « busy » = action en cours, les clics sont ignorés. */
+.bp-btn { transition: transform .08s, filter .08s; }
+.bp-btn:active, .bp-btn.pressed { transform: scale(.96); filter: brightness(.85); }
+.bp-btn.busy { opacity: .65; cursor: default; }
 .bp-tab:focus, .bp-search:focus, .bp-btn:focus, .vk-key:focus, .bp-tile:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--focus-glow); }
 .bp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px; padding: 10px; align-content: start; }
 .bp-tile { position: relative; aspect-ratio: 2 / 3; padding: 0; overflow: hidden; border: 2px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); transition: transform .12s; }

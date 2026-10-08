@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { crc32, deflateRawSync } from 'node:zlib'
@@ -142,6 +142,23 @@ describe('émulateurs : installation', () => {
     const out = await resolveZippedRom(zip, dir)
     expect(out).toBe(join(dir, 'extracted-rom', 'Jeu.gbc'))
     expect(readFileSync(out!)).toEqual(data)
+  })
+  it('réutilise le fichier déjà extrait s’il est intact, le refait s’il est trop court ou plus ancien que l’archive', async () => {
+    const data = Buffer.from('cartouche gbc')
+    const zip = join(dir, 'Reuse.zip')
+    writeFileSync(zip, makeZip([{ name: 'Reuse.gbc', data }]))
+    const out = (await resolveZippedRom(zip, dir))!
+    // Même taille, autre contenu : preuve que le deuxième lancement ne réécrit rien.
+    writeFileSync(out, Buffer.from('CARTOUCHE GBC'))
+    expect(readFileSync((await resolveZippedRom(zip, dir))!)).toEqual(Buffer.from('CARTOUCHE GBC'))
+    // Extraction interrompue : trop court, donc refait.
+    writeFileSync(out, Buffer.from('cart'))
+    expect(readFileSync((await resolveZippedRom(zip, dir))!)).toEqual(data)
+    // Archive remplacée après l’extraction : refait même à taille égale.
+    writeFileSync(out, Buffer.from('CARTOUCHE GBC'))
+    const later = new Date(Date.now() + 60_000)
+    utimesSync(zip, later, later)
+    expect(readFileSync((await resolveZippedRom(zip, dir))!)).toEqual(data)
   })
   it('laisse passer un chemin qui n’est pas un zip', async () => {
     expect(await resolveZippedRom(join(dir, 'a.gba'), dir)).toBe(join(dir, 'a.gba'))

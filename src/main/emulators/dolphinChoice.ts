@@ -1,30 +1,35 @@
-import type { DolphinNintendo } from './dolphin'
+import { DOLPHIN_MAX_PLAYERS } from './configure'
+import type { DolphinPlayerPad } from './dolphin'
 import { pickEdenPads } from './edenChoice'
 import { connectedNintendoPids, lastUsedPad, preferActive } from './padChoice'
 import { connectedXInputPads, type XInputPad } from './quit'
 
-export interface DolphinPadChoice {
-  /** Emplacement XInput du joueur 1 (null : pas de XInput, ou manette Nintendo choisie). */
-  xinputSlot: number | null
-  /** Manette Nintendo du joueur 1, si c'est elle la manette principale (dernière utilisée, sinon XInput > Switch Pro > paire > Joy-Con seul). */
-  nintendo: { kind: DolphinNintendo; port: number } | null
-}
-
 /**
- * La manette du joueur 1 de Dolphin. Même règle que pour Eden (`pickEdenPads`) : dernière manette utilisée, sinon XInput, Switch Pro, paire de Joy-Con, Joy-Con droit seul.
- * Un Joy-Con gauche seul n'a pas de quoi faire une Wiimote (ni pointeur, ni boutons suffisants) : il est ignoré, et Dolphin garde le clavier ou la XInput branchée.
- * Pure : les sources sont passées en paramètres.
+ * Les manettes des joueurs de Dolphin. Même règle qu'Eden (`pickEdenPads`) : le joueur 1 est la dernière manette utilisée (sinon XInput, Switch Pro, paire de Joy-Con, Joy-Con droit seul),
+ * chaque autre manette prend le joueur suivant dans un ordre stable, jusqu'à quatre. Un Joy-Con gauche seul n'a pas de quoi faire une Wiimote (ni pointeur, ni boutons suffisants) :
+ * il est ignoré. Pure : les sources sont passées en paramètres.
  */
-export function pickDolphinPad(xinput: readonly XInputPad[], nintendoPids: readonly number[], last: Parameters<typeof pickEdenPads>[2], xinputOrder: (pads: readonly XInputPad[]) => XInputPad[]): DolphinPadChoice {
-  // Les Joy-Con gauches seuls ne comptent pas : on les retire avant de choisir, pour qu'une XInput branchée à côté garde la main.
-  const players = pickEdenPads(xinput, nintendoPids, last, xinputOrder)
-  const supported = players.find((p) => !('nintendo' in p) || p.nintendo !== 'joycon-left')
-  if (supported && 'nintendo' in supported && supported.nintendo !== 'joycon-left') return { xinputSlot: null, nintendo: { kind: supported.nintendo, port: supported.port ?? 0 } }
-  const slot = xinputOrder(xinput)[0]?.slot ?? null
-  return { xinputSlot: slot, nintendo: null }
+export function pickDolphinPads(xinput: readonly XInputPad[], nintendoPids: readonly number[], last: Parameters<typeof pickEdenPads>[2], xinputOrder: (pads: readonly XInputPad[]) => XInputPad[]): DolphinPlayerPad[] {
+  const out: DolphinPlayerPad[] = []
+  for (const p of pickEdenPads(xinput, nintendoPids, last, xinputOrder)) {
+    if ('nintendo' in p) {
+      if (p.nintendo !== 'joycon-left') out.push({ xinputSlot: null, nintendo: { kind: p.nintendo, port: p.port ?? 0 } })
+    } else {
+      // Rang parmi les manettes de même identité (voir `pickEdenPads`) : l'emplacement XInput correspondant.
+      const slots = xinput.filter((x) => x.vid === p.vid && x.pid === p.pid && x.ver === p.ver).map((x) => x.slot).sort((a, b) => a - b)
+      const slot = slots[p.port ?? 0]
+      if (slot !== undefined) out.push({ xinputSlot: slot, nintendo: null })
+    }
+  }
+  return out.slice(0, DOLPHIN_MAX_PLAYERS)
 }
 
-export async function chooseDolphinPad(cacheDir: string): Promise<DolphinPadChoice> {
+/** Le joueur 1 seul (voir `pickDolphinPads`) : ni XInput ni manette Nintendo si aucune manette utilisable. */
+export function pickDolphinPad(...args: Parameters<typeof pickDolphinPads>): DolphinPlayerPad {
+  return pickDolphinPads(...args)[0] ?? { xinputSlot: null, nintendo: null }
+}
+
+export async function chooseDolphinPads(cacheDir: string): Promise<DolphinPlayerPad[]> {
   const xinput = await connectedXInputPads(cacheDir)
-  return pickDolphinPad(xinput, connectedNintendoPids(), lastUsedPad(), (pads) => preferActive(pads, (p) => p.slot))
+  return pickDolphinPads(xinput, connectedNintendoPids(), lastUsedPad(), (pads) => preferActive(pads, (p) => p.slot))
 }

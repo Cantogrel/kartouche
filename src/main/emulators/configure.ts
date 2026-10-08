@@ -14,7 +14,7 @@ import { AZAHAR_AUDIO, AZAHAR_GAME_OVERRIDES, AZAHAR_LAYOUT, azaharRenderer } fr
 import { MELONDS_GAME_SCREENS, MELONDS_JOYSTICK, MELONDS_KEYBOARD, MELONDS_WINDOW, melondsRendering, planMelondsGame, tomlSection, type LayoutState, type ScreenOverride } from './melonds'
 import { EDEN_GAME_OVERRIDES, EDEN_KEYBOARD_PROFILE, edenBackend, edenResolution } from './eden'
 import { edenNintendoKeys, edenNintendoProfile, isNintendoButtonA, type EdenNintendo } from './edenPads'
-import { dolphinGcPad, dolphinGraphics, dolphinNintendoGcPad, dolphinNintendoWiimote, dolphinWiimote, isUntouchedWiimoteFile, wiimoteKindFor, type DolphinNintendo } from './dolphin'
+import { dolphinGcPad, dolphinGraphics, dolphinNintendoGcPad, dolphinNintendoWiimote, dolphinWiimote, isUntouchedWiimoteFile, wiimoteKindFor, type DolphinNintendo, type DolphinPlayerPad } from './dolphin'
 
 /** Ce dont la configuration automatique a besoin : langue de l'app, taille de l'écran, dossier de BIOS de l'émulateur. */
 export interface ConfigContext {
@@ -193,24 +193,54 @@ export function isUntouchedPadFile(text: string): boolean {
  * lui (installation), les deux fichiers sont écrits au clavier seul.
  */
 export async function applyDolphinPad(dir: string, xinputSlot: number | null, game?: { console: string; gameId: string | null }, nintendo?: { kind: DolphinNintendo; port: number } | null): Promise<void> {
+  const first: DolphinPlayerPad | null = nintendo && game && xinputSlot === null ? { xinputSlot: null, nintendo } : xinputSlot !== null ? { xinputSlot, nintendo: null } : null
+  await applyDolphinPads(dir, first ? [first] : [], game)
+}
+
+/** Nombre de manettes que Dolphin sait recevoir (Wiimote 1 à 4, manettes GameCube 1 à 4). */
+export const DOLPHIN_MAX_PLAYERS = 4
+
+/** Les clés d'un profil de joueur 1 (`Wiimote1`, `GCPad1`) sous le nom de section du joueur `n`. */
+const asPlayer = (patch: IniPatch, section: string, n: number): IniPatch => ({ [`${section}${n}`]: Object.values(patch)[0] })
+
+/**
+ * Une manette par joueur, comme pour Eden : `players[0]` est le joueur 1 (la dernière manette utilisée), les suivantes les joueurs 2 à 4. Chaque joueur reçoit le profil de SA manette
+ * (XInput, Switch Pro, paire de Joy-Con, Joy-Con droit seul pour une Wiimote). Sans manette, le joueur 1 est au clavier ; sans joueur 2, il n'y a pas de Wiimote 2 ni de manette GameCube 2
+ * (`SIDevice`), pour que le jeu ne croie pas à un second joueur. Même règle que pour un seul joueur : un fichier retouché à la main n'est jamais réécrit.
+ */
+export async function applyDolphinPads(dir: string, players: readonly DolphinPlayerPad[], game?: { console: string; gameId: string | null }): Promise<void> {
   const cfg = join(dir, 'User', 'Config')
-  const device = xinputSlot === null ? null : `XInput/${xinputSlot}/Gamepad`
   const gcFile = join(cfg, 'GCPadNew.ini')
   const wiiFile = join(cfg, 'WiimoteNew.ini')
+  const xinput = (p: DolphinPlayerPad): string | null => (p.xinputSlot === null ? null : `XInput/${p.xinputSlot}/Gamepad`)
   if (!game || game.console === 'gc') {
-    if (isUntouchedPadFile(await readText(gcFile))) await writeIni(gcFile, nintendo && game && xinputSlot === null && nintendo.kind !== 'joycon-right' ? dolphinNintendoGcPad(nintendo.kind, nintendo.port) : dolphinGcPad(device))
+    // Un Joy-Con droit seul n'a pas de quoi faire une manette GameCube : ignoré, les autres manettes prennent sa place.
+    const gc = players.filter((p) => !(p.nintendo && p.nintendo.kind === 'joycon-right')).slice(0, DOLPHIN_MAX_PLAYERS)
+    if (isUntouchedPadFile(await readText(gcFile))) {
+      const pads = gc.length ? gc : [null]
+      for (const [i, p] of pads.entries()) {
+        const patch = p && game && p.nintendo && p.nintendo.kind !== 'joycon-right' ? dolphinNintendoGcPad(p.nintendo.kind, p.nintendo.port) : dolphinGcPad(p ? xinput(p) : null)
+        await writeIni(gcFile, asPlayer(patch, 'GCPad', i + 1))
+      }
+      // Manettes GameCube branchées sur la console : le joueur 1 toujours, les suivants seulement s'il y a une manette pour eux (6 = manette standard, 0 = rien).
+      if (game) await writeIni(join(cfg, 'Dolphin.ini'), { Core: Object.fromEntries([1, 2, 3].map((i) => [`SIDevice${i}`, i < pads.length ? 6 : 0])) })
+    }
   }
   if (!game || game.console === 'wii') {
     // À l'installation (sans `game`), le fichier créé par Dolphin lui-même n'est pas un réglage de l'utilisateur : toujours écrit.
-    {
-      const current = await readText(wiiFile)
-      if (!game || isUntouchedWiimoteFile(current)) {
-        // Section remplacée en entier (pas fusionnée) : les touches d'un profil précédent (Swing, Nunchuk, Classic…) ne doivent pas survivre au changement de profil.
-        await mkdir(dirname(wiiFile), { recursive: true })
-        const wiiKind = game ? wiimoteKindFor(game.gameId) : 'nunchuk'
-        // Manette Nintendo principale (jamais avec une XInput : la règle d'avant ne change pas) : profil SDL avec gyroscope.
-        await writeFile(wiiFile, patchIni(dropIniSection(current, 'Wiimote1'), nintendo && game && xinputSlot === null ? dolphinNintendoWiimote(nintendo.kind, nintendo.port, wiiKind) : dolphinWiimote(device, wiiKind)))
+    const current = await readText(wiiFile)
+    if (!game || isUntouchedWiimoteFile(current)) {
+      // Sections remplacées en entier (pas fusionnées) : les touches d'un profil précédent (Swing, Nunchuk, Classic…) ne doivent pas survivre au changement de profil.
+      await mkdir(dirname(wiiFile), { recursive: true })
+      const wiiKind = game ? wiimoteKindFor(game.gameId) : 'nunchuk'
+      const pads = players.length ? players.slice(0, DOLPHIN_MAX_PLAYERS) : [null]
+      let text = current
+      for (let i = 1; i <= DOLPHIN_MAX_PLAYERS; i++) text = dropIniSection(text, `Wiimote${i}`)
+      for (const [i, p] of pads.entries()) {
+        const patch = p && game && p.nintendo ? dolphinNintendoWiimote(p.nintendo.kind, p.nintendo.port, wiiKind) : dolphinWiimote(p ? xinput(p) : null, wiiKind)
+        text = patchIni(text, asPlayer(patch, 'Wiimote', i + 1))
       }
+      await writeFile(wiiFile, text)
     }
   }
 }
@@ -608,20 +638,34 @@ export async function applyEdenPads(dir: string, pads: readonly (EdenPad | EdenN
       Object.assign(patch, resetKeys([...xinputKeys, ...nintendoKeys]), state === 'nintendo' ? { [`player_${i}_type\\default`]: true } : {}, connected(false))
     }
   }
-  const applet = await edenAppletRestore(dir)
+  const applet = await edenAppletSetting(dir, text, pads, Object.keys(patch).length > 0)
   if (Object.keys(patch).length === 0 && !applet) return // rien d'écrit (joueurs configurés à la main)
   await writeIni(file, { ...(Object.keys(patch).length > 0 ? { Controls: patch } : {}), ...(applet ? { UI: applet } : {}) }, '=')
 }
 
 /**
- * Applet Contrôleur d'Eden : quand un jeu demande de vérifier ou d'assigner les manettes (Mario Kart à deux joueurs…), Eden ouvre une fenêtre à valider. On NE la désactive PAS :
- * quand elle est désactivée, Eden « déduit la meilleure configuration » lui-même (journal : « ReconfigureControllers: called, deducing the best configuration ») et refait
- * toutes les manettes en Pro Controller ou paire de Joy-Con, sans tenir compte du Joy-Con seul qu'on lui a assigné. Kartouche valide la vraie applet à la place de l'utilisateur
- * (voir `edenAppletConfirm` et `autoConfirmDialogs`). Ici, on rétablit seulement l'option qu'une ancienne version de Kartouche avait désactivée (repérée par son marqueur).
+ * Applet Contrôleur d'Eden : quand un jeu demande de vérifier ou d'assigner les manettes (Mario Kart à deux joueurs, ou un appui sur + / - dans son menu), Eden ouvre une fenêtre.
+ * Désactivée, Eden « déduit la meilleure configuration » lui-même (journal : « ReconfigureControllers: called, deducing the best configuration »), sans fenêtre ni attente : il refait
+ * les manettes en Pro Controller ou paire de Joy-Con, ce qui convient quand les manettes assignées SONT des Pro, des paires ou des XInput, mais défait un Joy-Con seul. Kartouche la
+ * désactive donc quand aucun Joy-Con seul n'est assigné (plus de fenêtre à chaque appui sur + ou -, qui servent aussi à fermer le jeu à la manette), et la laisse active sinon : la vraie
+ * applet est alors validée à la place de l'utilisateur (voir `autoConfirmEdenApplet`). Le réglage est repéré par un marqueur pour être rétabli ; celui qu'un utilisateur a fait à la main
+ * n'est jamais touché.
  */
-async function edenAppletRestore(dir: string): Promise<Record<string, string | number | boolean> | null> {
+export const edenAppletCanBeOff = (pads: readonly (EdenPad | EdenNintendoPad)[]): boolean =>
+  pads.some((p) => 'nintendo' in p) && pads.every((p) => !('nintendo' in p) || p.nintendo === 'switch-pro' || p.nintendo === 'joycon-pair')
+
+async function edenAppletSetting(dir: string, text: string, pads: readonly (EdenPad | EdenNintendoPad)[], managed: boolean): Promise<Record<string, string | number | boolean> | null> {
   const marker = join(dir, 'user', 'config', 'kartouche-applet-off')
-  if (!existsSync(marker)) return null
+  const ours = existsSync(marker)
+  if (edenAppletCanBeOff(pads)) {
+    // Toutes les manettes sont réglées à la main : Kartouche n’y touche pas, ni à l’applet.
+    if (!managed && !ours) return null
+    // Désactivée à la main par l'utilisateur (sans notre marqueur) : rien à faire.
+    if (!ours && /^disableControllerApplet\\default=false\s*$/m.test(text)) return null
+    if (!ours) { await mkdir(dirname(marker), { recursive: true }); await writeFile(marker, '') }
+    return { disableControllerApplet: true, 'disableControllerApplet\\default': false }
+  }
+  if (!ours) return null
   await rm(marker, { force: true })
   return { 'disableControllerApplet\\default': true }
 }

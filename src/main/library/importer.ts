@@ -90,6 +90,29 @@ export interface Prepared {
   ext: string
   /** Zip disque multi-fichiers (.cue + pistes) : entrées à extraire, feuille .cue en tête. */
   zipEntries?: string[]
+  /** Zip d'une seule ROM : nom de l'entrée (voir `UNZIP_ON_IMPORT`). */
+  zipEntry?: string
+}
+
+/**
+ * Consoles dont l'émulateur (Dolphin) ne lit pas les .zip : le jeu y est décompressé UNE fois, à l'import, et seul le fichier décompressé est gardé en bibliothèque. Sinon chaque lancement
+ * réextrayait plusieurs Go dans le cache (9 s d'attente pour Super Mario Galaxy). Les formats déjà compressés (.rvz, .wia, .gcz) restent tels quels une fois sortis du zip.
+ */
+export const UNZIP_ON_IMPORT: ReadonlySet<string> = new Set(['wii', 'gc'])
+
+/**
+ * Extrait l'unique ROM d'un zip vers `dest` en vérifiant son empreinte (CRC et taille de l'entrée) avant de la mettre en place : un fichier incomplet ou corrompu n'existe jamais sous son
+ * vrai nom, et l'archive n'est supprimée par l'appelant qu'après ce contrôle.
+ */
+export async function unzipVerified(zip: string, entry: string, dest: string, expect: { crc?: string; size: number }, onBytes?: (bytes: number) => void): Promise<boolean> {
+  const part = `${dest}.part`
+  try {
+    if (!(await extractZipEntries(zip, [{ entry, dest: part }]))) return false
+    const h = await hashFile(part, onBytes)
+    if (h.size !== expect.size || (expect.crc && h.crc.toLowerCase() !== expect.crc.toLowerCase())) return false
+    await rename(part, dest)
+    return true
+  } catch { return false } finally { await rm(part, { force: true }).catch(() => undefined) }
 }
 
 /** Empreinte (+ détection zip/.cue) d'un fichier, sans effet de bord — réutilisé par downloads/install.ts pour vérifier un téléchargement avant de l'installer. */
@@ -108,7 +131,7 @@ export async function prepare(file: string, extra: string[], onBytes?: (bytes: n
     const roms = all.filter((z) => extOf(z.name) in ROM_EXTENSIONS)
     if (roms.length === 1) {
       const z = roms[0]
-      return { crc: z.crc, size: z.size, name: stemOf(z.name), ext: extOf(z.name) }
+      return { crc: z.crc, size: z.size, name: stemOf(z.name), ext: extOf(z.name), zipEntry: z.name }
     }
     // Disque .cue + pistes dans un zip : reconnu seulement si une unique feuille .cue référence exactement les autres entrées de ROM.
     const cues = roms.filter((z) => extOf(z.name) === 'cue')
@@ -356,6 +379,14 @@ export async function importPaths(db: DatabaseSync, paths: string[], opt: Import
         const mapping = [{ entry: cueEntry, dest }, ...trackEntries.map((t) => ({ entry: t, dest: join(dir, basename(t)) }))]
         if (!(await extractZipEntries(file, mapping))) { await rm(dest, { force: true }); throw new Error('extraction de l’archive échouée') }
         if (opt.deleteSource) await rm(file, { force: true })
+      } else if (ext === 'zip' && prep.zipEntry && UNZIP_ON_IMPORT.has(cons)) {
+        // Wii/GameCube : décompressé à l'import, seul le jeu décompressé est gardé. La copie dans le dossier de ROMs de la bibliothèque (ou le zip temporaire sorti d'une archive) est supprimée une fois
+        // le fichier vérifié ; l'original choisi par l'utilisateur ne l'est que s'il l'a demandé (deleteSource).
+        const dir = join(opt.romsDir, cons)
+        await mkdir(dir, { recursive: true })
+        dest = join(dir, freeName(dir, basename(prep.zipEntry)))
+        if (!(await unzipVerified(file, prep.zipEntry, dest, { crc: prep.crc, size: prep.size }, reportBytes))) throw new Error('extraction de l’archive échouée')
+        if (opt.deleteSource || inRoms) await rm(file, { force: true })
       } else if (tempPath) {
         // Déjà empreinté ET copié dans le fichier temporaire ci-dessus : il ne reste qu'à le renommer à sa place finale.
         const dir = join(opt.romsDir, cons)
