@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createChordHold, nintendoChordDown, onNintendoChord } from './nintendoChord'
 
@@ -110,8 +110,9 @@ while ($true) {
 // assignées par Kartouche : on clique « OK » à la place de l'utilisateur. Relevé sur Eden 0.2.1 (UI Automation) : la fenêtre est une fenêtre propriétaire de la fenêtre principale
 // (titre « Applet Contrôleur » en français), et ses boutons ont tous l'identifiant « …QtControllerSelectorDialog…closeButtons.buttonBox.QPushButton » (OK et Annuler : même
 // identifiant, seuls le nom, traduit, et la position changent). On prend donc le bouton le plus à gauche (disposition Windows : OK puis Annuler), quelle que soit la langue.
-// Le bouton OK est grisé tant que la configuration ne convient pas au jeu (type de manette refusé, nombre de joueurs) : il n'est alors pas cliqué, la fenêtre reste affichée
-// et l'utilisateur voit pourquoi. La recherche UI Automation, lourde, n'est lancée que si une fenêtre propriétaire visible existe (test Win32 bon marché).
+// Le bouton OK est grisé tant que la configuration ne convient pas au jeu (type de manette refusé, nombre de joueurs) : il n'est alors pas cliqué. S'il reste grisé plus de
+// 1,5 s, le script écrit « REFUSED » : Kartouche ferme le jeu et explique clairement ce qu'il faut brancher. La recherche UI Automation, lourde, n'est lancée que si une fenêtre
+// propriétaire visible existe (test Win32 bon marché).
 const EDEN_APPLET_SCRIPT = `param([int]$ParentPid, [string]$Proc = 'eden')
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type @"
@@ -136,21 +137,32 @@ public static class EW {
 $root = [System.Windows.Automation.AutomationElement]::RootElement
 $id = 'QApplication.QtControllerSelectorDialog.mainControllerApplet.bottomControllerApplet.closeButtons.buttonBox.QPushButton'
 $cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
+$refusedSince = $null
+$reported = $false
 while ($true) {
   if (-not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { exit }
   $procs = @(Get-Process -Name $Proc -ErrorAction SilentlyContinue)
   if ($procs.Count -gt 0) {
     $set = New-Object 'System.Collections.Generic.HashSet[uint32]'
     foreach ($p in $procs) { [void]$set.Add([uint32]$p.Id) }
+    $applet = $false
     if ([EW]::HasVisibleOwned($set)) {
       foreach ($w in $root.FindAll('Children', [System.Windows.Automation.Condition]::TrueCondition)) {
         if (-not $set.Contains([uint32]$w.Current.ProcessId)) { continue }
         $buttons = @($w.FindAll('Descendants', $cond) | Sort-Object { $_.Current.BoundingRectangle.X })
-        if ($buttons.Count -ge 2 -and $buttons[0].Current.IsEnabled) {
+        if ($buttons.Count -lt 2) { continue }
+        $applet = $true
+        if ($buttons[0].Current.IsEnabled) {
+          $refusedSince = $null
+          Write-Output 'APPLET-OK-ENABLED'
           try { $buttons[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); Write-Output 'CLICK'; Start-Sleep -Milliseconds 1500 } catch {}
+        } else {
+          if ($null -eq $refusedSince) { $refusedSince = [Diagnostics.Stopwatch]::StartNew(); Write-Output 'APPLET-OK-DISABLED' }
+          if (-not $reported -and $refusedSince.ElapsedMilliseconds -gt 1500) { Write-Output 'REFUSED'; $reported = $true }
         }
       }
     }
+    if (-not $applet) { $refusedSince = $null; $reported = $false }
   }
   Start-Sleep -Milliseconds 300
 }
@@ -232,10 +244,19 @@ export async function watchQuitChord(cacheDir: string, onChord: () => void): Pro
   return () => { child.kill(); off(); hold.cancel() }
 }
 
-/** Valide l'applet Contrôleur d'Eden (voir `EDEN_APPLET_SCRIPT`) tant que Kartouche tourne ; renvoie la fonction d'arrêt. */
-export async function autoConfirmEdenApplet(cacheDir: string): Promise<() => void> {
+/**
+ * Valide l'applet Contrôleur d'Eden (voir `EDEN_APPLET_SCRIPT`) tant que Kartouche tourne ; renvoie la fonction d'arrêt. `onRefused` est appelé (une fois par ouverture de
+ * l'applet) quand le jeu refuse la configuration des manettes : le bouton OK reste grisé.
+ */
+export async function autoConfirmEdenApplet(cacheDir: string, onRefused?: () => void): Promise<() => void> {
   const file = await scriptFile(cacheDir, 'eden-applet.ps1', EDEN_APPLET_SCRIPT)
-  const child = spawn('powershell.exe', [...PS_ARGS, file, '-ParentPid', String(process.pid)], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore'] })
+  const child = spawn('powershell.exe', [...PS_ARGS, file, '-ParentPid', String(process.pid)], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
+  // Trace de ce que l'applet a affiché (état du bouton OK, refus) : aide à comprendre un jeu qui ne se ferme pas ou une applet validée à tort.
+  child.stdout.on('data', (d) => {
+    const lines = String(d).split(String.fromCharCode(10)).map((l) => l.trim()).filter(Boolean)
+    void appendFile(join(cacheDir, 'eden-applet.log'), `${new Date().toISOString()} ${lines.join(' | ')}${String.fromCharCode(10)}`).catch(() => {})
+    if (String(d).includes('REFUSED')) onRefused?.()
+  })
   child.on('error', () => {})
   return () => { child.kill() }
 }

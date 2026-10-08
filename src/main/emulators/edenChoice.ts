@@ -68,6 +68,22 @@ export function pickEdenPad(...args: Parameters<typeof pickEdenPads>): EdenPlaye
   return 'nintendo' in p ? { nintendo: p.nintendo } : { vid: p.vid, pid: p.pid, ver: p.ver }
 }
 
+/**
+ * Pourquoi le jeu a refusé les manettes assignées (l'applet reste bloquée) : `padRefusedJoycon` s'il y a un Joy-Con seul (les jeux qui ne l'acceptent pas sont les plus courants),
+ * sinon `padRefusedCount` (le jeu veut plus de manettes que celles branchées). Clés i18n `play.<code>`.
+ */
+export function edenRefusalReason(assigned: readonly EdenPlayerPad[]): 'padRefusedJoycon' | 'padRefusedCount' {
+  return assigned.some((p) => 'nintendo' in p && (p.nintendo === 'joycon-left' || p.nintendo === 'joycon-right')) ? 'padRefusedJoycon' : 'padRefusedCount'
+}
+
+/**
+ * Un refus n'entraîne la fermeture du jeu que dans la première minute : c'est là qu'un jeu refuse les manettes au démarrage (Paper Mario avec un Joy-Con seul). Plus tard, l'applet
+ * s'ouvre pour une raison que l'utilisateur peut régler sur place (une manette déconnectée en pleine partie, un menu à deux joueurs avec une seule manette) : fermer le jeu lui ferait
+ * perdre sa progression, alors qu'il lui suffit de rallumer une manette.
+ */
+export const EDEN_REFUSAL_WINDOW_MS = 60_000
+export const shouldCloseOnRefusal = (msSinceLaunch: number): boolean => msSinceLaunch <= EDEN_REFUSAL_WINDOW_MS
+
 export async function chooseEdenPads(cacheDir: string): Promise<EdenPlayerPad[]> {
   const xinput = await connectedXInputPads(cacheDir)
   return pickEdenPads(xinput, connectedNintendoPids(), lastUsedPad(), (pads) => preferActive(pads, (p) => p.slot))

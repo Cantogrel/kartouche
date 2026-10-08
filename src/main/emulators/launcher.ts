@@ -9,7 +9,7 @@ import { buildArgs, emulatorById, emulatorForConsole, type EmulatorDef, type Gam
 import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
 import { preferActive, rankAmong, startPadTracker } from './padChoice'
-import { chooseEdenPads } from './edenChoice'
+import { chooseEdenPads, edenRefusalReason, shouldCloseOnRefusal, type EdenPlayerPad } from './edenChoice'
 import { anyGamepadConnected, autoConfirmEdenApplet, closeGracefully, connectedXInputPads, connectedXInputSlots, watchQuitChord } from './quit'
 import { emulatorEnv } from './sdlEnv'
 import { applyCemuControls, applyCemuPad } from './cemu'
@@ -283,9 +283,11 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     if (def.id === 'pcsx2') await applyPsPads(join(row.dir, 'inis', 'PCSX2.ini')).catch(() => {})
     if (def.id === 'melonds') await applyMelondsPad(row.dir, padSlot === null ? null : rankAmong(padSlots, padSlot)).catch(() => {})
     if (def.id === 'melonds') await applyMelondsGame(row.dir, await readNdsCode(romPath).catch(() => null)).catch(() => {})
+    let edenAssigned: EdenPlayerPad[] = []
     // Eden : une manette par joueur (joueur 1 = la dernière utilisée, les autres dans un ordre stable ; voir edenChoice.ts), sinon clavier ; configuration propre au jeu seulement si une exception est connue (Title ID).
     if (def.id === 'eden') {
-      await applyEdenPads(row.dir, await chooseEdenPads(cacheDir)).catch(() => {})
+      edenAssigned = await chooseEdenPads(cacheDir).catch(() => [])
+      await applyEdenPads(row.dir, edenAssigned).catch(() => {})
       await applyEdenGameConfig(row.dir, entry.title_id).catch(() => {})
     }
     // PPSSPP : réglages propres au jeu (DISC_ID lu sur l'ISO) seulement si une exception est connue ; manettes et clavier : défauts natifs de PPSSPP, rien à écrire.
@@ -347,7 +349,12 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     void watchQuitChord(cacheDir, () => stopGame(entryId)).then((stop) => { if (over) stop(); else stopWatch = stop }).catch(() => {})
     // Eden : l'applet Contrôleur (jeux à plusieurs joueurs…) est validée à la place de l'utilisateur, les manettes étant déjà assignées (voir quit.ts).
     let stopApplet: (() => void) | null = null
-    if (def.id === 'eden') void autoConfirmEdenApplet(cacheDir).then((stop) => { if (over) stop(); else stopApplet = stop }).catch(() => {})
+    // Le jeu refuse les manettes assignées (applet bloquée) : on le ferme et on explique ce qu'il faut brancher (play.padRefused*), au lieu de laisser l'utilisateur devant une fenêtre sans issue.
+    let padRefusal: 'padRefusedJoycon' | 'padRefusedCount' | null = null
+    if (def.id === 'eden') {
+      void autoConfirmEdenApplet(cacheDir, () => { if (!padRefusal && shouldCloseOnRefusal(Date.now() - started)) { padRefusal = edenRefusalReason(edenAssigned); stopGame(entryId) } })
+        .then((stop) => { if (over) stop(); else stopApplet = stop }).catch(() => {})
+    }
     const finish = async (): Promise<void> => {
       if (over) return
       over = true
@@ -364,7 +371,8 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       const total = db.prepare('SELECT play_minutes FROM library WHERE id = ?').get(entryId) as { play_minutes: number } | undefined
       // Fermé tout seul (pas par l'utilisateur) en moins de QUICK_EXIT_MS : probablement un échec plutôt qu'une vraie partie.
       let quickExit: QuickExit | undefined
-      if (!attempt.stopped && attempt.elapsedMs < QUICK_EXIT_MS) {
+      if (padRefusal) quickExit = { elapsedMs: attempt.elapsedMs, immediate: padRefusal }
+      else if (!attempt.stopped && attempt.elapsedMs < QUICK_EXIT_MS) {
         quickExit = { elapsedMs: attempt.elapsedMs, log: attempt.captured.trim() || (await readLaunchLog(def, row.dir)) }
       }
       notify({ entryId, running: false, playMinutes: total?.play_minutes, quickExit })

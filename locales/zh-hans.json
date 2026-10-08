@@ -308,6 +308,8 @@
   "play.stop": "关闭游戏",
   "play.quitHint": "退出：Ctrl+Alt+Q，或在手柄上同时按住“返回”+“开始”",
   "play.launchFailedHeader": "无法启动游戏。",
+  "play.padRefusedJoycon": "此游戏不支持单个 Joy-Con。请连接 Switch Pro 手柄、左右两个 Joy-Con 一起使用，或连接 Xbox 手柄，然后重新启动游戏。",
+  "play.padRefusedCount": "此游戏需要的手柄数量多于当前已连接的数量。请连接缺少的手柄，然后重新启动游戏。",
   "play.quickExitHeader": "游戏在启动 {seconds} 秒后自行关闭了。",
   "play.quickExitSbi": "此游戏缺少必需的 .sbi 文件（光盘防拷贝保护）。请将同名文件放在游戏文件旁边。",
   "play.quickExitBios": "此主机的 BIOS 缺失或无效。",

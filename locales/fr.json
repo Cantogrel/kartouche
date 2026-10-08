@@ -308,6 +308,8 @@
   "play.stop": "Fermer le jeu",
   "play.quitHint": "Quitter : Ctrl+Alt+Q, ou Retour + Start maintenus sur la manette",
   "play.launchFailedHeader": "Le jeu n'a pas pu être lancé.",
+  "play.padRefusedJoycon": "Ce jeu n'accepte pas un Joy-Con seul. Connectez une manette Switch Pro, les deux Joy-Con ensemble (gauche et droit) ou une manette Xbox, puis relancez le jeu.",
+  "play.padRefusedCount": "Ce jeu demande plus de manettes que celles connectées. Connectez les manettes manquantes, puis relancez le jeu.",
   "play.quickExitHeader": "Le jeu s'est fermé tout seul {seconds} s après son lancement.",
   "play.quickExitSbi": "Il manque un fichier .sbi, requis par ce jeu (protection anticopie du disque). Placez-le à côté du fichier du jeu, avec le même nom.",
   "play.quickExitBios": "Le BIOS de cette console est manquant ou invalide.",

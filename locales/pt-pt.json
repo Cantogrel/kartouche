@@ -308,6 +308,8 @@
   "play.stop": "Fechar o jogo",
   "play.quitHint": "Sair: Ctrl+Alt+Q, ou mantém premidos Voltar + Start num comando",
   "play.launchFailedHeader": "Não foi possível iniciar o jogo.",
+  "play.padRefusedJoycon": "Este jogo não aceita um Joy-Con isolado. Liga um comando Switch Pro, os dois Joy-Con juntos (esquerdo e direito) ou um comando Xbox e inicia o jogo novamente.",
+  "play.padRefusedCount": "Este jogo precisa de mais comandos do que os ligados. Liga os comandos em falta e inicia o jogo novamente.",
   "play.quickExitHeader": "O jogo fechou-se sozinho {seconds} s após o arranque.",
   "play.quickExitSbi": "A este jogo falta um ficheiro .sbi necessário (proteção anticópia do disco). Coloca-o junto ao ficheiro do jogo com o mesmo nome.",
   "play.quickExitBios": "A BIOS desta consola está em falta ou é inválida.",
