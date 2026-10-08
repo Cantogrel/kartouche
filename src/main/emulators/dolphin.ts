@@ -85,8 +85,8 @@ export function dolphinWiimote(device: string | null, kind: WiimoteKind): IniPat
     Device: 'DInput/0/Keyboard Mouse',
     Extension: kind === 'classic' ? 'Classic' : 'Nunchuk',
     // Disposition choisie pour Super Mario Galaxy et reprise pour tous les jeux : A/B sur les positions Xbox croisées (A = bouton B ou LB,
-    // B = bouton A ou RB), « - » = Start, « + » = Back, secousse (spin) = X, penché = gâchette gauche + stick gauche.
-    'Buttons/A': kp('`Click 0`', 'Button B', 'Shoulder L'), 'Buttons/B': kp('`Click 1`', 'Button A', 'Shoulder R'), 'Buttons/1': '`1`', 'Buttons/2': '`2`',
+    // B = bouton A ou RT : gâchette du fond, plus naturelle pour la détente), « - » = Start, « + » = Back, secousse (spin) = X, penché = gâchette gauche + stick gauche.
+    'Buttons/A': kp('`Click 0`', 'Button B', 'Shoulder L'), 'Buttons/B': kp('`Click 1`', 'Button A', 'Trigger R'), 'Buttons/1': '`1`', 'Buttons/2': '`2`',
     // Pas de Home sur la manette (clavier seulement) : Start/Back servent à « - »/« + », le clic du stick droit au recentrage du pointeur.
     'Buttons/-': k('Q', 'Start'), 'Buttons/+': k('E', 'Back'), 'Buttons/Home': 'RETURN',
     'D-Pad/Up': k('UP', 'Pad N'), 'D-Pad/Down': k('DOWN', 'Pad S'), 'D-Pad/Left': k('LEFT', 'Pad W'), 'D-Pad/Right': k('RIGHT', 'Pad E'),
@@ -99,7 +99,7 @@ export function dolphinWiimote(device: string | null, kind: WiimoteKind): IniPat
   // manette, souris en absolu. Le stick droit sert aux balayages dans le profil « motion », qui garde donc la souris seule.
   const stickIr = device !== null && kind !== 'motion'
   Object.assign(wii, stickIr
-    ? { 'IR/Relative Input': 'True', 'IR/Auto-Hide': 'True', 'IR/Up': pad(device, 'Right Y+')!, 'IR/Down': pad(device, 'Right Y-')!, 'IR/Left': pad(device, 'Right X-')!, 'IR/Right': pad(device, 'Right X+')!, 'IR/Recenter': pad(device, 'Thumb R')! }
+    ? { 'IR/Relative Input': 'True', 'IR/Auto-Hide': 'True', 'IR/Dead Zone': '15.', 'IR/Up': pad(device, 'Right Y+')!, 'IR/Down': pad(device, 'Right Y-')!, 'IR/Left': pad(device, 'Right X-')!, 'IR/Right': pad(device, 'Right X+')!, 'IR/Recenter': pad(device, 'Thumb R')! }
     : { 'IR/Relative Input': 'False', 'IR/Auto-Hide': 'False', 'IR/Up': '`Cursor Y-`', 'IR/Down': '`Cursor Y+`', 'IR/Left': '`Cursor X-`', 'IR/Right': '`Cursor X+`', 'IR/Recenter': '' })
   if (kind === 'classic') {
     // Disposition Classic Controller (A à droite, B en bas, X en haut, Y à gauche) sur les positions physiques d'une manette Xbox.
@@ -115,7 +115,7 @@ export function dolphinWiimote(device: string | null, kind: WiimoteKind): IniPat
     })
   } else {
     Object.assign(wii, {
-      'Nunchuk/Buttons/C': k('`Shift`', 'Thumb L'), 'Nunchuk/Buttons/Z': k('`Ctrl`', 'Trigger R'),
+      'Nunchuk/Buttons/C': k('`Shift`', 'Thumb L'), 'Nunchuk/Buttons/Z': k('`Ctrl`', 'Shoulder R'),
       'Nunchuk/Stick/Up': k('W', 'Left Y+'), 'Nunchuk/Stick/Down': k('S', 'Left Y-'), 'Nunchuk/Stick/Left': k('A', 'Left X-'), 'Nunchuk/Stick/Right': k('D', 'Left X+')
     })
   }
@@ -130,10 +130,101 @@ export function dolphinWiimote(device: string | null, kind: WiimoteKind): IniPat
   return { Wiimote1: wii }
 }
 
+// --- Manettes Nintendo (Switch Pro, Joy-Con) : lues par SDL (pilote HIDAPI), gyroscope compris ----------------------------
+
+export type DolphinNintendo = 'switch-pro' | 'joycon-pair' | 'joycon-right'
+
+/** Nom du périphérique SDL dans Dolphin (`SDL/<rang parmi les manettes de même nom>/<nom>`) ; la paire de Joy-Con est UN périphérique (SDL les réunit). */
+export function dolphinNintendoDevice(kind: DolphinNintendo, port = 0): string {
+  const name = kind === 'switch-pro' ? 'Nintendo Switch Pro Controller' : kind === 'joycon-pair' ? 'Nintendo Switch Joy-Con (L/R)' : 'Nintendo Switch Joy-Con (R)'
+  return `SDL/${port}/${name}`
+}
+
+/**
+ * Réécrit une disposition faite pour une manette XInput (liaisons qualifiées par `dev`, clavier en plus) pour une manette SDL Nintendo : la manette devient le périphérique par défaut
+ * (comme la paire de Joy-Con, validée en jeu), les liaisons clavier, qui n'existent pas pour elle, sont retirées et les autres s'écrivent sans qualificatif. Noms SDL par position
+ * (Button S = bas, E = droite, W = gauche, N = haut) : A/B/X/Y de la XInput deviennent S/E/W/N.
+ */
+function sdlOnly(section: Record<string, string | number | boolean>, dev: string, face: Record<string, string> = { A: 'S', B: 'E', X: 'W', Y: 'N' }): Record<string, string | number | boolean> {
+  const own = '`' + dev + ':'
+  const faceRef = new RegExp(own.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + 'Button ([ABXY])`', 'g')
+  return Object.fromEntries(Object.entries(section).map(([k, v]) => {
+    if (k === 'Device') return [k, dev]
+    if (typeof v !== 'string' || ['Source', 'Extension', 'IR/Relative Input', 'IR/Auto-Hide', 'IR/Dead Zone'].includes(k)) return [k, v]
+    const terms = v.replace(faceRef, (_m, c: string) => own + 'Button ' + face[c] + '`').split(' | ').filter((t) => t.includes(own))
+    return [k, terms.join(' | ').split(own).join('`')]
+  }))
+}
+
+/** Manette GameCube avec une Switch Pro ou une paire de Joy-Con (SDL réunit la paire en une manette standard) : la disposition de la XInput. Un Joy-Con seul n'a pas de quoi faire une manette GameCube. */
+export function dolphinNintendoGcPad(kind: Exclude<DolphinNintendo, 'joycon-right'>, port: number): IniPatch {
+  const dev = dolphinNintendoDevice(kind, port)
+  // Jeu Nintendo, manette Nintendo : les boutons gardent leur place (A à droite, B en bas, X en haut, Y à gauche), contrairement à la XInput où A est en bas.
+  return { GCPad1: sdlOnly(dolphinGcPad(dev).GCPad1, dev, { A: 'E', B: 'S', X: 'N', Y: 'W' }) }
+}
+
+/**
+ * Wiimote émulée avec une manette Nintendo. Le pointeur vient du gyroscope (groupe « Point » de Dolphin = `IMUIR`, recentré sur R) ; ne pas
+ * cocher « Point (Passthrough) » (`IRPassthrough`), c'est l'infrarouge d'une vraie Wiimote. Mouvement (accéléromètre, gyroscope) et retour
+ * de force passent par la manette. Référence : le profil validé en jeu (Super Mario Galaxy) avec la paire de Joy-Con.
+ */
+export function dolphinNintendoWiimote(kind: DolphinNintendo, port: number, wiiKind: WiimoteKind): IniPatch {
+  if (kind === 'switch-pro') {
+    // Switch Pro = manette standard : exactement la disposition de la manette XInput, avec les noms SDL de Dolphin.
+    const dev = dolphinNintendoDevice(kind, port)
+    return { Wiimote1: sdlOnly(dolphinWiimote(dev, wiiKind).Wiimote1, dev) }
+  }
+  const wii: Record<string, string> = {
+    Source: '1',
+    Device: dolphinNintendoDevice(kind, port),
+    Extension: kind === 'joycon-right' ? 'None' : wiiKind === 'classic' ? 'Classic' : 'Nunchuk',
+    'IMUAccelerometer/Up': '`Accel Up`', 'IMUAccelerometer/Down': '`Accel Down`', 'IMUAccelerometer/Left': '`Accel Left`', 'IMUAccelerometer/Right': '`Accel Right`',
+    'IMUAccelerometer/Forward': '`Accel Forward`', 'IMUAccelerometer/Backward': '`Accel Backward`',
+    'IMUGyroscope/Pitch Up': '`Gyro Pitch Up`', 'IMUGyroscope/Pitch Down': '`Gyro Pitch Down`', 'IMUGyroscope/Roll Left': '`Gyro Roll Left`', 'IMUGyroscope/Roll Right': '`Gyro Roll Right`',
+    'IMUGyroscope/Yaw Left': '`Gyro Yaw Left`', 'IMUGyroscope/Yaw Right': '`Gyro Yaw Right`',
+    'Shake/X': '`Click 2`', 'Shake/Y': '`Click 2`', 'Shake/Z': '`Click 2`',
+    'IMUIR/Recenter': '`Shoulder R`',
+    'Rumble/Motor': '`Motor R`',
+    'Buttons/A': '`Button E`', 'Buttons/B': '`Trigger R`', 'Buttons/1': '`Button N`', 'Buttons/2': '`Button W`'
+  }
+  const stick = { 'Nunchuk/Stick/Up': '`Left Y+`', 'Nunchuk/Stick/Down': '`Left Y-`', 'Nunchuk/Stick/Left': '`Left X-`', 'Nunchuk/Stick/Right': '`Left X+`', 'Nunchuk/Buttons/C': '`Shoulder L`', 'Nunchuk/Buttons/Z': '`Trigger L`' }
+  if (kind === 'joycon-pair') {
+    // Joy-Con droit = Wiimote, gauche = Nunchuk. SDL voit « - » et « + » de la paire réunie comme des palettes ; la croix de la Wiimote est sur le stick droit.
+    Object.assign(wii, stick, {
+      'Buttons/-': '`Paddle 1`', 'Buttons/+': '`Paddle 3`', 'Buttons/Home': 'Guide', 'Nunchuk/Stick/Dead Zone': '15.',
+      'D-Pad/Up': '`Right Y+`', 'D-Pad/Down': '`Right Y-`', 'D-Pad/Left': '`Right X-`', 'D-Pad/Right': '`Right X+`'
+    })
+  } else {
+    // Joy-Con droit seul = la Wiimote, sans Nunchuk (choix voulu : un jeu qui l'exige le réclame, comme avec une vraie Wiimote). Mapping fait à la main dans Dolphin sur le matériel :
+    // SDL expose ce Joy-Con tourné d'un quart de tour (A = Button S, X = Button E, Y = Button N, R = Paddle 1, ZR = Paddle 3, SL = Shoulder L, SR = Shoulder R, stick = Left X/Y).
+    // Capteurs et vibreur gardent leurs noms d'origine (le pointage au gyroscope est juste ainsi), recentrage sur R, le stick fait la croix.
+    Object.assign(wii, {
+      'Buttons/A': '`Button S`', 'Buttons/B': '`Paddle 3`', 'Buttons/1': '`Button E`', 'Buttons/2': '`Button N`', 'Buttons/-': '`Shoulder R`', 'Buttons/+': '`Shoulder L`', 'Buttons/Home': 'Guide',
+      'D-Pad/Up': '`Left X+`', 'D-Pad/Down': '`Left X-`', 'D-Pad/Left': '`Left Y+`', 'D-Pad/Right': '`Left Y-`',
+      'IMUIR/Recenter': '`Paddle 1`',
+      // Capteurs : relevé SDL sur le matériel. La paire réunie est dans le repère d'une manette tenue de face (monter le bout = x+, tourner à gauche = y+, rouler à gauche = z+), noms Dolphin d'origine.
+      // Le Joy-Con seul est tourné d'un quart de tour : monter le bout = z+, rouler à gauche = x-, lacet y+ : tangage et roulis (et accélérations avant/arrière et gauche/droite) sont échangés.
+      'IMUGyroscope/Pitch Up': '`Gyro Roll Left`', 'IMUGyroscope/Pitch Down': '`Gyro Roll Right`', 'IMUGyroscope/Roll Left': '`Gyro Pitch Down`', 'IMUGyroscope/Roll Right': '`Gyro Pitch Up`',
+      'IMUAccelerometer/Forward': '`Accel Right`', 'IMUAccelerometer/Backward': '`Accel Left`', 'IMUAccelerometer/Left': '`Accel Forward`', 'IMUAccelerometer/Right': '`Accel Backward`'
+    })
+  }
+  return { Wiimote1: wii }
+}
+
+/** Signature du profil Nintendo de Kartouche (périphérique SDL Nintendo, A, recentrage) : tant qu'elle est là, le fichier n'a pas été retouché à la main. */
+export function isKartoucheNintendoWiimote(text: string): boolean {
+  // Le fichier contient aussi Wiimote2 à 4 (Device clavier) : seule la section Wiimote1 compte.
+  const section = /^\[Wiimote1\]\s*$([\s\S]*?)(?=^\[|(?![\s\S]))/m.exec(text)?.[1] ?? text
+  const get = (k: string): string | undefined => new RegExp(`^\\s*${k}\\s*=\\s*(.*?)\\s*$`, 'm').exec(section)?.[1]
+  if (!/^SDL\/\d+\/Nintendo Switch /.test(get('Device') ?? '')) return false
+  // Joy-Con : A seul + recentrage du pointeur ; Switch Pro : A ou LB (disposition de la XInput).
+  return ((get('Buttons/A') === '`Button E`' && get('IMUIR/Recenter') === '`Shoulder R`') || (get('Buttons/A') === '`Button S`' && get('IMUIR/Recenter') === '`Paddle 1`')) || get('Buttons/A') === '`Button E` | `Shoulder L`'
+}
+
 /** Signature de la touche A écrite par Kartouche sur la Wiimote : tant qu'elle est là, le fichier n'a pas été retouché à la main. */
 export function isUntouchedWiimoteFile(text: string): boolean {
   const a = /^\s*Buttons\/A\s*=\s*(.*?)\s*$/m.exec(text)
-  return !a || /^`Click 0`(\s*\|.*)?$/.test(a[1])
+  return !a || /^`Click 0`(\s*\|.*)?$/.test(a[1]) || isKartoucheNintendoWiimote(text)
 }
 
 // --- Exceptions par jeu -------------------------------------------------------------------------------------------------

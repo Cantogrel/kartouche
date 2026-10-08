@@ -8,7 +8,8 @@ import { basename, dirname, join } from 'node:path'
 import { buildArgs, emulatorById, emulatorForConsole, type EmulatorDef, type GameSession, type LaunchResult, type QuickExit } from '@shared/emulators'
 import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
-import { preferActive, rankAmong, startPadTracker } from './padChoice'
+import { connectedNintendoPids, lastUsedPad, preferActive, rankAmong, startPadTracker } from './padChoice'
+import { chooseDolphinPad } from './dolphinChoice'
 import { chooseEdenPads, edenRefusalReason, shouldCloseOnRefusal, type EdenPlayerPad } from './edenChoice'
 import { anyGamepadConnected, autoConfirmEdenApplet, closeGracefully, connectedXInputPads, connectedXInputSlots, watchQuitChord } from './quit'
 import { emulatorEnv } from './sdlEnv'
@@ -262,9 +263,12 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
   try {
     // Dolphin invalide toute liaison qui cite un périphérique absent : la manette branchée est écrite à chaque lancement.
     if (def.id === 'dolphin') {
-      const slots = preferActive(await connectedXInputSlots(cacheDir), (s) => s)
+      const choice = await chooseDolphinPad(cacheDir).catch(() => ({ xinputSlot: null, nintendo: null }))
       const gameId = await readDiscId(romPath)
-      await applyDolphinPad(row.dir, slots.length ? slots[0] : null, { console: entry.console, gameId }).catch(() => {})
+      // Trace du choix (dernière manette utilisée, manettes Nintendo vues) : sert à comprendre un « aucune commande » sans relancer le jeu.
+      void mkdir(join(cacheDir, 'tools'), { recursive: true }).then(() => writeFile(join(cacheDir, 'tools', 'dolphin-pad.log'), `${new Date().toISOString()} ${JSON.stringify({ choice, nintendo: connectedNintendoPids(), last: lastUsedPad() })}
+`, { flag: 'a' })).catch(() => {})
+      await applyDolphinPad(row.dir, choice.xinputSlot, { console: entry.console, gameId }, choice.nintendo).catch(() => {})
       // FastDiscSpeed est activé globalement (voir configureDolphin) ; quelques jeux (liste d'exclusion) en ont besoin
       // désactivé pour démarrer correctement — réglage propre à ce jeu, réappliqué à chaque lancement.
       if (gameId) await applyDolphinFastDiscExclusion(row.dir, gameId).catch(() => {})

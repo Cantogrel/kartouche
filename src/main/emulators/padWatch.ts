@@ -148,11 +148,21 @@ public static class NHid {
     SetupDiDestroyDeviceInfoList(set);
   }
   static void Read(SafeFileHandle h, string path, ushort pid, int len) {
-    byte[] b = new byte[len]; int[] baseline = null; long lastAct = 0;
+    byte[] b = new byte[len]; int[] baseline = null; int[] base3f = null; long lastAct = 0;
     try {
       while (true) {
         int r;
         if (!ReadFile(h, b, b.Length, out r, IntPtr.Zero) || r < 12) break;
+        if (b[0] == 0x3F) {
+          // Rapport « simple » (manette qui clignote : aucun programme ne l'a encore initialisée) : octets 1 et 2 = boutons, 3 = croix (8 = neutre), 4 à 11 = quatre axes de 16 bits (centre 0x8000).
+          int[] ax = new int[] { b[4] | (b[5] << 8), b[6] | (b[7] << 8), b[8] | (b[9] << 8), b[10] | (b[11] << 8) };
+          if (base3f == null) base3f = ax;
+          bool simple = (b[1] | b[2]) != 0 || b[3] != 8;
+          for (int k = 0; k < 4 && !simple; k++) if (Math.Abs(ax[k] - base3f[k]) > 9000) simple = true;
+          long t3 = Environment.TickCount;
+          if (simple && t3 - lastAct > 250) { lastAct = t3; Emit("ACT " + pid.ToString("x")); }
+          continue;
+        }
         if (b[0] != 0x30) continue;
         bool minus = (b[4] & 1) != 0, plus = (b[4] & 2) != 0;
         lock (gate) {

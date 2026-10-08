@@ -14,7 +14,7 @@ import { AZAHAR_AUDIO, AZAHAR_GAME_OVERRIDES, AZAHAR_LAYOUT, azaharRenderer } fr
 import { MELONDS_GAME_SCREENS, MELONDS_JOYSTICK, MELONDS_KEYBOARD, MELONDS_WINDOW, melondsRendering, planMelondsGame, tomlSection, type LayoutState, type ScreenOverride } from './melonds'
 import { EDEN_GAME_OVERRIDES, EDEN_KEYBOARD_PROFILE, edenBackend, edenResolution } from './eden'
 import { edenNintendoKeys, edenNintendoProfile, isNintendoButtonA, type EdenNintendo } from './edenPads'
-import { dolphinGcPad, dolphinGraphics, dolphinWiimote, isUntouchedWiimoteFile, wiimoteKindFor } from './dolphin'
+import { dolphinGcPad, dolphinGraphics, dolphinNintendoGcPad, dolphinNintendoWiimote, dolphinWiimote, isUntouchedWiimoteFile, wiimoteKindFor, type DolphinNintendo } from './dolphin'
 
 /** Ce dont la configuration automatique a besoin : langue de l'app, taille de l'écran, dossier de BIOS de l'émulateur. */
 export interface ConfigContext {
@@ -180,7 +180,9 @@ export function isUntouchedPadFile(text: string): boolean {
   const a = /^\s*Buttons\/A\s*=\s*(.*?)\s*$/m.exec(text)
   if (!a) return true
   if (/^`X`(\s*\|.*)?$/.test(a[1])) return true
-  return a[1] === '`Button A`' && /^\s*Device\s*=\s*DInput\/\d+\/Keyboard Mouse\s*$/m.test(text)
+  if (a[1] === '`Button A`' && /^\s*Device\s*=\s*DInput\/\d+\/Keyboard Mouse\s*$/m.test(text)) return true
+  // Profil Switch Pro / Joy-Con de Kartouche (manette SDL Nintendo par défaut, A sur le bouton de droite).
+  return (a[1] === '`Button E`' || a[1] === '`Button S`') && /^\s*Device\s*=\s*SDL\/\d+\/Nintendo Switch /m.test(text)
 }
 
 /**
@@ -190,13 +192,13 @@ export function isUntouchedPadFile(text: string): boolean {
  * Wiimote pour un jeu Wii, jamais l'un pour l'autre) et identifiant disque (extension de la Wiimote, voir `wiimoteKindFor`) ; sans
  * lui (installation), les deux fichiers sont écrits au clavier seul.
  */
-export async function applyDolphinPad(dir: string, xinputSlot: number | null, game?: { console: string; gameId: string | null }): Promise<void> {
+export async function applyDolphinPad(dir: string, xinputSlot: number | null, game?: { console: string; gameId: string | null }, nintendo?: { kind: DolphinNintendo; port: number } | null): Promise<void> {
   const cfg = join(dir, 'User', 'Config')
   const device = xinputSlot === null ? null : `XInput/${xinputSlot}/Gamepad`
   const gcFile = join(cfg, 'GCPadNew.ini')
   const wiiFile = join(cfg, 'WiimoteNew.ini')
   if (!game || game.console === 'gc') {
-    if (isUntouchedPadFile(await readText(gcFile))) await writeIni(gcFile, dolphinGcPad(device))
+    if (isUntouchedPadFile(await readText(gcFile))) await writeIni(gcFile, nintendo && game && xinputSlot === null && nintendo.kind !== 'joycon-right' ? dolphinNintendoGcPad(nintendo.kind, nintendo.port) : dolphinGcPad(device))
   }
   if (!game || game.console === 'wii') {
     // À l'installation (sans `game`), le fichier créé par Dolphin lui-même n'est pas un réglage de l'utilisateur : toujours écrit.
@@ -205,7 +207,9 @@ export async function applyDolphinPad(dir: string, xinputSlot: number | null, ga
       if (!game || isUntouchedWiimoteFile(current)) {
         // Section remplacée en entier (pas fusionnée) : les touches d'un profil précédent (Swing, Nunchuk, Classic…) ne doivent pas survivre au changement de profil.
         await mkdir(dirname(wiiFile), { recursive: true })
-        await writeFile(wiiFile, patchIni(dropIniSection(current, 'Wiimote1'), dolphinWiimote(device, game ? wiimoteKindFor(game.gameId) : 'nunchuk')))
+        const wiiKind = game ? wiimoteKindFor(game.gameId) : 'nunchuk'
+        // Manette Nintendo principale (jamais avec une XInput : la règle d'avant ne change pas) : profil SDL avec gyroscope.
+        await writeFile(wiiFile, patchIni(dropIniSection(current, 'Wiimote1'), nintendo && game && xinputSlot === null ? dolphinNintendoWiimote(nintendo.kind, nintendo.port, wiiKind) : dolphinWiimote(device, wiiKind)))
       }
     }
   }

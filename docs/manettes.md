@@ -33,6 +33,22 @@ Retour + Start (XInput) ou **Moins + Plus** maintenus 1,5 s : sur la Switch Pro,
 - Non testé : GUID de la Switch Pro en USB (relevé en Bluetooth seulement), deux manettes identiques (ports), plus de trois joueurs.
 - Joy-Con séparés en deux joueurs : pas géré (une paire est toujours une seule manette).
 
+## Dolphin (`dolphin.ts`, `dolphinChoice.ts`, `configure.ts`)
+
+Joueur 1 seulement pour l'instant (Wiimote 1, manette GameCube 1). Même règle qu'Eden pour la manette principale (`pickDolphinPad`, qui réutilise `pickEdenPads`) ; une XInput principale garde exactement l'ancien profil (clavier + XInput). Dolphin lit les manettes Nintendo en SDL (HIDAPI) : périphériques `SDL/<rang>/Nintendo Switch Pro Controller`, `…Joy-Con (L/R)` (SDL réunit une paire en un seul périphérique), `…Joy-Con (R)`.
+
+- **Wii, Switch Pro** : la disposition de la Wiimote avec une XInput (`dolphinWiimote`), noms SDL par position, la manette en périphérique par défaut (les liaisons clavier sont retirées : sur un périphérique SDL elles invalideraient l'expression entière). B = gâchette du fond (ZR) ou bouton du bas, Z du Nunchuk = bouton de devant (R). Pointeur au stick droit en relatif, zone morte 15 % (contre la dérive), recentrage sur le clic du stick.
+- **Wii, paire de Joy-Con** : Joy-Con droit = Wiimote, gauche = Nunchuk. Pointeur au gyroscope (`IMUIR`, recentrage sur R, jamais `IRPassthrough`), vibreur `Motor R`, zone morte 15 % sur le stick du Nunchuk. Profil fait à la main dans Dolphin puis repris tel quel.
+- **Wii, Joy-Con droit seul** : la Wiimote seule, **sans Nunchuk** (voulu : un jeu qui l'exige le réclame, comme avec une vraie Wiimote ; seul le Joy-Con gauche en plus donne un Nunchuk). SDL l'expose tourné d'un quart de tour : A = `Button S`, X = `Button E`, Y = `Button N`, R = `Paddle 1`, ZR = `Paddle 3`, SL = `Shoulder L`, SR = `Shoulder R`. Le stick fait la croix. Capteurs : tangage et roulis (gyroscope) et accélérations avant/arrière et gauche/droite sont **échangés** par rapport à la paire (relevé : paire réunie = repère « manette de face », monter le bout = x+, lacet = y+, rouler à gauche = z+ ; Joy-Con seul = monter le bout z+, rouler à gauche x-). Pointage validé sur Super Mario Galaxy.
+- **GameCube, Switch Pro et paire de Joy-Con** : la disposition de la XInput mais avec les boutons à leur place Nintendo (A = `Button E`, B = `Button S`, X = `Button N`, Y = `Button W`). Un Joy-Con seul n'a pas de quoi faire une manette GameCube : Dolphin reste au clavier. La paire n'est pas testée à part (reprise de la Pro).
+- Un fichier retouché à la main n'est jamais réécrit : `isUntouchedWiimoteFile` / `isUntouchedPadFile` reconnaissent la signature de Kartouche (section `[Wiimote1]` seulement, le fichier contient aussi Wiimote2 à 4). Journal du choix : `<données>/cache/tools/tools/dolphin-pad.log`.
+- Piège : les noms de gâchettes SDL changent d'une manette à l'autre (Pro = `Trigger L/R`, Joy-Con seul = paddles) ; les relevés se font avec la vraie manette (SDL3 chargé en PowerShell, voir le vault).
+- **Wii Sports** : le pointage reste mauvais (même avec la paire, alors que Galaxy est « niquel » avec le même profil) : à regarder côté jeu/réglages de Dolphin, pas côté profil.
+
+### Manettes qui clignotent
+
+Une manette Nintendo qui vient d'être allumée envoie un rapport « simple » (id 0x3F) tant qu'aucun programme ne l'a initialisée (LED qui clignotent). `HID_SCRIPT` le lit aussi, sinon ses appuis ne comptaient pas pour la « dernière manette utilisée ». Les LED s'attribuent quand Chromium interroge les manettes (`navigator.getGamepads()` dans les Paramètres ou le Big Picture) : ce n'est pas la détection PowerShell.
+
 ## Autres émulateurs
 
-Le principe (une manette par joueur, joueur 1 = dernière utilisée) est voulu pour tous. Aujourd'hui seul Eden le met en œuvre ; Dolphin (Wiimote avec Joy-Con : un Joy-Con droit = Wiimote, la paire = Wiimote + Nunchuk, pointage par gyroscope validé en configuration manuelle) et les autres émulateurs restent à faire.
+Le principe (une manette par joueur, joueur 1 = dernière utilisée) est voulu pour tous. Aujourd'hui seul Eden le met en œuvre pour plusieurs joueurs ; Dolphin ne gère que le joueur 1 ; les autres émulateurs restent à faire.
