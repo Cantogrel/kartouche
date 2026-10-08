@@ -17,6 +17,7 @@ import type { CatalogGame, CatalogPage, CatalogQuery, GameDetails, ProviderStatu
 import type { GameSource, SourceListImportResult, SourceListRefreshAllResult, SourceListRefreshResult, SourceListSummary } from './sourceList'
 import type { DownloadProgress } from './downloads'
 import type { ClearCacheResult } from './cache'
+import type { PadList } from './pads'
 
 export interface AppPaths {
   dataDir: string
@@ -206,6 +207,8 @@ export interface IpcChannels {
   'bios:remove': { req: string; res: boolean }
   'game:play': { req: number; res: LaunchResult }
   /** Ferme le jeu proprement (fermeture des fenêtres de l'émulateur, de force au bout de 5 s). */
+  /** Manettes branchées et leur interprétation (XInput, Switch Pro, Joy-Con seul ou paire…), sans qu'il faille appuyer sur un bouton ; à redemander toutes les secondes ou deux tant que la page est ouverte. */
+  'pads:list': { req: void; res: PadList }
   'game:stop': { req: number; res: void }
   /** Comme `game:stop`, mais attend la fin réelle du process (ou 8 s) avant de répondre : utilisé pour fermer l'autre
    * jeu en cours (`LaunchResult.error === 'otherRunning'`) juste avant de relancer, sans quoi le nouveau lancement

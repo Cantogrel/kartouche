@@ -9,6 +9,7 @@ import { Modal } from '@/ui/CollectionDialogs'
 import { useApp } from '@/store/app'
 import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
+import { padDetail, padTitle, usePads } from '@/store/pads'
 import { useUpdate } from '@/store/update'
 import { useChangelog } from '@/store/changelog'
 import { useEmulators } from '@/store/emulators'
@@ -420,6 +421,7 @@ function SourcesSection() {
 function ControllerSection() {
   const { settings, update } = useSettings()
   const [pads, setPads] = useState<{ id: string; pressed: string[] }[]>([])
+  const detected = usePads()
   useEffect(() => {
     const names = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Select', 'Start', 'L3', 'R3', '↑', '↓', '←', '→']
     const timer = window.setInterval(() => {
@@ -443,7 +445,16 @@ function ControllerSection() {
         <span className="muted">{t('settings.padThresholdHint')}</span>
       </label>
       <h3>{t('settings.padDetected')}</h3>
-      {pads.length === 0 && <p className="muted">{t('settings.padNone')}</p>}
+      {!detected.ready ? <p className="muted">{t('settings.padChecking')}</p>
+        : !detected.ok ? <p className="muted">{t('settings.padUnavailable')}</p>
+        : detected.pads.length === 0 ? <p className="muted">{t('settings.padNone')}</p>
+        : detected.pads.map((p) => (
+          <div key={p.id} className="copy-row">
+            <strong>{padTitle(p)}</strong>
+            <div className="muted">{padDetail(p)}</div>
+          </div>
+        ))}
+      {pads.length > 0 && <h3>{t('settings.padTest')}</h3>}
       {pads.map((p) => (
         <div key={p.id} className="copy-row">
           <strong>{p.id}</strong>

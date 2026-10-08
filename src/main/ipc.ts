@@ -51,6 +51,7 @@ import { resolveLanguage } from '@shared/settings'
 import { EMULATORS, emulatorById, type EmulatorState } from '@shared/emulators'
 import { installEmulator, uninstallEmulator } from './emulators/installer'
 import { latestRelease } from './emulators/source'
+import { getPadList } from './emulators/padService'
 import { getRow, listEmulators, saveEmulator } from './emulators/emulatorStore'
 import { biosStatus, importBiosFile, removeBios } from './bios/bios'
 import { BIOS_SLOTS } from '@shared/bios'
@@ -487,6 +488,7 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
     if (s.running) { if (!globalShortcut.isRegistered(QUIT_KEY)) globalShortcut.register(QUIT_KEY, stopAllGames) }
     else if (runningCount() === 0) { globalShortcut.unregister(QUIT_KEY); bringKartoucheToFront(() => runningCount() === 0) }
   }, join(paths.cache, 'tools'), paths.saves, paths.roms))
+  handle('pads:list', () => getPadList(join(paths.cache, 'tools')))
   handle('game:stop', (entryId) => stopGame(entryId))
   handle('game:stopAndWait', (entryId) => stopGameAndWait(entryId))
   handle('game:running', () => listLibrary(db).map((e) => e.id).filter(isRunning))

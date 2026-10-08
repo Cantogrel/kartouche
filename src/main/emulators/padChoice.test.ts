@@ -79,3 +79,15 @@ describe('disposition hybride', () => {
     expect(await readFile(join(a, 'user', 'config', 'qt-config.ini'), 'utf8')).toContain('layout_option=5')
   })
 })
+
+describe('dernière manette utilisée, toutes familles', () => {
+  it('suit la plus récente des deux familles (XInput par emplacement, Nintendo par PID)', async () => {
+    const { lastUsedPad, noteActiveHid, noteActivePad } = await import('./padChoice')
+    noteActivePad(2)
+    expect(lastUsedPad()).toEqual({ source: 'xinput', slot: 2 })
+    noteActiveHid(0x2009)
+    expect(lastUsedPad()).toEqual({ source: 'hid', pid: 0x2009 })
+    noteActivePad(1)
+    expect(lastUsedPad()).toEqual({ source: 'xinput', slot: 1 })
+  })
+})
