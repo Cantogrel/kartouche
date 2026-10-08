@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { applyEdenPad, applyEdenPads, isUntouchedEdenControls } from './configure'
 import { edenNintendoProfile, isNintendoButtonA, type EdenNintendo } from './edenPads'
-import { pickEdenPad, pickEdenPads } from './edenChoice'
+import { edenRefusalReason, pickEdenPad, pickEdenPads, shouldCloseOnRefusal } from './edenChoice'
 import { EDEN_REAL } from './edenReal.fixture'
 import type { XInputPad } from './quit'
 
@@ -322,5 +322,27 @@ describe('Eden : applet Contrôleur', () => {
     const c = await controls(dir)
     expect(c['disableControllerApplet']).toBe('true')
     expect(c['disableControllerApplet\\default']).toBe('false')
+  })
+})
+
+describe('Eden : manettes refusées par le jeu', () => {
+  it('un Joy-Con seul parmi les manettes assignées : message « Joy-Con seul »', () => {
+    expect(edenRefusalReason([{ nintendo: 'joycon-left' }])).toBe('padRefusedJoycon')
+    expect(edenRefusalReason([{ nintendo: 'switch-pro' }, { nintendo: 'joycon-right' }])).toBe('padRefusedJoycon')
+  })
+
+  it('sinon, le jeu veut plus de manettes que celles branchées', () => {
+    expect(edenRefusalReason([{ nintendo: 'switch-pro' }])).toBe('padRefusedCount')
+    expect(edenRefusalReason([{ nintendo: 'joycon-pair' }, { vid: 0x045e, pid: 0x02ff, ver: 0 }])).toBe('padRefusedCount')
+    expect(edenRefusalReason([])).toBe('padRefusedCount')
+  })
+})
+
+describe('Eden : quand fermer le jeu sur un refus', () => {
+  it('seulement au démarrage, jamais en pleine partie', () => {
+    expect(shouldCloseOnRefusal(5_000)).toBe(true)
+    expect(shouldCloseOnRefusal(60_000)).toBe(true)
+    expect(shouldCloseOnRefusal(60_001)).toBe(false)
+    expect(shouldCloseOnRefusal(20 * 60_000)).toBe(false)
   })
 })

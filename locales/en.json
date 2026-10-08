@@ -308,6 +308,8 @@
   "play.stop": "Close the game",
   "play.quitHint": "Quit: Ctrl+Alt+Q, or hold Back + Start on a controller",
   "play.launchFailedHeader": "The game could not be launched.",
+  "play.padRefusedJoycon": "This game does not accept a single Joy-Con. Connect a Switch Pro Controller, both Joy-Cons together (left and right) or an Xbox controller, then start the game again.",
+  "play.padRefusedCount": "This game needs more controllers than the ones connected. Connect the missing controllers, then start the game again.",
   "play.quickExitHeader": "The game closed on its own {seconds}s after launching.",
   "play.quickExitSbi": "This game is missing a required .sbi file (disc copy protection). Place it next to the game file with the same name.",
   "play.quickExitBios": "The BIOS for this console is missing or invalid.",

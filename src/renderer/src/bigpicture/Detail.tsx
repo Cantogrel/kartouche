@@ -36,6 +36,8 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   const [error, setError] = useState<string | null>(null)
   const running = useEmulators((s) => (owned ? s.running.includes(owned.id) : false))
   const play = useEmulators((s) => s.play)
+  // Le jeu a refusé les manettes branchées et Kartouche l'a fermé : le message explique quoi brancher (même texte qu'en mode classique, voir QuickExitNotice).
+  const padRefused = useEmulators((s) => { const q = owned ? s.quickExits[owned.id] : undefined; return q?.immediate?.startsWith('padRefused') ? q.immediate : undefined })
   const def = emulatorForConsole(game?.console ?? owned?.console ?? '')
   const installed = useEmulators((s) => s.list.find((e) => e.id === def?.id)?.installed)
   // Un seul jeu à la fois (cf. launchGame) : `otherRunning` propose de fermer l'autre plutôt qu'un message sec, avec
@@ -150,7 +152,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
           {genres.length > 0 && <div className="tags">{genres.map((g) => <Tag key={g}>{g}</Tag>)}</div>}
           {/* Pas de data-nav : texte informatif seulement, déjà défilable au stick droit (cf. scrollWithRightStick) sans jamais recevoir le focus. */}
           {summary && <div className="bp-summary" data-scroll>{summary}</div>}
-          {(error || dlError) && <div className="bp-error">{error ?? `${t('download.failedHeader')} ${dlError}`}</div>}
+          {(error || dlError || padRefused) && <div className="bp-error">{error ?? (dlError ? `${t('download.failedHeader')} ${dlError}` : t(`play.${padRefused}`))}</div>}
           <div className="bp-actions">
             {playable && (running
               ? <button data-nav className="bp-btn primary" onClick={() => void window.api.invoke('game:stop', owned.id)}>■ {t('play.stop')}</button>
