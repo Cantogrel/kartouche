@@ -24,8 +24,14 @@ export function noteNintendoDevice(pid: number, present: boolean): void {
 /** PID des manettes Nintendo branchées (un PID par manette : deux Joy-Con gauches donnent deux fois 0x2006). */
 export const connectedNintendoPids = (): number[] => [...nintendoPresent].flatMap(([pid, n]) => Array<number>(n).fill(pid))
 
-export const noteActivePad = (slot: number): void => { lastActive = slot; lastSource = 'xinput' }
-export const noteActiveHid = (pid: number): void => { lastHidPid = pid; lastSource = 'hid' }
+// Pendant qu'un jeu tourne, les appuis ne comptent pas (voir `setPadActivityGate`) : à plusieurs, le joueur 2 qui appuie en pleine partie ne doit pas devenir « joueur 1 » au prochain lancement.
+let activityGate: () => boolean = () => true
+
+/** `gate` renvoie faux tant que les appuis ne doivent pas changer la « dernière manette utilisée » (un jeu est en cours). */
+export const setPadActivityGate = (gate: () => boolean): void => { activityGate = gate }
+
+export const noteActivePad = (slot: number): void => { if (!activityGate()) return; lastActive = slot; lastSource = 'xinput' }
+export const noteActiveHid = (pid: number): void => { if (!activityGate()) return; lastHidPid = pid; lastSource = 'hid' }
 
 /** La dernière manette utilisée, toutes familles confondues ; null tant qu'aucune n'a servi. */
 export function lastUsedPad(): LastUsed | null {

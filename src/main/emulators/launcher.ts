@@ -9,12 +9,12 @@ import { buildArgs, emulatorById, emulatorForConsole, type EmulatorDef, type Gam
 import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
 import { preferActive, rankAmong, startPadTracker } from './padChoice'
-import { chooseEdenPad } from './edenChoice'
-import { anyGamepadConnected, closeGracefully, connectedXInputPads, connectedXInputSlots, watchQuitChord } from './quit'
+import { chooseEdenPads } from './edenChoice'
+import { anyGamepadConnected, autoConfirmEdenApplet, closeGracefully, connectedXInputPads, connectedXInputSlots, watchQuitChord } from './quit'
 import { emulatorEnv } from './sdlEnv'
 import { applyCemuControls, applyCemuPad } from './cemu'
 import { isVWiiWrapper, readWuaFiles } from '../library/content/wua'
-import { applyDolphinFastDiscExclusion, applyDolphinPad, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyMelondsPad, applyPpssppPads, migrateHybridLayout, applyPsPads, applyEdenPad, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
+import { applyDolphinFastDiscExclusion, applyDolphinPad, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyMelondsPad, applyPpssppPads, migrateHybridLayout, applyPsPads, applyEdenPads, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
 import { loadSettings } from '../db/settingsStore'
 import { backupSaves, cemuMlcDir, learnCemuKey, prepareRetroarch, readDiscId, snapshotCemuSaves } from '../saves/saves'
 import { identifyGame } from '../saves/identify'
@@ -283,9 +283,9 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     if (def.id === 'pcsx2') await applyPsPads(join(row.dir, 'inis', 'PCSX2.ini')).catch(() => {})
     if (def.id === 'melonds') await applyMelondsPad(row.dir, padSlot === null ? null : rankAmong(padSlots, padSlot)).catch(() => {})
     if (def.id === 'melonds') await applyMelondsGame(row.dir, await readNdsCode(romPath).catch(() => null)).catch(() => {})
-    // Eden : la manette à lire (dernière utilisée, sinon XInput, Switch Pro, Joy-Con ; voir edenChoice.ts), sinon clavier ; configuration propre au jeu seulement si une exception est connue (Title ID).
+    // Eden : une manette par joueur (joueur 1 = la dernière utilisée, les autres dans un ordre stable ; voir edenChoice.ts), sinon clavier ; configuration propre au jeu seulement si une exception est connue (Title ID).
     if (def.id === 'eden') {
-      await applyEdenPad(row.dir, await chooseEdenPad(cacheDir)).catch(() => {})
+      await applyEdenPads(row.dir, await chooseEdenPads(cacheDir)).catch(() => {})
       await applyEdenGameConfig(row.dir, entry.title_id).catch(() => {})
     }
     // PPSSPP : réglages propres au jeu (DISC_ID lu sur l'ISO) seulement si une exception est connue ; manettes et clavier : défauts natifs de PPSSPP, rien à écrire.
@@ -345,10 +345,14 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     let stopWatch: (() => void) | null = null
     let over = false
     void watchQuitChord(cacheDir, () => stopGame(entryId)).then((stop) => { if (over) stop(); else stopWatch = stop }).catch(() => {})
+    // Eden : l'applet Contrôleur (jeux à plusieurs joueurs…) est validée à la place de l'utilisateur, les manettes étant déjà assignées (voir quit.ts).
+    let stopApplet: (() => void) | null = null
+    if (def.id === 'eden') void autoConfirmEdenApplet(cacheDir).then((stop) => { if (over) stop(); else stopApplet = stop }).catch(() => {})
     const finish = async (): Promise<void> => {
       if (over) return
       over = true
       stopWatch?.()
+      stopApplet?.()
       let attempt: RunAttempt = { elapsedMs: Date.now() - started, stopped: running.get(entryId)?.stopped ?? false, captured }
       if (def.id === 'dolphin' && !attempt.stopped && attempt.elapsedMs < QUICK_EXIT_MS) {
         attempt = await retryDolphinWithoutFastDiscSpeed(entryId, row, args, cacheDir, romPath, attempt).catch(() => attempt)

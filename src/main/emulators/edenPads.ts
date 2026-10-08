@@ -77,7 +77,7 @@ function single(side: 1 | 2, type: number): EdenNintendoProfile {
   }
 }
 
-export function edenNintendoProfile(kind: EdenNintendo): EdenNintendoProfile {
+function baseProfile(kind: EdenNintendo): EdenNintendoProfile {
   switch (kind) {
     case 'switch-pro': return PRO
     case 'joycon-pair': return PAIR
@@ -86,11 +86,25 @@ export function edenNintendoProfile(kind: EdenNintendo): EdenNintendoProfile {
   }
 }
 
-/** Toutes les clés `player_0_*` qu'un profil Nintendo peut écrire : à remettre par défaut quand on change de profil. */
-export const EDEN_NINTENDO_KEYS: string[] = [...new Set((['switch-pro', 'joycon-pair', 'joycon-left', 'joycon-right'] as const).flatMap((k) => Object.keys(edenNintendoProfile(k).keys)))]
+/**
+ * Profil pour le joueur `player` (0 = joueur 1) : mêmes liaisons que celles qu'Eden écrit pour ce type de manette, sous les clés `player_<n>_*`. `port` départage
+ * plusieurs manettes identiques (0 pour la première, 1 pour la deuxième…). Les profils du joueur 1 sont ceux relevés dans Eden ; pour les autres joueurs seule la clé change
+ * (Eden numérote ses réglages de manette de la même façon pour chaque joueur, vérifié sur le joueur 2 d'un Joy-Con droit).
+ */
+export function edenNintendoProfile(kind: EdenNintendo, player = 0, port = 0): EdenNintendoProfile {
+  const p = baseProfile(kind)
+  if (player === 0 && port === 0) return p
+  return { type: p.type, keys: Object.fromEntries(Object.entries(p.keys).map(([k, v]) => [k.replace('player_0_', `player_${player}_`), v.replace(/port:0/, `port:${port}`)])) }
+}
+
+const NINTENDO_KINDS = ['switch-pro', 'joycon-pair', 'joycon-left', 'joycon-right'] as const
+
+/** Toutes les clés `player_<n>_*` qu'un profil Nintendo peut écrire : à remettre par défaut quand on change de profil. */
+export const edenNintendoKeys = (player = 0): string[] => [...new Set(NINTENDO_KINDS.flatMap((k) => Object.keys(edenNintendoProfile(k, player).keys)))]
+export const EDEN_NINTENDO_KEYS: string[] = edenNintendoKeys(0)
 
 /** Vrai si la liaison du bouton A est celle qu'un de nos profils Nintendo écrit (pour reconnaître nos propres réglages, par opposition à ceux de l'utilisateur). */
 export function isNintendoButtonA(value: string): boolean {
   const v = value.trim().replace(/^"(.*)"$/, '$1')
-  return v === PRO.keys.player_0_button_a || /^engine:joycon,guid:0{31}[12],port:0,pad:[12],button:2048$/.test(v)
+  return /^engine:sdl,port:\d,guid:030000007e0500000920000000006803,button:1$/.test(v) || /^engine:joycon,guid:0{31}[12],port:\d,pad:[12],button:2048$/.test(v)
 }

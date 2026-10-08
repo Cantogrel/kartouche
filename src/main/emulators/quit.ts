@@ -106,6 +106,56 @@ while ($true) {
 }
 `
 
+// Applet Contrôleur d'Eden : quand un jeu demande de vérifier ou d'assigner les manettes (Mario Kart à deux joueurs…), Eden ouvre une fenêtre à valider. Les manettes sont déjà
+// assignées par Kartouche : on clique « OK » à la place de l'utilisateur. Relevé sur Eden 0.2.1 (UI Automation) : la fenêtre est une fenêtre propriétaire de la fenêtre principale
+// (titre « Applet Contrôleur » en français), et ses boutons ont tous l'identifiant « …QtControllerSelectorDialog…closeButtons.buttonBox.QPushButton » (OK et Annuler : même
+// identifiant, seuls le nom, traduit, et la position changent). On prend donc le bouton le plus à gauche (disposition Windows : OK puis Annuler), quelle que soit la langue.
+// Le bouton OK est grisé tant que la configuration ne convient pas au jeu (type de manette refusé, nombre de joueurs) : il n'est alors pas cliqué, la fenêtre reste affichée
+// et l'utilisateur voit pourquoi. La recherche UI Automation, lourde, n'est lancée que si une fenêtre propriétaire visible existe (test Win32 bon marché).
+const EDEN_APPLET_SCRIPT = `param([int]$ParentPid, [string]$Proc = 'eden')
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type @"
+using System; using System.Collections.Generic; using System.Runtime.InteropServices;
+public static class EW {
+  public delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc p, IntPtr l);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+  public static bool HasVisibleOwned(HashSet<uint> pids) {
+    bool found = false;
+    EnumWindows((h, l) => {
+      uint pid; GetWindowThreadProcessId(h, out pid);
+      if (pids.Contains(pid) && IsWindowVisible(h) && GetWindow(h, 4) != IntPtr.Zero) { found = true; return false; }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+}
+"@
+$root = [System.Windows.Automation.AutomationElement]::RootElement
+$id = 'QApplication.QtControllerSelectorDialog.mainControllerApplet.bottomControllerApplet.closeButtons.buttonBox.QPushButton'
+$cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
+while ($true) {
+  if (-not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { exit }
+  $procs = @(Get-Process -Name $Proc -ErrorAction SilentlyContinue)
+  if ($procs.Count -gt 0) {
+    $set = New-Object 'System.Collections.Generic.HashSet[uint32]'
+    foreach ($p in $procs) { [void]$set.Add([uint32]$p.Id) }
+    if ([EW]::HasVisibleOwned($set)) {
+      foreach ($w in $root.FindAll('Children', [System.Windows.Automation.Condition]::TrueCondition)) {
+        if (-not $set.Contains([uint32]$w.Current.ProcessId)) { continue }
+        $buttons = @($w.FindAll('Descendants', $cond) | Sort-Object { $_.Current.BoundingRectangle.X })
+        if ($buttons.Count -ge 2 -and $buttons[0].Current.IsEnabled) {
+          try { $buttons[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); Write-Output 'CLICK'; Start-Sleep -Milliseconds 1500 } catch {}
+        }
+      }
+    }
+  }
+  Start-Sleep -Milliseconds 300
+}
+`
+
 export async function scriptFile(cacheDir: string, name: string, content: string): Promise<string> {
   await mkdir(cacheDir, { recursive: true })
   const file = join(cacheDir, name)
@@ -180,6 +230,14 @@ export async function watchQuitChord(cacheDir: string, onChord: () => void): Pro
   const hold = createChordHold(QUIT_HOLD_MS, onChord, nintendoChordDown())
   const off = onNintendoChord(hold.feed)
   return () => { child.kill(); off(); hold.cancel() }
+}
+
+/** Valide l'applet Contrôleur d'Eden (voir `EDEN_APPLET_SCRIPT`) tant que Kartouche tourne ; renvoie la fonction d'arrêt. */
+export async function autoConfirmEdenApplet(cacheDir: string): Promise<() => void> {
+  const file = await scriptFile(cacheDir, 'eden-applet.ps1', EDEN_APPLET_SCRIPT)
+  const child = spawn('powershell.exe', [...PS_ARGS, file, '-ParentPid', String(process.pid)], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore'] })
+  child.on('error', () => {})
+  return () => { child.kill() }
 }
 
 /**

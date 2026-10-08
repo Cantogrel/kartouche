@@ -91,3 +91,17 @@ describe('dernière manette utilisée, toutes familles', () => {
     expect(lastUsedPad()).toEqual({ source: 'xinput', slot: 1 })
   })
 })
+
+describe('appuis pendant une partie', () => {
+  it('ne changent pas la dernière manette utilisée tant que la porte est fermée', async () => {
+    const { lastUsedPad, noteActiveHid, noteActivePad, setPadActivityGate } = await import('./padChoice')
+    noteActivePad(0)
+    setPadActivityGate(() => false)
+    noteActivePad(3)
+    noteActiveHid(0x2009)
+    expect(lastUsedPad()).toEqual({ source: 'xinput', slot: 0 })
+    setPadActivityGate(() => true)
+    noteActiveHid(0x2009)
+    expect(lastUsedPad()).toEqual({ source: 'hid', pid: 0x2009 })
+  })
+})
