@@ -6,6 +6,7 @@ import { useDownloads } from '@/store/downloads'
 import { DownloadVeil } from '@/ui/EntryCard'
 import { useEmulators } from '@/store/emulators'
 import { useSettings } from '@/store/settings'
+import { padDetail, padTitle, usePads } from '@/store/pads'
 import { CONSOLES, platformLabel } from '@shared/consoles'
 import { EMULATORS } from '@shared/emulators'
 import type { CatalogPage } from '@shared/catalog'
@@ -278,6 +279,7 @@ function MenuFocus(): null {
 function BpSettings({ onExit }: { onExit: () => void }) {
   const { settings, update, languages } = useSettings()
   const { list, progress, errors, install } = useEmulators()
+  const detected = usePads()
   const langs: LanguageSetting[] = ['auto', ...languages.map((l) => l.code)]
   const langName = (l: LanguageSetting): string => (l === 'auto' ? t('settings.langAuto') : languages.find((x) => x.code === l)?.name ?? l)
   return (
@@ -288,6 +290,11 @@ function BpSettings({ onExit }: { onExit: () => void }) {
       <button data-nav className="bp-row" onClick={() => void update({ startInBigPicture: !settings.startInBigPicture })}>
         <span>{t('settings.startBigPicture')}</span><strong>{settings.startInBigPicture ? t('bp.on') : t('bp.off')}</strong>
       </button>
+      <h2 className="bp-h">{t('settings.padDetected')}</h2>
+      {!detected.ready ? <button data-nav className="bp-row"><span>{t('settings.padChecking')}</span></button>
+        : !detected.ok ? <button data-nav className="bp-row"><span>{t('settings.padUnavailable')}</span></button>
+        : detected.pads.length === 0 ? <button data-nav className="bp-row"><span>{t('settings.padNone')}</span></button>
+        : detected.pads.map((p) => <button key={p.id} data-nav className="bp-row"><span>{padTitle(p)}</span><strong>{padDetail(p)}</strong></button>)}
       <h2 className="bp-h">{t('nav.emulators')}</h2>
       {EMULATORS.map((def) => {
         const s = list.find((e) => e.id === def.id)

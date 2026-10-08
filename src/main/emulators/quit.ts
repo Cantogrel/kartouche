@@ -1,8 +1,9 @@
 import { execFile, spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { createChordHold, nintendoChordDown, onNintendoChord } from './nintendoChord'
 
-/** Combinaison de manette pour quitter un jeu : Retour + Start maintenus (XInput : Xbox et manettes compatibles). */
+/** Combinaison de manette pour quitter un jeu : Retour + Start maintenus (XInput : Xbox et manettes compatibles) ou Moins + Plus maintenus (Switch Pro, paire de Joy-Cons, voir `nintendoChord.ts`). */
 export const QUIT_HOLD_MS = 1500
 
 // XInput (manettes Xbox et compatibles) : Back = 0x0020, Start = 0x0010.
@@ -105,14 +106,14 @@ while ($true) {
 }
 `
 
-async function scriptFile(cacheDir: string, name: string, content: string): Promise<string> {
+export async function scriptFile(cacheDir: string, name: string, content: string): Promise<string> {
   await mkdir(cacheDir, { recursive: true })
   const file = join(cacheDir, name)
   await writeFile(file, content)
   return file
 }
 
-const PS_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File']
+export const PS_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File']
 
 /** Numéros (0 à 3) des manettes XInput branchées ; vide si aucune ou si la détection échoue. */
 export async function connectedXInputSlots(cacheDir: string): Promise<number[]> {
@@ -170,13 +171,15 @@ export async function watchPadActivity(cacheDir: string, onPress: (slot: number)
   return () => { child.kill() }
 }
 
-/** Surveille la manette pendant une partie ; `onChord` est appelé quand Retour + Start sont maintenus. Renvoie la fonction d'arrêt. */
+/** Surveille la manette pendant une partie ; `onChord` est appelé quand Retour + Start (XInput) ou Moins + Plus (Nintendo) sont maintenus. Renvoie la fonction d'arrêt. */
 export async function watchQuitChord(cacheDir: string, onChord: () => void): Promise<() => void> {
   const file = await scriptFile(cacheDir, 'quit-watch.ps1', WATCH_SCRIPT)
   const child = spawn('powershell.exe', [...PS_ARGS, file, '-ParentPid', String(process.pid), '-HoldMs', String(QUIT_HOLD_MS)], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
   child.stdout.on('data', (d) => { if (String(d).includes('QUIT')) onChord() })
   child.on('error', () => {})
-  return () => { child.kill() }
+  const hold = createChordHold(QUIT_HOLD_MS, onChord, nintendoChordDown())
+  const off = onNintendoChord(hold.feed)
+  return () => { child.kill(); off(); hold.cancel() }
 }
 
 /**
