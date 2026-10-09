@@ -157,6 +157,14 @@ public static class NHid {
           // Rapport « simple » (manette qui clignote : aucun programme ne l'a encore initialisée) : octets 1 et 2 = boutons, 3 = croix (8 = neutre), 4 à 11 = quatre axes de 16 bits (centre 0x8000).
           int[] ax = new int[] { b[4] | (b[5] << 8), b[6] | (b[7] << 8), b[8] | (b[9] << 8), b[10] | (b[11] << 8) };
           if (base3f == null) base3f = ax;
+          // Moins = bit 0 et Plus = bit 1 de l'octet 2 (relevé sur la Switch Pro) : la fermeture du jeu à la manette doit marcher aussi dans ce format (DuckStation, PCSX2… dont le pilote SDL ne passe pas la manette en rapports complets).
+          bool minus3 = (b[2] & 1) != 0, plus3 = (b[2] & 2) != 0;
+          lock (gate) {
+            if (pid == 0x2009) { proMinus = minus3; proPlus = plus3; }
+            else if (pid == 0x2006) leftMinus = minus3;
+            else if (pid == 0x2007) rightPlus = plus3;
+            Chord();
+          }
           bool simple = (b[1] | b[2]) != 0 || b[3] != 8;
           for (int k = 0; k < 4 && !simple; k++) if (Math.Abs(ax[k] - base3f[k]) > 9000) simple = true;
           long t3 = Environment.TickCount;

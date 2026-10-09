@@ -310,6 +310,7 @@
   "play.launchFailedHeader": "ゲームを起動できませんでした。",
   "play.padRefusedJoycon": "このゲームは Joy-Con 1 本だけでは遊べません。Switch Pro コントローラー、Joy-Con の左右 2 本、または Xbox コントローラーを接続して、もう一度起動してください。",
   "play.padRefusedCount": "このゲームには、接続されているより多くのコントローラーが必要です。足りないコントローラーを接続して、もう一度起動してください。",
+  "play.padRefusedEmulator": "このエミュレーターはこのコントローラーを読み取れません。Switch Pro コントローラーまたは Xbox コントローラーを接続して、もう一度起動してください。",
   "play.quickExitHeader": "ゲームは起動の {seconds} 秒後に自動的に終了しました。",
   "play.quickExitSbi": "このゲームには必要な .sbi ファイル（ディスクのコピー防止）がありません。ゲームファイルと同じ名前でその隣に置いてください。",
   "play.quickExitBios": "この機種の BIOS がないか、無効です。",

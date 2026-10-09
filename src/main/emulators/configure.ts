@@ -11,7 +11,7 @@ import { PPSSPP_GAME_OVERRIDES, expandXInputPads, ppssppGraphics } from './ppssp
 import { vita3kRenderer } from './vita3k'
 import { PCSX2_GAME_OVERRIDES, PCSX2_PROFILE_NAMES, pcsx2Gs, type Ps2Game } from './pcsx2'
 import { AZAHAR_AUDIO, AZAHAR_GAME_OVERRIDES, AZAHAR_LAYOUT, azaharRenderer } from './azahar'
-import { MELONDS_GAME_SCREENS, MELONDS_JOYSTICK, MELONDS_KEYBOARD, MELONDS_WINDOW, melondsRendering, planMelondsGame, tomlSection, type LayoutState, type ScreenOverride } from './melonds'
+import { MELONDS_GAME_SCREENS, MELONDS_JOYSTICK, MELONDS_JOYSTICK_NINTENDO, MELONDS_KEYBOARD, MELONDS_WINDOW, melondsRendering, planMelondsGame, tomlSection, type LayoutState, type ScreenOverride } from './melonds'
 import { EDEN_GAME_OVERRIDES, EDEN_KEYBOARD_PROFILE, edenBackend, edenResolution } from './eden'
 import { edenNintendoKeys, edenNintendoProfile, isNintendoButtonA, type EdenNintendo } from './edenPads'
 import { dolphinGcPad, dolphinGraphics, dolphinNintendoGcPad, dolphinNintendoWiimote, dolphinWiimote, isUntouchedWiimoteFile, wiimoteKindFor, type DolphinNintendo, type DolphinPlayerPad } from './dolphin'
@@ -355,6 +355,18 @@ const AZAHAR_CONTROLLER_PROFILE: Record<string, string | number> = {
 }
 
 /**
+ * Troisième profil d'Azahar : les manettes Nintendo (Switch Pro, paire de Joy-Con). SDL2 y nomme les boutons d'après leur ÉTIQUETTE (A = le bouton marqué A, à droite), pas d'après leur
+ * position comme sur une manette Xbox : le profil de la manette Xbox, qui croise A et B pour garder les positions, les inverserait donc. Ici, 3DS A = bouton A de la manette, B = B, X = X,
+ * Y = Y (relevé sur une Switch Pro : A et B inversés avec le profil Xbox).
+ */
+const AZAHAR_NINTENDO_PROFILE: Record<string, string | number> = {
+  ...Object.fromEntries(Object.entries(AZAHAR_CONTROLLER_PROFILE).map(([k, v]) => [k.replace('profiles\\2\\', 'profiles\\3\\'), v])),
+  'profiles\\3\\name': 'Manette Nintendo',
+  'profiles\\3\\button_a': sdlButton(SDL_BUTTON.A), 'profiles\\3\\button_b': sdlButton(SDL_BUTTON.B),
+  'profiles\\3\\button_x': sdlButton(SDL_BUTTON.X), 'profiles\\3\\button_y': sdlButton(SDL_BUTTON.Y)
+}
+
+/**
  * Tactile par bouton, moteur natif d'Azahar (`touch_from_button`) : chaque entrée `bind` est la liaison d'un bouton (mêmes paramètres SDL que le profil) plus
  * la position `x`/`y` du « tap » en pixels de l'écran du bas (320 x 240, vérifié dans touch_from_button.cpp). LB = tap au milieu en hauteur, à 1/3 de la
  * gauche ; RB = au milieu en hauteur, à 1/3 de la droite. Les gâchettes avant ne servent plus à L/R (voir le profil) : elles tapent à l'écran. La souris reste
@@ -428,15 +440,19 @@ const AZAHAR_CONTROLLER_HOTKEYS: Record<string, string> = {
  * profil 1 (clavier, `profile=0`). Seulement tant que le profil 2 est encore celui de Kartouche et que le profil actif est l'un des deux : si
  * l'utilisateur a créé ou choisi un autre profil dans Azahar, rien n'est touché.
  */
-export async function applyAzaharPad(dir: string, controllerConnected: boolean): Promise<void> {
+export async function applyAzaharPad(dir: string, controllerConnected: boolean, nintendo = false): Promise<void> {
   const file = join(dir, 'user', 'config', 'qt-config.ini')
   const text = await readText(file)
   if (!/^profiles\\2\\name=Manette\s*$/m.test(text)) return
   const buttonA = /^profiles\\2\\button_a=.*/m.exec(text)?.[0] ?? ''
   if (!buttonA.includes(XINPUT_GUID)) return
   const current = Number(/^profile=(\d+)\s*$/m.exec(text)?.[1] ?? 0)
-  if (current > 1) return
-  const wanted = controllerConnected ? 1 : 0
+  // Profil Nintendo (3e) : le nôtre seulement, repéré par son nom ; un autre profil choisi ou créé par l'utilisateur n'est jamais touché.
+  const hasNintendo = /^profiles\\3\\name=Manette Nintendo\s*$/m.test(text)
+  if (current > 2 || (current === 2 && !hasNintendo)) return
+  // Switch Pro ou paire de Joy-Con comme manette principale : profil aux boutons dans l'ordre Nintendo (voir `AZAHAR_NINTENDO_PROFILE`) ; sinon les profils d'avant, inchangés.
+  if (nintendo && !hasNintendo) await writeIni(file, { Controls: { ...qt(quoteLists(AZAHAR_NINTENDO_PROFILE)), 'profiles\\size': 3 } }, '=')
+  const wanted = nintendo ? 2 : controllerConnected ? 1 : 0
   // Profil écrit par une ancienne version de Kartouche (liaisons sans `api:controller` : aucune manette ne répondait) : remplacé par le profil actuel.
   // Seulement tant qu'il porte encore le GUID supposé : un profil refait dans Azahar par l'utilisateur n'est jamais touché.
   // (ou L encore sur le bouton LB d'avant : seule valeur précise remplacée, une autre liaison de L choisie par l'utilisateur reste intacte).
@@ -691,12 +707,18 @@ export async function applyEdenGameConfig(dir: string, titleId: string | null | 
 }
 
 /** melonDS ne lit qu'un joystick SDL, désigné par son rang (`JoystickID`) : celui de la manette à lire, réécrit à chaque lancement. */
-export async function applyMelondsPad(dir: string, joystickId: number | null): Promise<void> {
+export async function applyMelondsPad(dir: string, joystickId: number | null, nintendo = false): Promise<void> {
   if (joystickId === null) return
   const file = join(dir, 'melonDS.toml')
   const text = await readText(file)
   if (!text) return
-  const next = setTomlKeys(text, 'Instance0', { JoystickID: joystickId })
+  // Les liaisons de la manette suivent le type de manette (XInput ou Switch Pro), mais seulement tant qu'elles sont celles de Kartouche : des liaisons refaites dans melonDS ne sont jamais touchées.
+  const joy = tomlSection(text, 'Instance0.Joystick')
+  const is = (set: Record<string, string | number | boolean>): boolean => Object.entries(set).every(([k, v]) => joy[k] === String(v))
+  const wanted = nintendo ? MELONDS_JOYSTICK_NINTENDO : MELONDS_JOYSTICK
+  let next = text
+  if (!is(wanted) && (is(MELONDS_JOYSTICK) || is(MELONDS_JOYSTICK_NINTENDO))) next = setTomlKeys(next, 'Instance0.Joystick', wanted)
+  next = setTomlKeys(next, 'Instance0', { JoystickID: joystickId })
   if (next !== text) await writeFile(file, next)
 }
 
@@ -814,11 +836,39 @@ export function expandSdlPads(text: string): string {
   return [...lines.slice(0, head + 1), ...out, ...lines.slice(end)].join(nl)
 }
 
+/**
+ * Retouches de [Pad1] selon la manette principale : vibration retirée pour une manette Nintendo (jugée gênante sur les jeux Sony : la Pro et surtout le Joy-Con gauche vibrent en continu),
+ * remise pour les autres ; boutons de face A/B et X/Y échangés pour la paire de Joy-Con (SDL3 les donne dans l'autre sens : constaté sur DuckStation). Idempotent dans les deux sens, et ne
+ * touche que les valeurs de Kartouche (une liaison choisie par l'utilisateur reste).
+ */
+export function tuneSdlPad(text: string, opt: { nintendo: boolean; swapFace: boolean }): string {
+  const nl = text.includes('\r\n') ? '\r\n' : '\n'
+  const lines = text.split(/\r?\n/)
+  const head = lines.findIndex((l) => l.trim() === '[Pad1]')
+  if (head < 0) return text
+  let end = lines.findIndex((l, i) => i > head && /^\s*\[/.test(l))
+  if (end < 0) end = lines.length
+  const std: Record<string, string> = { Cross: 'A', Circle: 'B', Square: 'X', Triangle: 'Y' }
+  const swapped: Record<string, string> = { Cross: 'B', Circle: 'A', Square: 'Y', Triangle: 'X' }
+  for (let i = head + 1; i < end; i++) {
+    const m = /^(\s*)(LargeMotor|SmallMotor|Cross|Circle|Square|Triangle)(\s*=\s*)(.*?)\s*$/.exec(lines[i])
+    if (!m) continue
+    if (m[2].endsWith('Motor')) {
+      if (opt.nintendo && m[4] === 'SDL-0/' + m[2]) lines[i] = m[1] + m[2] + m[3]
+      else if (!opt.nintendo && m[4] === '') lines[i] = m[1] + m[2] + m[3] + 'SDL-0/' + m[2]
+    } else {
+      const sdl = /^SDL-(\d)\/([ABXY])$/.exec(m[4])
+      if (sdl) lines[i] = m[1] + m[2] + m[3] + 'SDL-' + sdl[1] + '/' + (opt.swapFace ? swapped : std)[m[2]]
+    }
+  }
+  return lines.join(nl)
+}
+
 /** DuckStation (settings.ini) et PCSX2 (inis/PCSX2.ini) : la manette utilisée peut être n'importe laquelle des quatre premières. */
-export async function applyPsPads(file: string): Promise<void> {
+export async function applyPsPads(file: string, opt: { nintendo: boolean; swapFace: boolean } = { nintendo: false, swapFace: false }): Promise<void> {
   const text = await readText(file)
   if (!text) return
-  const next = expandSdlPads(text)
+  const next = tuneSdlPad(expandSdlPads(text), opt)
   if (next !== text) await writeFile(file, next)
 }
 

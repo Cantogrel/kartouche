@@ -6,5 +6,12 @@
 const XINPUT_ONLY = new Set(['eden', 'melonds'])
 
 /** Variables d'environnement du processus de l'émulateur `id` (`undefined` : celles de Kartouche, inchangées). */
-export const emulatorEnv = (id: string): NodeJS.ProcessEnv | undefined =>
-  XINPUT_ONLY.has(id) ? { ...process.env, SDL_JOYSTICK_HIDAPI: '0', SDL_JOYSTICK_RAWINPUT: '0', SDL_JOYSTICK_WGI: '0' } : undefined
+export const emulatorEnv = (id: string, nintendo = false): NodeJS.ProcessEnv | undefined => {
+  // Manette Nintendo principale d'un émulateur qui lit les joysticks bruts (melonDS) : le pilote HIDAPI (qui seul reconnaît la manette) et plus rien d'autre, pour que son rang soit celui
+  // parmi les manettes Nintendo, sans les XInput ni DirectInput qui s'intercaleraient.
+  // (RetroArch : la paire de Joy-Con est réunie en une manette, comme sous Dolphin.)
+  if (nintendo && (id === 'melonds' || id === 'retroarch')) return { ...process.env, SDL_JOYSTICK_HIDAPI: '1', SDL_JOYSTICK_HIDAPI_XBOX: '0', SDL_JOYSTICK_RAWINPUT: '0', SDL_JOYSTICK_WGI: '0', SDL_XINPUT_ENABLED: '0', SDL_DIRECTINPUT_ENABLED: '0', SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS: '1', SDL_JOYSTICK_HIDAPI_JOY_CONS: '1' }
+  // Azahar (SDL 2.32) et Cemu (SDL 2.30) : on garde leurs pilotes, mais la paire de Joy-Con est réunie en une seule manette.
+  if (nintendo && (id === 'azahar' || id === 'cemu')) return { ...process.env, SDL_JOYSTICK_HIDAPI_JOY_CONS: '1', SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS: '1' }
+  return XINPUT_ONLY.has(id) ? { ...process.env, SDL_JOYSTICK_HIDAPI: '0', SDL_JOYSTICK_RAWINPUT: '0', SDL_JOYSTICK_WGI: '0' } : undefined
+}

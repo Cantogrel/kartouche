@@ -57,6 +57,22 @@ Ce sont les jeux qui rappellent l'applet (journal Eden : « Initializing Control
 
 Dolphin ne lit pas les .zip. `importPaths` décompresse (UNE fois, `UNZIP_ON_IMPORT` = wii, gc) un zip d'une seule ROM vers `roms/<console>/`, vérifie CRC et taille (`unzipVerified`, jamais de fichier sous son vrai nom avant) et ne garde que le jeu décompressé (le zip d'origine n'est supprimé que si « supprimer la source », ou s'il était déjà dans le dossier de ROMs). Les jeux déjà importés en zip restent des zips : `resolveZippedRom` réutilise le fichier déjà extrait dans le cache (taille exacte, pas plus ancien que l'archive) au lieu de réextraire 3 Go à chaque lancement (Galaxy : 20 s → 8 s).
 
-## Autres émulateurs
+## Autres émulateurs (joueur 1 seulement)
 
-Le principe (une manette par joueur, joueur 1 = dernière utilisée) est voulu pour tous. Eden et Dolphin le mettent en œuvre ; les autres émulateurs restent à faire.
+Le principe « une manette par joueur » n'est mis en œuvre que par Eden et Dolphin ; les autres n'ont que le joueur 1 (joueurs 2 et suivants : à faire). Fonctions communes : `chooseMainNintendo` / `chooseSupportedMain(cacheDir, accepted)` (`mainPad.ts`) : la manette du joueur 1 = la première, dans l'ordre habituel (dernière utilisée en tête), que l'émulateur sait lire ; si des manettes sont branchées mais qu'aucune n'est lisible, `launchGame` renvoie l'erreur `padRefusedEmulator` (message `play.padRefusedEmulator`, classique et Big Picture) au lieu d'un jeu muet. Une XInput reste toujours acceptée et inchangée.
+
+| Émulateur | Switch Pro | Paire de Joy-Con | Joy-Con seul |
+|---|---|---|---|
+| DuckStation, PCSX2 (SDL 3) | liaisons SDL-0..3 existantes ; vibration retirée | idem ; A/B et X/Y échangés sur DuckStation (`tuneSdlPad`) | non testé |
+| Vita3K (SDL 3) | natif, rien à écrire | natif | non testé |
+| Azahar (SDL 2.32) | 3e profil « Manette Nintendo » : 3DS A = bouton A (SDL2 nomme d'après l'étiquette), profil Xbox inchangé | idem, avec `SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS` (`emulatorEnv`) | refusé |
+| melonDS (SDL 2.32) | `MELONDS_JOYSTICK_NINTENDO` (boutons HIDAPI relevés), env HIDAPI seul | mêmes indices (relevé) | refusé |
+| Cemu (SDL 2.30) | bloc `SDLController` dans le profil Kartouche (GUID `0300b7e6…6803`) | bloc « Joy-Con (L/R) » (GUID `0300460f…6800`), env combine | refusé |
+| RPCS3 (SDL 3) | handler SDL, « Nintendo Switch Pro Controller 1 » | « Nintendo Switch Joy-Con (L/R) 1 » | refusé |
+| RetroArch | pilote `sdl2` + autoconfig fournis, stick gauche aussi sur la croix (`input_player1_analog_dpad_mode`, une fois) | SDL2 remplacé par la 2.32.10 officielle (`sdlUpdate.ts`, SHA-256 vérifié, ancienne DLL gardée) | refusé |
+| PPSSPP | DirectInput, rien à écrire | refusé (deux manettes DirectInput, pas de SDL) | refusé |
+
+- Relevés : sonde SDL2/SDL3 chargée en PowerShell avec la vraie manette (boutons, axes, noms d'appareil) et, pour Cemu / RPCS3 / melonDS / Dolphin, le fichier que l'émulateur écrit quand l'utilisateur mappe la manette lui-même.
+- Un fichier retouché dans l'émulateur n'est jamais réécrit (Cemu `controller0.xml` sans le marqueur, RPCS3 `Default.yml` sans `# romvault:rpcs3-input`, liaisons melonDS qui ne sont plus celles de Kartouche).
+- **Fermeture à la manette (Moins + Plus)** : `HID_SCRIPT` lit aussi les rapports simples 0x3F (octet 2, bit 0 = Moins, bit 1 = Plus), que la Pro envoie quand l'émulateur ne la passe pas en rapports complets (DuckStation, PCSX2).
+- **Clavier à l'écran de Cemu** (`cemuKeyboard.ts`) : ImGui, sans navigation à la manette. Détecté par capture de la fenêtre du jeu (aplat 91,134,168 en au moins quatre bandes) ; tant qu'il est affiché, stick droit = souris, A = clic (XInput, Pro, Joy-Con droit de la paire).

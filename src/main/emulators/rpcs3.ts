@@ -42,7 +42,7 @@ export function rpcs3ConfigYaml(gpu: Gpu, displayHeight: number, fr: boolean): Y
 
 // --- Manettes -----------------------------------------------------------------------------------------------------------
 
-export type PadKind = 'xinput' | 'dualshock4' | 'dualsense'
+export type PadKind = 'xinput' | 'dualshock4' | 'dualsense' | 'switch-pro' | 'joycon-pair'
 
 /** Première ligne des profils écrits par Kartouche : RPCS3 réécrit le fichier (sans ce commentaire) dès que l'utilisateur modifie ses manettes ; Kartouche n'y touche alors plus. */
 export const RPCS3_INPUT_MARKER = '# romvault:rpcs3-input'
@@ -58,12 +58,23 @@ const XINPUT_MAPPING: [string, string][] = [
 ]
 
 /**
+ * Switch Pro par le handler SDL de RPCS3 (périphérique « Nintendo Switch Pro Controller <rang> », rang à partir de 1) : relevé dans le Default.yml qu'écrit RPCS3 quand on y configure la Pro.
+ * Les boutons de face suivent les POSITIONS (South = bas = Croix…), comme la disposition Xbox ci-dessus ; gâchettes LT/RT = L2/R2.
+ */
+const SWITCH_PRO_MAPPING: [string, string][] = XINPUT_MAPPING.map(([k, v]) => [k, ({ A: 'South', B: 'East', X: 'West', Y: 'North' } as Record<string, string>)[v] ?? v])
+
+/**
  * Profil de manette du joueur 1. XInput : `slot` = emplacement XInput (0 à 3) de la manette connectée, écrit en « XInput Pad #<slot+1> » (RPCS3 numérote à partir de 1) ;
  * mapping Xbox explicite (celui que RPCS3 charge, relevé dans son journal). Manettes Sony : handler natif, mapping par défaut de RPCS3 pour ce handler (non testé : aucune
  * manette Sony sur la machine de développement). Les joueurs 2 à 7 restent sur « Null ».
  */
 export function rpcs3InputYaml(kind: PadKind, slot = 0): Yaml {
   const head = [RPCS3_INPUT_MARKER, 'Player 1 Input:']
+  if (kind === 'switch-pro' || kind === 'joycon-pair') {
+    // La paire de Joy-Con est UN périphérique pour le SDL 3 de RPCS3 (« Nintendo Switch Joy-Con (L/R) 1 », relevé dans son journal et dans le Default.yml qu'il écrit : même mapping que la Pro).
+    const name = kind === 'switch-pro' ? 'Nintendo Switch Pro Controller' : 'Nintendo Switch Joy-Con (L/R)'
+    return [...head, '  Handler: SDL', `  Device: ${q(`${name} ${slot + 1}`)}`, '  Config:', ...SWITCH_PRO_MAPPING.map(([k, v]) => `    ${k}: ${v}`), '  Buddy Device: ""'].join('\n') + '\n'
+  }
   if (kind === 'xinput') {
     return [...head, '  Handler: XInput', `  Device: ${q(`XInput Pad #${slot + 1}`)}`, '  Config:', ...XINPUT_MAPPING.map(([k, v]) => `    ${k}: ${v}`), '  Buddy Device: ""'].join('\n') + '\n'
   }

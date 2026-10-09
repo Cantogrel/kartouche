@@ -10,6 +10,9 @@ import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
 import { connectedNintendoPids, lastUsedPad, preferActive, rankAmong, startPadTracker } from './padChoice'
 import { chooseDolphinPads } from './dolphinChoice'
+import { chooseMainNintendo, chooseSupportedMain } from './mainPad'
+import { startCemuKeyboardMouse } from './cemuKeyboard'
+import { ensureModernSdl2 } from './sdlUpdate'
 import { chooseEdenPads, edenRefusalReason, shouldCloseOnRefusal, type EdenPlayerPad } from './edenChoice'
 import { anyGamepadConnected, autoConfirmEdenApplet, closeGracefully, connectedXInputPads, connectedXInputSlots, watchQuitChord } from './quit'
 import { emulatorEnv } from './sdlEnv'
@@ -216,6 +219,13 @@ export async function stopGameAndWait(entryId: number, timeoutMs = 8000): Promis
   return true
 }
 
+/** Vrai si le SDL2 de RetroArch sait réunir une paire de Joy-Con branchée (mis à jour au besoin) ; sans paire branchée, rien n'est téléchargé. */
+async function retroPairReady(cacheDir: string, dir: string): Promise<boolean> {
+  const pids = connectedNintendoPids()
+  if (!(pids.includes(0x2006) && pids.includes(0x2007))) return false
+  return ensureModernSdl2(dir, cacheDir).catch(() => false)
+}
+
 /** Lance le jeu dans son émulateur, puis cumule le temps de jeu à la fermeture. */
 export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: GameSession) => void, cacheDir: string, savesRoot: string, romsDir?: string): Promise<LaunchResult> {
   if (running.has(entryId)) return { ok: false, error: 'running' }
@@ -278,17 +288,46 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     }
     // Azahar : profil manette si une manette XInput est branchée, sinon clavier ; réglages propres au jeu seulement si une exception est connue (Title ID).
     if (def.id === 'azahar') {
-      await applyAzaharPad(row.dir, await anyGamepadConnected(cacheDir)).catch(() => {})
+      // Switch Pro ou paire de Joy-Con en manette principale : profil aux boutons dans l'ordre Nintendo (A/B non croisés, voir configure.ts) ; Joy-Con seul : pas de profil (il manque des boutons).
+      const nin = await chooseMainNintendo(cacheDir).catch(() => null)
+      await applyAzaharPad(row.dir, await anyGamepadConnected(cacheDir), nin === 'switch-pro' || nin === 'joycon-pair').catch(() => {})
       await applyAzaharGameConfig(row.dir, (await readNcsdTitleId(romPath).catch(() => null)) ?? entry.title_id).catch(() => {})
     }
     // melonDS : disposition d'écrans propre au jeu (code de jeu de la ROM) si une exception est connue, sinon retour à la disposition d'origine.
     // melonDS et RetroArch ne lisent qu'une manette pour le joueur 1 : la dernière sur laquelle on a appuyé (voir padChoice.ts), pas forcément la première branchée.
     const padSlots = def.id === 'melonds' || def.id === 'retroarch' ? await connectedXInputSlots(cacheDir) : []
     const padSlot = preferActive(padSlots, (s) => s)[0] ?? null
+    // RetroArch : la Switch Pro passe par son pilote SDL2 (autoconfig fournis). Sa version de SDL2 (2.0.14) ne sait pas réunir les Joy-Con : avec une paire branchée, on la remplace d'abord par la version
+    // officielle (voir sdlUpdate.ts) ; si ce n'est pas possible, ou pour un Joy-Con seul, message clair.
+    let retroNintendo: { port: number } | null = null
+    let cemuNintendo = false
+    if (def.id === 'retroarch') {
+      const sup = await chooseSupportedMain(cacheDir, (await retroPairReady(cacheDir, row.dir)) ? ['switch-pro', 'joycon-pair'] : ['switch-pro']).catch(() => ({ pad: null, refused: false }))
+      if (sup.refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
+      if (sup.pad && 'nintendo' in sup.pad) retroNintendo = { port: sup.pad.port ?? 0 }
+    }
+    // PPSSPP lit les manettes par XInput et DirectInput seulement : la Switch Pro y est une manette DirectInput, mais la paire de Joy-Con y est DEUX manettes séparées (message clair plutôt qu'un
+    // jeu muet).
+    if (def.id === 'ppsspp') {
+      const sup = await chooseSupportedMain(cacheDir, ['switch-pro']).catch(() => ({ pad: null, refused: false }))
+      if (sup.refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
+    }
+    // Azahar (SDL 2.32) : la paire de Joy-Con n'y est réunie en une manette que si on le demande (voir `emulatorEnv`).
+    const azaharNintendo = def.id === 'azahar' ? await chooseMainNintendo(cacheDir).catch(() => null) : null
+    // melonDS ne lit qu'un joystick SDL (2.32) : la Switch Pro et la paire de Joy-Con réunie en un seul joystick (même disposition de boutons, relevé) ; un Joy-Con seul, non : message clair plutôt qu'un
+    // jeu qui ne répond à rien. La manette principale est la première que melonDS sait lire (dernière utilisée en tête).
+    let melondsNintendo: { port: number } | null = null
+    if (def.id === 'melonds') {
+      const sup = await chooseSupportedMain(cacheDir, ['switch-pro', 'joycon-pair']).catch(() => ({ pad: null, refused: false }))
+      if (sup.refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
+      if (sup.pad && 'nintendo' in sup.pad) melondsNintendo = { port: sup.pad.port ?? 0 }
+    }
     // DuckStation et PCSX2 lisent les manettes SDL par numéro : les quatre premières sont liées, quelle que soit celle qu'on utilise.
-    if (def.id === 'duckstation') await applyPsPads(join(row.dir, 'settings.ini')).catch(() => {})
-    if (def.id === 'pcsx2') await applyPsPads(join(row.dir, 'inis', 'PCSX2.ini')).catch(() => {})
-    if (def.id === 'melonds') await applyMelondsPad(row.dir, padSlot === null ? null : rankAmong(padSlots, padSlot)).catch(() => {})
+    // Manette Nintendo principale : sans vibration (gênante), et A/B / X/Y échangés pour la paire de Joy-Con sur DuckStation (voir `tuneSdlPad`).
+    const psNin = def.id === 'duckstation' || def.id === 'pcsx2' ? await chooseMainNintendo(cacheDir).catch(() => null) : null
+    if (def.id === 'duckstation') await applyPsPads(join(row.dir, 'settings.ini'), { nintendo: psNin !== null, swapFace: psNin === 'joycon-pair' }).catch(() => {})
+    if (def.id === 'pcsx2') await applyPsPads(join(row.dir, 'inis', 'PCSX2.ini'), { nintendo: psNin !== null, swapFace: false }).catch(() => {})
+    if (def.id === 'melonds') await applyMelondsPad(row.dir, melondsNintendo ? melondsNintendo.port : padSlot === null ? null : rankAmong(padSlots, padSlot), melondsNintendo !== null).catch(() => {})
     if (def.id === 'melonds') await applyMelondsGame(row.dir, await readNdsCode(romPath).catch(() => null)).catch(() => {})
     let edenAssigned: EdenPlayerPad[] = []
     // Eden : une manette par joueur (joueur 1 = la dernière utilisée, les autres dans un ordre stable ; voir edenChoice.ts), sinon clavier ; configuration propre au jeu seulement si une exception est connue (Title ID).
@@ -313,17 +352,25 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     // une exception est connue (numéro de série lu sur le disque).
     if (def.id === 'rpcs3') {
       const slots = preferActive(await connectedXInputSlots(cacheDir), (s) => s)
-      const pad = slots.length ? { kind: 'xinput' as const, slot: slots[0] } : await detectSonyPad().then((kind) => (kind ? { kind } : null)).catch(() => null)
+      // Switch Pro : handler SDL de RPCS3 (la dernière manette utilisée passe en premier, XInput ou Pro). Paire de Joy-Con / Joy-Con seul : pas lisibles, message clair s'il n'y a rien d'autre.
+      const sup = await chooseSupportedMain(cacheDir, ['switch-pro', 'joycon-pair']).catch(() => ({ pad: null, refused: false }))
+      const nintendoPad = sup.pad && 'nintendo' in sup.pad ? { kind: sup.pad.nintendo === 'joycon-pair' ? 'joycon-pair' as const : 'switch-pro' as const, slot: sup.pad.port ?? 0 } : null
+      const pad = nintendoPad ?? (slots.length ? { kind: 'xinput' as const, slot: slots[0] } : await detectSonyPad().then((kind) => (kind ? { kind } : null)).catch(() => null))
+      if (!pad && sup.refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
       await applyRpcs3Pad(row.dir, pad).catch(() => {})
       await applyRpcs3Game(row.dir, await readPs3Serial(romPath).catch(() => null)).catch(() => {})
     }
     // Cemu : Pro Controller par défaut, profil GamePad pour les jeux qui l'exigent (profil de l'utilisateur jamais touché).
     if (def.id === 'cemu') {
+      // Switch Pro et paire de Joy-Con : leurs blocs SDLController sont dans le profil de Kartouche, à côté du clavier et de la XInput (la manette qui répond, répond) ; Joy-Con seul : refusé s'il n'y a rien d'autre.
+      const sup = await chooseSupportedMain(cacheDir, ['switch-pro', 'joycon-pair']).catch(() => ({ pad: null, refused: false }))
+      cemuNintendo = sup.pad !== null && 'nintendo' in sup.pad
+      if (sup.refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
       await applyCemuControls(row.dir, entry.title, basename(entry.path)).catch(() => {})
       await applyCemuPad(row.dir, preferActive(await connectedXInputSlots(cacheDir), (s) => s)[0] ?? 0).catch(() => {})
     }
     // RetroArch range ses sauvegardes et états dans le dossier de données de Kartouche (par jeu, hors de l'installation).
-    if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot, padSlot).catch(() => {})
+    if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot, padSlot, retroNintendo).catch(() => {})
     // DuckStation n'écrit rien sur la sortie standard : sans ça, un jeu qui se ferme tout seul ne laisse aucune trace exploitable.
     if (def.id === 'duckstation') {
       await ensureDuckstationLogging(row.dir).catch(() => {})
@@ -342,7 +389,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       })().catch(() => {})
     }
     const started = Date.now()
-    const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: ['ignore', 'pipe', 'pipe'], env: emulatorEnv(def.id) })
+    const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: ['ignore', 'pipe', 'pipe'], env: emulatorEnv(def.id, melondsNintendo !== null || retroNintendo !== null || azaharNintendo === 'switch-pro' || azaharNintendo === 'joycon-pair' || cemuNintendo) })
     // Vita3K : fermer la fenêtre du jeu ne fait que revenir à sa bibliothèque, le process ne sort jamais seul ; on le force après 2 s au lieu de 5.
     running.set(entryId, { pid: child.pid ?? 0, stopped: false, graceMs: def.id === 'vita3k' ? 2000 : undefined })
     // Capturé au cas où l'émulateur écrit sur la sortie standard (RetroArch, par ex.) ; sert de diagnostic si le jeu se ferme vite.
@@ -356,6 +403,9 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     void watchQuitChord(cacheDir, () => stopGame(entryId)).then((stop) => { if (over) stop(); else stopWatch = stop }).catch(() => {})
     // Eden : l'applet Contrôleur (jeux à plusieurs joueurs…) est validée à la place de l'utilisateur, les manettes étant déjà assignées (voir quit.ts).
     let stopApplet: (() => void) | null = null
+    // Cemu : le clavier à l'écran (nom d'un profil…) n'a pas de navigation à la manette ; pendant qu'il est affiché, le stick droit fait la souris et A le clic (voir cemuKeyboard.ts).
+    let stopKeyboard: (() => void) | null = null
+    if (def.id === 'cemu' && child.pid) void startCemuKeyboardMouse(cacheDir, child.pid).then((stop) => { if (over) stop(); else stopKeyboard = stop }).catch(() => {})
     // Le jeu refuse les manettes assignées (applet bloquée) : on le ferme et on explique ce qu'il faut brancher (play.padRefused*), au lieu de laisser l'utilisateur devant une fenêtre sans issue.
     let padRefusal: 'padRefusedJoycon' | 'padRefusedCount' | null = null
     if (def.id === 'eden') {
@@ -367,6 +417,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       over = true
       stopWatch?.()
       stopApplet?.()
+      stopKeyboard?.()
       let attempt: RunAttempt = { elapsedMs: Date.now() - started, stopped: running.get(entryId)?.stopped ?? false, captured }
       if (def.id === 'dolphin' && !attempt.stopped && attempt.elapsedMs < QUICK_EXIT_MS) {
         attempt = await retryDolphinWithoutFastDiscSpeed(entryId, row, args, cacheDir, romPath, attempt).catch(() => attempt)
