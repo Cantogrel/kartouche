@@ -89,7 +89,7 @@ export async function watchPadList(cacheDir: string, onChange: (raw: RawPad[]) =
 // Rapports « complets » (0x30) des manettes Nintendo, lus sur l'interface HID sans la verrouiller (partage lecture/écriture, lecture seule) : octet 3 = boutons du Joy-Con droit,
 // octet 4 = Moins (bit 0) et Plus (bit 1), octet 5 = boutons du Joy-Con gauche, octets 6 à 11 = les deux sticks (12 bits chacun). Relevé sur de vraies manettes, voir le vault
 // (projects/romvault/manettes-nintendo-phase0). Sorties : « ACT <pid> » (bouton ou stick franchement actionné, au plus 4 par seconde et par manette) et « CHORD 1/0 »
-// (Moins + Plus tenus ensemble : sur la Pro, ou Moins du Joy-Con gauche + Plus du Joy-Con droit ; un Joy-Con seul ne peut pas les tenir tous les deux), et « DEV <pid> 1/0 »
+// (Moins + Plus tenus ensemble : sur la Pro, ou Moins du Joy-Con gauche + Plus du Joy-Con droit ; un Joy-Con seul : Moins + Capture (gauche) ou Home + Plus (droit), octet 4 bits 0x20 et 0x10), et « DEV <pid> 1/0 »
 // (manette Nintendo ouverte / perdue : sert à savoir ce qui est branché sans relancer de détection).
 const HID_SCRIPT = `param([int]$ParentPid)
 Add-Type @'
@@ -114,9 +114,9 @@ public static class NHid {
   [DllImport("hid.dll")] static extern int HidP_GetCaps(IntPtr p, byte[] caps);
   static readonly HashSet<string> open = new HashSet<string>();
   static readonly object gate = new object();
-  static bool leftMinus, rightPlus, proMinus, proPlus, chord;
+  static bool leftMinus, rightPlus, leftCap, rightHome, proMinus, proPlus, chord;
   static void Emit(string s) { lock (gate) { Console.Out.WriteLine(s); Console.Out.Flush(); } }
-  static void Chord() { bool c = (proMinus && proPlus) || (leftMinus && rightPlus); if (c != chord) { chord = c; Emit(c ? "CHORD 1" : "CHORD 0"); } }
+  static void Chord() { bool c = (proMinus && proPlus) || (leftMinus && rightPlus) || (leftMinus && leftCap) || (rightHome && rightPlus); if (c != chord) { chord = c; Emit(c ? "CHORD 1" : "CHORD 0"); } }
   static int[] Sticks(byte[] b) { return new int[] { b[6] | ((b[7] & 15) << 8), (b[7] >> 4) | (b[8] << 4), b[9] | ((b[10] & 15) << 8), (b[10] >> 4) | (b[11] << 4) }; }
   public static void Scan() {
     Guid g; HidD_GetHidGuid(out g);
@@ -172,11 +172,11 @@ public static class NHid {
           continue;
         }
         if (b[0] != 0x30) continue;
-        bool minus = (b[4] & 1) != 0, plus = (b[4] & 2) != 0;
+        bool minus = (b[4] & 1) != 0, plus = (b[4] & 2) != 0, home = (b[4] & 0x10) != 0, cap = (b[4] & 0x20) != 0;
         lock (gate) {
           if (pid == 0x2009) { proMinus = minus; proPlus = plus; }
-          else if (pid == 0x2006) leftMinus = minus;
-          else if (pid == 0x2007) rightPlus = plus;
+          else if (pid == 0x2006) { leftMinus = minus; leftCap = cap; }
+          else if (pid == 0x2007) { rightPlus = plus; rightHome = home; }
           Chord();
         }
         int[] s = Sticks(b);
@@ -187,7 +187,7 @@ public static class NHid {
         if (active && now - lastAct > 250) { lastAct = now; Emit("ACT " + pid.ToString("x")); }
       }
     } finally {
-      lock (gate) { if (pid == 0x2009) { proMinus = false; proPlus = false; } else if (pid == 0x2006) leftMinus = false; else if (pid == 0x2007) rightPlus = false; Chord(); }
+      lock (gate) { if (pid == 0x2009) { proMinus = false; proPlus = false; } else if (pid == 0x2006) { leftMinus = false; leftCap = false; } else if (pid == 0x2007) { rightPlus = false; rightHome = false; } Chord(); }
       lock (open) { open.Remove(path); }
       Emit("DEV " + pid.ToString("x") + " 0");
       h.Dispose();

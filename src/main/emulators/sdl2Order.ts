@@ -50,7 +50,7 @@ export async function listSdl2Joysticks(cacheDir: string, dll: string, env: Node
   } catch { return [] }
 }
 
-const NAME: Record<string, string> = { 'switch-pro': 'Nintendo Switch Pro Controller', 'joycon-pair': 'Nintendo Switch Joy-Con (L/R)' }
+const NAME: Record<string, string> = { 'switch-pro': 'Nintendo Switch Pro Controller', 'joycon-pair': 'Nintendo Switch Joy-Con (L/R)', 'joycon-left': 'Nintendo Switch Joy-Con (L)', 'joycon-right': 'Nintendo Switch Joy-Con (R)' }
 const NINTENDO = 0x057e
 
 /**

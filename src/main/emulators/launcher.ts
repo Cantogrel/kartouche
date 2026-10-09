@@ -12,6 +12,7 @@ import { connectedNintendoPids, lastUsedPad, preferActive, rankAmong, startPadTr
 import { chooseDolphinPads } from './dolphinChoice'
 import { chooseMainNintendo, chooseSupportedMain, chooseSupportedPlayers, type SupportedPlayer } from './mainPad'
 import { startCemuKeyboardMouse } from './cemuKeyboard'
+import { ensureRetroJoyconProfiles } from './retroJoycon'
 import { ensureModernSdl2 } from './sdlUpdate'
 import { ANY_SDL, applyPsPlayers, type PsPlayer } from './psPads'
 import { assignSdlNumbers, listSdlPads } from './sdlOrder'
@@ -223,10 +224,11 @@ export async function stopGameAndWait(entryId: number, timeoutMs = 8000): Promis
   return true
 }
 
-/** Vrai si le SDL2 de RetroArch sait réunir une paire de Joy-Con branchée (mis à jour au besoin) ; sans paire branchée, rien n'est téléchargé. */
-async function retroPairReady(cacheDir: string, dir: string): Promise<boolean> {
+/** Vrai si le SDL2 de RetroArch (mis à jour au besoin) sait lire les Joy-Con branchés : une paire réunie, ou un Joy-Con seul quand `lone` ; sans Joy-Con concerné branché, rien n'est téléchargé. */
+async function retroJoyconReady(cacheDir: string, dir: string, lone: boolean): Promise<boolean> {
   const pids = connectedNintendoPids()
-  if (!(pids.includes(0x2006) && pids.includes(0x2007))) return false
+  const left = pids.includes(0x2006), right = pids.includes(0x2007)
+  if (!((left && right) || (lone && (left || right)))) return false
   return ensureModernSdl2(dir, cacheDir).catch(() => false)
 }
 
@@ -311,7 +313,11 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     let cemuNintendo = false
     let retroPlayers: { driver: 'xinput' | 'sdl2'; indexes: number[] } | null = null
     if (def.id === 'retroarch') {
-      const retroAccepted: EdenNintendo[] = (await retroPairReady(cacheDir, row.dir)) ? ['switch-pro', 'joycon-pair'] : ['switch-pro']
+      // Un Joy-Con seul (horizontal) n'est lu que sur les consoles à manette simple de Nintendo ; N64 et le reste : refusé.
+      const loneOk = ['nes', 'snes', 'gb', 'gbc', 'gba'].includes(entry.console)
+      const retroReady = await retroJoyconReady(cacheDir, row.dir, loneOk)
+      const retroAccepted: EdenNintendo[] = retroReady ? ['switch-pro', 'joycon-pair', ...(loneOk ? (['joycon-left', 'joycon-right'] as const) : [])] : ['switch-pro']
+      if (retroReady && loneOk) await ensureRetroJoyconProfiles(row.dir).catch(() => {})
       const sup = await chooseSupportedMain(cacheDir, retroAccepted).catch(() => ({ pad: null, refused: false }))
       if (sup.refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
       if (sup.pad && 'nintendo' in sup.pad) retroNintendo = { port: sup.pad.port ?? 0 }
