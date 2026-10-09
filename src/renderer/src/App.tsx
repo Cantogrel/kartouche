@@ -26,6 +26,7 @@ import { Home } from '@/pages/Home'
 import { Emulators } from '@/pages/Emulators'
 import { Settings } from '@/pages/Settings'
 import { BigPicture } from '@/bigpicture/BigPicture'
+import { useClassicPad } from '@/ui/useClassicPad'
 
 const NAV: Exclude<Route, 'game'>[] = ['home', 'catalog', 'library', 'emulators', 'settings']
 const ICON: Record<string, string> = { home: '⌂', catalog: '▦', library: '▤', emulators: '⚙', settings: '☰' }
@@ -47,6 +48,8 @@ export default function App() {
   // version qu'on vient de démarrer proposé une seule fois, où que l'utilisateur se trouve dans l'app.
   useEffect(() => { void useUpdate.getState().refresh(); void useChangelog.getState().showPending(); return useUpdate.getState().listen() }, [])
   const updateStatus = useUpdate((s) => s.state.status)
+  // Manette dans le mode classique (le Big Picture a la sienne).
+  useClassicPad(ready && !bigPicture)
   // Thème clair/sombre : réglage 'auto' suivi en direct si l'OS change de thème pendant que l'app tourne.
   useEffect(() => useSettings.getState().listen(), [])
 
