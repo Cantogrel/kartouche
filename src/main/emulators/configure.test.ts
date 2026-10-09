@@ -629,6 +629,21 @@ describe('configuration automatique des émulateurs', () => {
     await applyAzaharPad(dir, true)
     expect(read('user', 'config', 'qt-config.ini')).toMatch(/^profile=2$/m)
   })
+  it('Azahar : Switch Pro / paire de Joy-Con = profil Nintendo (A/B non croisés), la manette Xbox reprend le sien ensuite', async () => {
+    await configureEmulator('azahar', dir, ctx())
+    const text = (): string => read('user', 'config', 'qt-config.ini')
+    await applyAzaharPad(dir, true, true)
+    expect(text()).toMatch(/^profile=2$/m)
+    expect(text()).toMatch(/^profiles\\3\\name=Manette Nintendo$/m)
+    expect(text()).toMatch(/^profiles\\size=3$/m)
+    // 3DS A = bouton A de la manette (SDL2 nomme d'après l'étiquette), contre B (croisé) pour la manette Xbox.
+    expect(text()).toMatch(/^profiles\\3\\button_a="?api:controller,button:0,/m)
+    expect(text()).toMatch(/^profiles\\2\\button_a="?api:controller,button:1,/m)
+    await applyAzaharPad(dir, true, false)
+    expect(text()).toMatch(/^profile=1$/m)
+    await applyAzaharPad(dir, false, false)
+    expect(text()).toMatch(/^profile=0$/m)
+  })
   it('Azahar : un profil manette écrit par une ancienne version (sans api:controller) est réparé au lancement, un profil refait par l’utilisateur jamais', async () => {
     await configureEmulator('azahar', dir, ctx())
     const file = join(dir, 'user', 'config', 'qt-config.ini')

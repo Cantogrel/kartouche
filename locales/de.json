@@ -310,6 +310,7 @@
   "play.launchFailedHeader": "Das Spiel konnte nicht gestartet werden.",
   "play.padRefusedJoycon": "Dieses Spiel akzeptiert keinen einzelnen Joy-Con. Verbinde einen Switch Pro Controller, beide Joy-Con zusammen (links und rechts) oder einen Xbox-Controller und starte das Spiel erneut.",
   "play.padRefusedCount": "Dieses Spiel braucht mehr Controller als verbunden sind. Verbinde die fehlenden Controller und starte das Spiel erneut.",
+  "play.padRefusedEmulator": "Dieser Emulator kann diesen Controller nicht lesen. Verbinde einen Switch Pro Controller oder einen Xbox-Controller und starte das Spiel erneut.",
   "play.quickExitHeader": "Das Spiel hat sich {seconds} s nach dem Start von selbst beendet.",
   "play.quickExitSbi": "Diesem Spiel fehlt eine erforderliche .sbi-Datei (Kopierschutz der Disc). Lege sie mit demselben Namen neben die Spieldatei.",
   "play.quickExitBios": "Das BIOS für diese Konsole fehlt oder ist ungültig.",

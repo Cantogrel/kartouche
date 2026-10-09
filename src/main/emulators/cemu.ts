@@ -191,6 +191,19 @@ const XINPUT: Record<string, number> = {
   StickL_Right: 38, StickL_Up: 39, StickR_Right: 40, StickR_Up: 41, ZL: 42, ZR: 43, StickL_Left: 44, StickL_Down: 45, StickR_Left: 46, StickR_Down: 47
 }
 
+/**
+ * Switch Pro par l'API SDLController de Cemu (relevé dans le profil qu'écrit Cemu quand on y configure la Pro) : boutons 0 à 3 = A, B, X, Y d'après leur ÉTIQUETTE (SDL2) — donc pas de croisement
+ * comme pour XInput —, 9/10 = L/R, 4 = Moins, 6 = Plus, 7/8 = clics des sticks, 11 à 14 = croix, 42/43 = ZL/ZR, mêmes codes d'axes que XInput mais avec les sens verticaux inversés
+ * (SDL : vers le haut = négatif). Home n'est pas mappé. L'identifiant est « <rang>_<GUID SDL> » ; le GUID de la Pro (HIDAPI, signature « h3 ») est le même en USB et en Bluetooth.
+ */
+const SWITCH_PRO_GUID = '0300b7e67e0500000920000000006803'
+// La paire de Joy-Con réunie en UNE manette par le SDL 2.30 de Cemu (à condition de le demander : voir `emulatorEnv`) : « Nintendo Switch Joy-Con (L/R) », mêmes boutons que la Pro (relevé).
+const JOYCON_PAIR_GUID = '0300460f7e0500000820000000006800'
+const SWITCH_PRO: Record<string, number> = {
+  A: 0, B: 1, X: 2, Y: 3, L: 9, R: 10, ZL: 42, ZR: 43, Plus: 6, Minus: 4, Up: 11, Down: 12, Left: 13, Right: 14, StickL: 7, StickR: 8,
+  StickL_Up: 45, StickL_Down: 39, StickL_Left: 44, StickL_Right: 38, StickR_Up: 47, StickR_Down: 41, StickR_Left: 46, StickR_Right: 40
+}
+
 const TYPE_NAME: Record<PadKind, string> = { gamepad: 'Wii U GamePad', pro: 'Wii U Pro Controller' }
 const MARKER = /<!--\s*romvault:cemu-profile=(gamepad|pro)\s*-->/
 
@@ -214,13 +227,13 @@ ${entries}
  * de doigt sur l'écran tactile du GamePad (natif Cemu, pas de mapping). Un commentaire marque le fichier comme écrit par Kartouche : Cemu
  * le réécrit sans ce commentaire dès que l'utilisateur retouche ses réglages, et Kartouche n'y touche alors plus jamais.
  */
-export function cemuProfileXml(kind: PadKind, xinputSlot = 0): string {
+export function cemuProfileXml(kind: PadKind, xinputSlot = 0, switchPro = true): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!-- romvault:cemu-profile=${kind} -->
 <emulated_controller>
   <type>${TYPE_NAME[kind]}</type>${kind === 'gamepad' ? '\n  <toggle_display>0</toggle_display>' : ''}
 ${controllerBlock(kind, 'Keyboard', 'keyboard', 'Keyboard', 0.25, Object.fromEntries(Object.keys(IDS[kind]).map((c) => [c, KEYBOARD[c]])))}
-${controllerBlock(kind, 'XInput', String(xinputSlot), 'Controller 1', 0.15, Object.fromEntries(Object.keys(XINPUT).map((c) => [c, XINPUT[c]])))}
+${controllerBlock(kind, 'XInput', String(xinputSlot), 'Controller 1', 0.15, Object.fromEntries(Object.keys(XINPUT).map((c) => [c, XINPUT[c]])))}${switchPro ? '\n' + controllerBlock(kind, 'SDLController', `0_${SWITCH_PRO_GUID}`, 'Nintendo Switch Pro Controller', 0.25, Object.fromEntries(Object.keys(SWITCH_PRO).map((c) => [c, SWITCH_PRO[c]]))) + '\n' + controllerBlock(kind, 'SDLController', `0_${JOYCON_PAIR_GUID}`, 'Nintendo Switch Joy-Con (L/R)', 0.25, Object.fromEntries(Object.keys(SWITCH_PRO).map((c) => [c, SWITCH_PRO[c]]))) : ''}
 </emulated_controller>
 `
 }
@@ -281,7 +294,8 @@ export async function applyCemuControls(dir: string, ...names: string[]): Promis
   const marked = current === null ? null : MARKER.exec(current)?.[1] ?? 'user'
   if (marked === 'user') return
   const wanted: PadKind = needsGamePad(...names) ? 'gamepad' : 'pro'
-  if (marked === wanted) return
+  // Un profil de Kartouche d'avant la Switch Pro n'a pas son bloc SDLController : réécrit (seulement tant que le marqueur est là).
+  if (marked === wanted && current?.includes(JOYCON_PAIR_GUID)) return
   await mkdir(join(dir, 'controllerProfiles'), { recursive: true })
   await writeFile(file, cemuProfileXml(wanted))
 }

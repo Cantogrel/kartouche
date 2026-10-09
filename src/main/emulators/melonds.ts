@@ -69,6 +69,18 @@ export const MELONDS_JOYSTICK: TomlValues = {
   HK_SwapScreens: 9, HK_SwapScreenEmphasis: 8
 }
 
+/**
+ * Switch Pro vue comme joystick brut par le pilote HIDAPI de SDL2 (relevé sur une vraie Pro, sonde SDL2 : boutons 0 = A, 1 = B, 2 = X, 3 = Y — SDL2 nomme d'après l'ÉTIQUETTE, donc pas de croisement
+ * A/B ici —, 4 = Moins, 5 = Home, 6 = Plus, 7/8 = clics des sticks, 9 = L, 10 = R, 11 à 14 = croix haut/bas/gauche/droite (des boutons, pas un hat), 15 = Capture ; axes 0/1 = stick gauche,
+ * 2/3 = stick droit, 4/5 = ZL/ZR au repos à -32768 comme les gâchettes XInput). melonDS ne lit qu'UN joystick ; la paire de Joy-Con, réunie en un seul par son SDL 2.32 (voir sdlEnv.ts), a les mêmes indices (relevé : liaisons identiques à celles de la Pro).
+ */
+export const MELONDS_JOYSTICK_NINTENDO: TomlValues = {
+  A: 0, B: 1, X: 2, Y: 3, Select: 4, Start: 6,
+  L: 9 | axis(4, 2), R: 10 | axis(5, 2),
+  Up: 11 | axis(1, 1), Down: 12 | axis(1, 0), Left: 13 | axis(0, 1), Right: 14 | axis(0, 0),
+  HK_SwapScreens: 8, HK_SwapScreenEmphasis: 7
+}
+
 // --- Exceptions par jeu -------------------------------------------------------------------------------------------------
 
 export type ScreenOverride = Partial<Record<'ScreenLayout' | 'ScreenRotation' | 'ScreenSizing' | 'ScreenGap' | 'ScreenSwap', number | boolean>>

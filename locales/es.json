@@ -310,6 +310,7 @@
   "play.launchFailedHeader": "No se pudo iniciar el juego.",
   "play.padRefusedJoycon": "Este juego no acepta un Joy-Con suelto. Conecta un mando Switch Pro, los dos Joy-Con juntos (izquierdo y derecho) o un mando de Xbox y vuelve a iniciar el juego.",
   "play.padRefusedCount": "Este juego necesita más mandos de los que hay conectados. Conecta los mandos que faltan y vuelve a iniciar el juego.",
+  "play.padRefusedEmulator": "Este emulador no puede leer este mando. Conecta un mando Switch Pro o un mando de Xbox y vuelve a iniciar el juego.",
   "play.quickExitHeader": "El juego se cerró solo {seconds} s después de iniciarse.",
   "play.quickExitSbi": "A este juego le falta un archivo .sbi necesario (protección anticopia del disco). Colócalo junto al archivo del juego con el mismo nombre.",
   "play.quickExitBios": "Falta la BIOS de esta consola o no es válida.",
