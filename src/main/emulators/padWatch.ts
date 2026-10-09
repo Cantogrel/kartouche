@@ -91,7 +91,7 @@ export async function watchPadList(cacheDir: string, onChange: (raw: RawPad[]) =
 // (projects/romvault/manettes-nintendo-phase0). Sorties : « ACT <pid> » (bouton ou stick franchement actionné, au plus 4 par seconde et par manette) et « CHORD 1/0 »
 // (Moins + Plus tenus ensemble : sur la Pro, ou Moins du Joy-Con gauche + Plus du Joy-Con droit ; un Joy-Con seul : Moins + Capture (gauche) ou Home + Plus (droit), octet 4 bits 0x20 et 0x10), et « DEV <pid> 1/0 »
 // (manette Nintendo ouverte / perdue : sert à savoir ce qui est branché sans relancer de détection).
-const HID_SCRIPT = `param([int]$ParentPid)
+export const HID_SCRIPT = `param([int]$ParentPid)
 Add-Type @'
 using System;
 using System.Collections.Generic;
@@ -113,6 +113,9 @@ public static class NHid {
   [DllImport("hid.dll")] static extern bool HidD_FreePreparsedData(IntPtr p);
   [DllImport("hid.dll")] static extern int HidP_GetCaps(IntPtr p, byte[] caps);
   static readonly HashSet<string> open = new HashSet<string>();
+  static readonly HashSet<string> ignored = new HashSet<string>();
+  static readonly Dictionary<string, int> tries = new Dictionary<string, int>();
+  static void Ignore(string path, bool now) { lock (open) { int n = 0; tries.TryGetValue(path, out n); n++; tries[path] = n; if (now || n >= 5) ignored.Add(path); } }
   static readonly object gate = new object();
   static bool leftMinus, rightPlus, leftCap, rightHome, proMinus, proPlus, chord;
   static void Emit(string s) { lock (gate) { Console.Out.WriteLine(s); Console.Out.Flush(); } }
@@ -130,13 +133,16 @@ public static class NHid {
       if (SetupDiGetDeviceInterfaceDetail(set, ref d, buf, req, out req, IntPtr.Zero)) path = Marshal.PtrToStringUni(IntPtr.Add(buf, 4));
       Marshal.FreeHGlobal(buf);
       if (path == null) continue;
-      lock (open) { if (open.Contains(path)) continue; }
-      if (path.IndexOf("vid&0002057e", StringComparison.OrdinalIgnoreCase) < 0 && path.IndexOf("vid_057e", StringComparison.OrdinalIgnoreCase) < 0) continue;
+      lock (open) { if (open.Contains(path) || ignored.Contains(path)) continue; }
+      // Une manette Bluetooth ou USB réelle porte son identifiant (« vid_057e ») dans son chemin Windows ; une manette virtuelle (pont Freebox Pop → PC, pilote de
+      // manette virtuelle) a un chemin « hid#hidclass#… » sans rien : on lit alors son vrai fabricant par HidD_GetAttributes. Un chemin sans identifiant n'est essayé
+      // qu'une fois (périphérique ouvert et pas Nintendo) ou quelques fois (ouverture refusée, ex. clavier), puis ignoré : pas de réouverture de tous les HID à chaque tour.
+      bool named = path.IndexOf("vid&0002057e", StringComparison.OrdinalIgnoreCase) >= 0 || path.IndexOf("vid_057e", StringComparison.OrdinalIgnoreCase) >= 0;
       SafeFileHandle h = CreateFile(path, 0x80000000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
-      if (h.IsInvalid) continue;
+      if (h.IsInvalid) { if (!named) Ignore(path, false); continue; }
       ATTR a = new ATTR(); a.size = Marshal.SizeOf(a);
       IntPtr pp; int len = 0;
-      if (!HidD_GetAttributes(h, ref a) || a.vid != 0x057E) { h.Dispose(); continue; }
+      if (!HidD_GetAttributes(h, ref a) || a.vid != 0x057E) { if (!named) Ignore(path, true); h.Dispose(); continue; }
       if (HidD_GetPreparsedData(h, out pp)) { byte[] caps = new byte[64]; if (HidP_GetCaps(pp, caps) == 0x110000) len = BitConverter.ToUInt16(caps, 4); HidD_FreePreparsedData(pp); }
       if (len < 12) { h.Dispose(); continue; }
       lock (open) { open.Add(path); }
