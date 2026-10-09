@@ -44,6 +44,9 @@ public static class CK {
   // Etat de la Switch Pro (stick droit normalise -1..1, y vers le haut positif, et A), mis a jour par les fils de lecture.
   static volatile float proX, proY; static volatile bool proA;
   static readonly HashSet<string> open = new HashSet<string>();
+  static readonly HashSet<string> ignored = new HashSet<string>();
+  static readonly Dictionary<string, int> tries = new Dictionary<string, int>();
+  static void Ignore(string path, bool now) { lock (open) { int n = 0; tries.TryGetValue(path, out n); n++; tries[path] = n; if (now || n >= 5) ignored.Add(path); } }
 
   public static void ScanPro() {
     Guid g; HidD_GetHidGuid(out g);
@@ -58,12 +61,19 @@ public static class CK {
       Marshal.FreeHGlobal(buf);
       if (path == null) continue;
       string low = path.ToLowerInvariant();
+      lock (open) { if (open.Contains(path) || ignored.Contains(path)) continue; }
       // Switch Pro (2009) et Joy-Con droit (2007, le stick de la paire : sa position est celle du stick droit de la manette réunie).
-      if (!(low.Contains("vid&0002057e") || low.Contains("vid_057e")) || !(low.Contains("pid&2009") || low.Contains("pid_2009") || low.Contains("pid&2007") || low.Contains("pid_2007"))) continue;
+      // Une manette réelle porte son identifiant dans son chemin Windows ; une manette virtuelle (pont Freebox Pop → PC) a un chemin « hid#hidclass#… » : on lit alors son vrai fabricant.
+      bool named = low.Contains("vid&0002057e") || low.Contains("vid_057e");
+      if (named && !(low.Contains("pid&2009") || low.Contains("pid_2009") || low.Contains("pid&2007") || low.Contains("pid_2007"))) continue;
       bool right = low.Contains("2007");
-      lock (open) { if (open.Contains(path)) continue; }
       SafeFileHandle h = CreateFile(path, 0x80000000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
-      if (h.IsInvalid) continue;
+      if (h.IsInvalid) { if (!named) Ignore(path, false); continue; }
+      if (!named) {
+        ATTR a = new ATTR(); a.size = Marshal.SizeOf(a);
+        if (!HidD_GetAttributes(h, ref a) || a.vid != 0x057E || (a.pid != 0x2009 && a.pid != 0x2007)) { Ignore(path, true); h.Dispose(); continue; }
+        right = a.pid == 0x2007;
+      }
       IntPtr pp; int len = 0;
       if (HidD_GetPreparsedData(h, out pp)) { byte[] caps = new byte[64]; if (HidP_GetCaps(pp, caps) == 0x110000) len = BitConverter.ToUInt16(caps, 4); HidD_FreePreparsedData(pp); }
       if (len < 12) { h.Dispose(); continue; }

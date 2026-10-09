@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { parseHidLine, parseListLine } from './padWatch'
+import { HID_SCRIPT, parseHidLine, parseListLine } from './padWatch'
+
+describe('lecture HID des manettes Nintendo : manettes virtuelles', () => {
+  // Une manette Nintendo virtuelle (pont Freebox Pop → PC, pilote de manette virtuelle) a un chemin Windows « hid#hidclass#… » sans « vid_057e » : le
+  // script ne doit pas écarter un périphérique sur son seul chemin, mais lire son fabricant (HidD_GetAttributes), et ne pas rouvrir les autres à chaque tour.
+  it('ne filtre plus sur le seul chemin Windows', () => {
+    expect(HID_SCRIPT).not.toMatch(/IndexOf\("vid_057e"[^\n]*\)\s*continue;/)
+    expect(HID_SCRIPT).toContain('bool named')
+    expect(HID_SCRIPT).toContain('a.vid != 0x057E')
+  })
+
+  it('mémorise les périphériques qui ne sont pas Nintendo', () => {
+    expect(HID_SCRIPT).toContain('ignored.Contains(path)')
+    expect(HID_SCRIPT).toContain('Ignore(path, true)')
+  })
+})
 
 describe('lecture des lignes des surveillances de manettes', () => {
   it('liste : manettes XInput et HID, avec accents', () => {
