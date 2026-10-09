@@ -1,6 +1,6 @@
 /**
  * Combinaison de fermeture des manettes Nintendo : Moins + Plus tenus ensemble (voir `watchNintendoHid` : sur la Switch Pro, ou Moins du Joy-Con gauche + Plus du Joy-Con droit).
- * Un Joy-Con seul n'a pas de combinaison : SL/SR servent en jeu.
+ * Un Joy-Con seul : Moins + Capture (gauche) ou Home + Plus (droit).
  */
 let down = false
 const listeners = new Set<(down: boolean) => void>()

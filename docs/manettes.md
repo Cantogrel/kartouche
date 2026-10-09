@@ -17,7 +17,7 @@ Relevés détaillés (formats de config, octets des rapports HID) : vault Obsidi
 
 ## Fermer un jeu à la manette
 
-Retour + Start (XInput) ou **Moins + Plus** maintenus 1,5 s : sur la Switch Pro, ou Moins du Joy-Con gauche + Plus du Joy-Con droit. Un Joy-Con seul n'a pas de combinaison (SL/SR servent en jeu) : utiliser Ctrl + Alt + Q ou le bouton « Fermer le jeu ».
+Retour + Start (XInput) ou **Moins + Plus** maintenus 1,5 s : sur la Switch Pro, ou Moins du Joy-Con gauche + Plus du Joy-Con droit. Joy-Con seul : **Moins + Capture** (gauche) ou **Home + Plus** (droit), lus dans le rapport HID complet (octet 4, bits 0x20 et 0x10) ; sinon Ctrl + Alt + Q ou le bouton « Fermer le jeu ».
 
 ## Eden (`edenPads.ts`, `edenChoice.ts`, `configure.ts`)
 
@@ -87,3 +87,11 @@ Le principe « une manette par joueur » est mis en œuvre par Eden, Dolphin et,
 - **RPCS3** : un bloc `Player <n> Input` par manette (jusqu'à 7). Vérifié dans son journal (`Input: Pad 1: device='Nintendo Switch Pro Controller 1'`…).
 - **Cemu** : `controller<n>.xml` = joueur n+1 ; avec deux manettes ou plus, chaque fichier ne cite que sa manette (le joueur 1 garde le clavier). Les fichiers des joueurs suivants que Kartouche a écrits sont retirés quand il n'y a plus qu'une manette.
 - **RetroArch** : jusqu'à 4 joueurs. XInput seules : pilote `xinput`, rang = emplacement. Avec une manette Nintendo : pilote `sdl2`, rangs demandés à SDL2 (`sdl2Order.ts`, DLL de RetroArch, environnement `emulatorEnv('retroarch', true, true)` : Xbox visible par XInput, Nintendo par HIDAPI, sans les doublons DirectInput). Stick gauche = croix pour les joueurs 2 à 4 aussi (une fois).
+
+## Joy-Con seul à l'horizontale dans RetroArch (NES, SNES, Game Boy, Game Boy Color, Game Boy Advance)
+
+Accepté seulement sur ces cinq consoles (N64 : refusé). SDL2 2.32 est installé comme pour la paire (`sdlUpdate.ts`) et les profils `autoconfig/sdl2/Nintendo Switch Joy-Con (L|R).cfg` sont écrits au lancement (`retroJoycon.ts`, jamais par-dessus un fichier qui n'est pas le nôtre). Numéros relevés sur de vrais Joy-Con : face 0 bas, 1 droite, 2 gauche, 3 haut ; SL/SR 9/10 ; Moins/Plus 6 ; Capture/Home 5 ; L/ZL 17/19 (gauche), R/ZR 16/18 (droit) ; stick axes 0/1 (la croix vient du stick, `analog_dpad_mode`).
+- Joy-Con gauche : stick = croix, flèches = A/B/X/Y (A et B inversés), SL = L, SR = R, Start = Moins, Select = Capture, menu RetroArch = le bouton L du dessus (17).
+- Joy-Con droit : stick = croix, boutons = A/B/X/Y (A et B inversés), SL = L, SR = R, Start = Home, Select = Plus, menu RetroArch = le bouton R du dessus (16).
+- Fermeture du jeu : voir plus haut (Moins + Capture ou Home + Plus).
+Limite connue : dans le menu de RetroArch, A (valider) et B (annuler) sont à l'inverse de la position voulue ; `menu_swap_ok_cancel_buttons` n'a rien changé à l'essai, laissé tel quel.

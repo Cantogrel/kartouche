@@ -177,3 +177,28 @@ describe('SDL2 de RetroArch : réunion des Joy-Con', () => {
     } finally { rmSync(dir, { recursive: true, force: true }); rmSync(cache, { recursive: true, force: true }) }
   })
 })
+
+describe('RetroArch : Joy-Con seul à l\'horizontale', () => {
+  it('écrit les deux profils sdl2 (L et R) sans toucher un fichier étranger', async () => {
+    const { ensureRetroJoyconProfiles } = await import('./retroJoycon')
+    const dir = mkdtempSync(join(tmpdir(), 'retro-jc-'))
+    try {
+      await ensureRetroJoyconProfiles(dir)
+      const r = readFileSync(join(dir, 'autoconfig', 'sdl2', 'Nintendo Switch Joy-Con (R).cfg'), 'utf8')
+      expect(r).toContain('input_device = "Nintendo Switch Joy-Con (R)"')
+      expect(r).toContain('input_product_id = "8199"')
+      expect(r).toContain('input_a_btn = "0"')
+      expect(r).toContain('input_select_btn = "6"')
+      expect(r).toContain('input_start_btn = "5"')
+      expect(r).toContain('input_menu_toggle_btn = "16"')
+      const l = readFileSync(join(dir, 'autoconfig', 'sdl2', 'Nintendo Switch Joy-Con (L).cfg'), 'utf8')
+      expect(l).toContain('input_product_id = "8198"')
+      expect(l).toContain('input_start_btn = "6"')
+      expect(l).toContain('input_select_btn = "5"')
+      expect(l).toContain('input_menu_toggle_btn = "17"')
+      writeFileSync(join(dir, 'autoconfig', 'sdl2', 'Nintendo Switch Joy-Con (L).cfg'), 'perso')
+      await ensureRetroJoyconProfiles(dir)
+      expect(readFileSync(join(dir, 'autoconfig', 'sdl2', 'Nintendo Switch Joy-Con (L).cfg'), 'utf8')).toBe('perso')
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+})
