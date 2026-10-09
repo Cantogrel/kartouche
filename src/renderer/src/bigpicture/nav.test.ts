@@ -97,6 +97,10 @@ describe('manettes Nintendo', () => {
     expect([...padActions(mk(pair, [20]), { split: true })]).toEqual(['prev'])
     expect([...padActions(mk(pair, [4, 6]), { split: true })].sort()).toEqual(['nextFilter', 'prevFilter'])
     expect([...padActions(mk(pair, [5, 7]), { split: true })].sort()).toEqual(['nextFilter', 'prevFilter'])
+    // Start : Plus sur une manette entière ou le Joy-Con droit seul, Moins sur le Joy-Con gauche seul.
+    expect([...padActions(mk(pro, [9]))]).toEqual(['start'])
+    expect([...padActions(mk(pair, [8]), { split: true })]).toEqual(['start'])
+    expect([...padActions(mk(pair, [9]), { split: true })]).toEqual(['start'])
     expect([...padActions(mk(pair, [1]), { split: true })]).toEqual(['back'])
   })
 
