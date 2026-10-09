@@ -299,3 +299,41 @@ export async function applyCemuControls(dir: string, ...names: string[]): Promis
   await mkdir(join(dir, 'controllerProfiles'), { recursive: true })
   await writeFile(file, cemuProfileXml(wanted))
 }
+
+/** Une manette de joueur pour Cemu : XInput (emplacement) ou manette Nintendo (rang parmi les manettes de même identité, voir `SWITCH_PRO_GUID`). */
+export type CemuPlayerPad = { kind: 'xinput'; slot: number } | { kind: 'switch-pro' | 'joycon-pair'; port: number }
+
+/** Profil d'UN joueur quand il y en a plusieurs : sa manette seulement (la même manette ne doit pas répondre pour deux joueurs) ; le clavier reste au joueur 1. */
+export function cemuPlayerXml(kind: PadKind, pad: CemuPlayerPad, keyboard: boolean): string {
+  const physical = (table: Record<string, number>): Record<string, number> => Object.fromEntries(Object.keys(table).map((c) => [c, table[c]]))
+  const block = pad.kind === 'xinput'
+    ? controllerBlock(kind, 'XInput', String(pad.slot), `Controller ${pad.slot + 1}`, 0.15, physical(XINPUT))
+    : controllerBlock(kind, 'SDLController', `${pad.port}_${pad.kind === 'switch-pro' ? SWITCH_PRO_GUID : JOYCON_PAIR_GUID}`, pad.kind === 'switch-pro' ? 'Nintendo Switch Pro Controller' : 'Nintendo Switch Joy-Con (L/R)', 0.25, physical(SWITCH_PRO))
+  const kb = keyboard ? controllerBlock(kind, 'Keyboard', 'keyboard', 'Keyboard', 0.25, Object.fromEntries(Object.keys(IDS[kind]).map((c) => [c, KEYBOARD[c]]))) + '\n' : ''
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!-- romvault:cemu-profile=${kind} -->
+<emulated_controller>
+  <type>${TYPE_NAME[kind]}</type>${kind === 'gamepad' ? '\n  <toggle_display>0</toggle_display>' : ''}
+${kb}${block}
+</emulated_controller>
+`
+}
+
+/**
+ * Une manette par joueur : `controller<n>.xml` = joueur n+1 (Cemu en lit jusqu'à huit). Avec deux manettes ou plus, chaque fichier ne cite que SA manette (le joueur 1 garde aussi le
+ * clavier) ; avec une seule, le profil du joueur 1 est celui d'`applyCemuControls` (toutes les manettes répondent) et les fichiers des joueurs suivants laissés par un lancement précédent
+ * sont retirés. Un fichier retouché par l'utilisateur (marqueur disparu) n'est jamais touché. `firstKind` : profil du joueur 1 (GamePad pour les jeux qui l'exigent), les autres sont des Pro Controller.
+ */
+export async function applyCemuPlayers(dir: string, players: readonly CemuPlayerPad[], firstKind: PadKind): Promise<void> {
+  const profiles = join(dir, 'controllerProfiles')
+  const multi = players.length >= 2
+  for (let i = multi ? 0 : 1; i < 8; i++) {
+    const file = join(profiles, `controller${i}.xml`)
+    const current = await readFile(file, 'utf8').catch(() => null)
+    if (current !== null && !MARKER.test(current)) continue // retouché par l'utilisateur
+    if (multi && i < players.length) {
+      const xml = cemuPlayerXml(i === 0 ? firstKind : 'pro', players[i], i === 0)
+      if (current !== xml) { await mkdir(profiles, { recursive: true }); await writeFile(file, xml) }
+    } else if (current !== null && i > 0) await rm(file, { force: true })
+  }
+}
