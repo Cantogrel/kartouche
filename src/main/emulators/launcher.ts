@@ -279,6 +279,10 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
   // Réservé pendant la préparation (détection de la manette) pour qu'un double clic ne lance pas deux fois le jeu.
   running.set(entryId, { pid: 0, stopped: false })
   try {
+    // Un Joy-Con seul n'est accepté que là où il est réellement configuré : Eden (le jeu décide, applet) et Dolphin Wii (Joy-Con droit = Wiimote). Ailleurs, message clair plutôt qu'un jeu qui répond de travers.
+    const pairOk: EdenNintendo[] = ['switch-pro', 'joycon-pair']
+    const readable = def.id === 'dolphin' ? (entry.console === 'gc' ? pairOk : [...pairOk, 'joycon-right' as const]) : ['duckstation', 'pcsx2', 'vita3k', 'azahar'].includes(def.id) ? pairOk : null
+    if (readable && (await chooseSupportedMain(cacheDir, readable).catch(() => ({ pad: null, refused: false }))).refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
     // Dolphin invalide toute liaison qui cite un périphérique absent : la manette branchée est écrite à chaque lancement.
     if (def.id === 'dolphin') {
       const players = await chooseDolphinPads(cacheDir).catch(() => [])
@@ -342,7 +346,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     // Manette Nintendo : sans vibration (gênante), et A/B / X/Y échangés pour la paire de Joy-Con sur DuckStation (voir psPads.ts).
     if (def.id === 'duckstation' || def.id === 'pcsx2') {
       const psFile = def.id === 'duckstation' ? join(row.dir, 'settings.ini') : join(row.dir, 'inis', 'PCSX2.ini')
-      const psPlayers = await chooseSupportedPlayers(cacheDir, ['switch-pro', 'joycon-pair', 'joycon-left', 'joycon-right'], 2).catch(() => [])
+      const psPlayers = await chooseSupportedPlayers(cacheDir, pairOk, 2).catch(() => [])
       const psPlayer = (p: SupportedPlayer, indexes: number[]): PsPlayer => ({ indexes, nintendo: p.kind !== 'xinput', swapFace: def.id === 'duckstation' && p.kind === 'joycon-pair' })
       let psPads: PsPlayer[] = psPlayers.slice(0, 1).map((p) => psPlayer(p, ANY_SDL))
       if (psPlayers.length >= 2) {
