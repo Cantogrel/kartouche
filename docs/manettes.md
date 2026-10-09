@@ -33,6 +33,8 @@ Retour + Start (XInput) ou **Moins + Plus** maintenus 1,5 s : sur la Switch Pro,
 - Non testé : GUID de la Switch Pro en USB (relevé en Bluetooth seulement), deux manettes identiques (ports), plus de trois joueurs.
 - Joy-Con séparés en deux joueurs : pas géré (une paire est toujours une seule manette).
 
+**Règle : un Joy-Con seul n'est accepté que là où il est réellement configuré** — Eden (le jeu décide, applet) et Dolphin Wii (Joy-Con droit = Wiimote). Partout ailleurs, y compris Dolphin GameCube et le Joy-Con gauche seul de Dolphin, le lancement est refusé avec `play.padRefusedEmulator` (`launcher.ts`, `readable`), sauf si une XInput, une Pro ou une paire est branchée à côté (elle prend alors le joueur 1).
+
 ## Dolphin (`dolphin.ts`, `dolphinChoice.ts`, `configure.ts`)
 
 **Une manette par joueur, jusqu'à 4** (Wiimote 1 à 4, manettes GameCube 1 à 4 avec `SIDevice1-3` dans Dolphin.ini) : `pickDolphinPads` réutilise `pickEdenPads` (joueur 1 = dernière utilisée, les autres dans un ordre stable ; Joy-Con gauche seul ignoré, Joy-Con droit seul ignoré en GameCube), `applyDolphinPads` écrit une section par joueur et retire celles du lancement précédent. Joueur 2 et suivants vérifiés sur matériel (Wii Sports). Pour la manette du joueur 1 : une XInput principale garde exactement l'ancien profil (clavier + XInput). Dolphin lit les manettes Nintendo en SDL (HIDAPI) : périphériques `SDL/<rang>/Nintendo Switch Pro Controller`, `…Joy-Con (L/R)` (SDL réunit une paire en un seul périphérique), `…Joy-Con (R)`.
@@ -63,8 +65,8 @@ Le principe « une manette par joueur » est mis en œuvre par Eden, Dolphin et,
 
 | Émulateur | Switch Pro | Paire de Joy-Con | Joy-Con seul |
 |---|---|---|---|
-| DuckStation, PCSX2 (SDL 3) | liaisons SDL-0..3 existantes ; vibration retirée | idem ; A/B et X/Y échangés sur DuckStation (`tuneSdlPad`) | non testé |
-| Vita3K (SDL 3) | natif, rien à écrire | natif | non testé |
+| DuckStation, PCSX2 (SDL 3) | liaisons SDL-0..3 existantes ; vibration retirée | idem ; A/B et X/Y échangés sur DuckStation (`tuneSdlPad`) | refusé |
+| Vita3K (SDL 3) | natif, rien à écrire | natif | refusé |
 | Azahar (SDL 2.32) | 3e profil « Manette Nintendo » : 3DS A = bouton A (SDL2 nomme d'après l'étiquette), profil Xbox inchangé | idem, avec `SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS` (`emulatorEnv`) | refusé |
 | melonDS (SDL 2.32) | `MELONDS_JOYSTICK_NINTENDO` (boutons HIDAPI relevés), env HIDAPI seul | mêmes indices (relevé) | refusé |
 | Cemu (SDL 2.30) | bloc `SDLController` dans le profil Kartouche (GUID `0300b7e6…6803`) | bloc « Joy-Con (L/R) » (GUID `0300460f…6800`), env combine | refusé |
