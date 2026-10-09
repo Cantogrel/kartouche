@@ -38,7 +38,7 @@ export function pickNext(cur: Box, others: Box[], dir: Dir): number {
   return best
 }
 
-export interface PadLike { buttons: ArrayLike<{ pressed: boolean }>; axes: ArrayLike<number> }
+export interface PadLike { id?: string; buttons: ArrayLike<{ pressed: boolean }>; axes: ArrayLike<number> }
 
 const BUTTONS: [number, PadAction][] = [
   [0, 'accept'], [1, 'back'], [2, 'x'], [3, 'y'], [4, 'prev'], [5, 'next'], [6, 'prevFilter'], [7, 'nextFilter'], [9, 'start'],
@@ -59,6 +59,85 @@ export function heldActions(pad: PadLike, opts: { swapAB?: boolean; threshold?: 
   if (ax > stick) out.add('right'); else if (ax < -stick) out.add('left')
   if (ay > stick) out.add('down'); else if (ay < -stick) out.add('up')
   return out
+}
+
+/**
+ * Manette de Nintendo (Switch Pro, Joy-Con) : le profil « standard » de Chromium la lit par position (bouton du bas = 0), donc « valider » tombe sur le B de Nintendo.
+ * A et B y sont échangés d'office, pour que valider soit le A de la manette.
+ */
+export const isNintendoPad = (pad: PadLike): boolean => /057e|joy-con|pro controller/i.test(pad.id ?? '')
+
+/** Deux Joy-Con réunis par Chromium en une seule manette (« Joy-Con L+R ») : impossible de les lui faire voir séparés, on lit chaque moitié à part (voir `JOYCON_HALVES`). */
+export const isJoyconPair = (pad: PadLike): boolean => /joy-con l\+r/i.test(pad.id ?? '')
+
+/**
+ * Une moitié de la manette « Joy-Con L+R », lue comme un Joy-Con seul tenu à l'horizontale (relevé sur de vrais Joy-Con). Le gauche est tourné dans un sens, le droit dans l'autre :
+ * `dirs` = [axe, signe] du stick pour chaque direction vue à l'horizontale ; `face` = les quatre boutons par position (est = valider, sud = retour, nord = X, ouest = Y) ;
+ * `names` = ce qui est gravé sur chaque bouton (test des boutons).
+ */
+export interface JoyconHalf {
+  dirs: Record<Dir, [number, 1 | -1]>
+  face: { accept: number; back: number; x: number; y: number }
+  /** Précédent / suivant (SL, SR), puis les filtres (L et ZL du Joy-Con gauche, R et ZR du droit : un Joy-Con seul n'a ni LT ni RT). */
+  prev: number; next: number; prevFilter: number; nextFilter: number; start: number
+  names: Record<number, string>
+  title: string
+}
+
+export const JOYCON_HALVES: { left: JoyconHalf; right: JoyconHalf } = {
+  left: {
+    dirs: { up: [0, 1], down: [0, -1], left: [1, -1], right: [1, 1] },
+    face: { accept: 13, back: 14, x: 15, y: 12 },
+    prev: 18, next: 19, prevFilter: 4, nextFilter: 6, start: 8,
+    names: { 4: 'L', 6: 'ZL', 8: '−', 10: 'L3', 12: '↑', 13: '↓', 14: '←', 15: '→', 17: 'Capture', 18: 'SL', 19: 'SR' },
+    title: 'Joy-Con (L)'
+  },
+  right: {
+    dirs: { up: [2, -1], down: [2, 1], left: [3, 1], right: [3, -1] },
+    face: { accept: 3, back: 1, x: 2, y: 0 },
+    prev: 20, next: 21, prevFilter: 5, nextFilter: 7, start: 9,
+    names: { 0: 'B', 1: 'A', 2: 'Y', 3: 'X', 5: 'R', 7: 'ZR', 9: '+', 11: 'R3', 16: 'Home', 20: 'SL', 21: 'SR' },
+    title: 'Joy-Con (R)'
+  }
+}
+
+/** Actions maintenues sur une moitié de « Joy-Con L+R » lue comme un Joy-Con seul. */
+export function heldActionsHalf(pad: PadLike, half: JoyconHalf, threshold = STICK): Set<PadAction> {
+  const out = new Set<PadAction>()
+  for (const d of ['up', 'down', 'left', 'right'] as const) {
+    const [axis, sign] = half.dirs[d]
+    if ((pad.axes[axis] ?? 0) * sign > threshold) out.add(d)
+  }
+  const on = (i: number): boolean => !!pad.buttons[i]?.pressed
+  if (on(half.face.accept)) out.add('accept')
+  if (on(half.face.back)) out.add('back')
+  if (on(half.face.x)) out.add('x')
+  if (on(half.face.y)) out.add('y')
+  if (on(half.prev)) out.add('prev')
+  if (on(half.next)) out.add('next')
+  if (on(half.prevFilter)) out.add('prevFilter')
+  if (on(half.nextFilter)) out.add('nextFilter')
+  if (on(half.start)) out.add('start')
+  return out
+}
+
+/**
+ * Actions maintenues par une manette : un « Joy-Con L+R » que l'utilisateur a séparé se lit moitié par moitié (chaque Joy-Con est une manette à part entière),
+ * toute autre manette Nintendo avec A et B échangés, les autres telles quelles.
+ */
+export function padActions(pad: PadLike, opts: { split?: boolean; threshold?: number } = {}): Set<PadAction> {
+  if (opts.split && isJoyconPair(pad)) {
+    return new Set([...heldActionsHalf(pad, JOYCON_HALVES.left, opts.threshold), ...heldActionsHalf(pad, JOYCON_HALVES.right, opts.threshold)])
+  }
+  return heldActions(pad, { swapAB: isNintendoPad(pad), threshold: opts.threshold })
+}
+
+/** Boutons actuellement enfoncés de chaque moitié d'un « Joy-Con L+R » séparé, par leur nom gravé (test des boutons) ; `n` : numéro de la paire quand il y en a plusieurs. */
+export function joyconHalvesPressed(pad: PadLike, n?: number): { title: string; pressed: string[] }[] {
+  return [JOYCON_HALVES.left, JOYCON_HALVES.right].map((h) => ({
+    title: n === undefined ? h.title : `${h.title} · ${n}`,
+    pressed: Object.entries(h.names).flatMap(([i, name]) => (pad.buttons[Number(i)]?.pressed ? [name] : []))
+  }))
 }
 
 /** Défilement à appliquer (pixels) pour le stick droit (axe 3, vertical) de la première manette qui le sort de sa zone morte. */

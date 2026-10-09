@@ -6,7 +6,8 @@ import { useDownloads } from '@/store/downloads'
 import { DownloadVeil } from '@/ui/EntryCard'
 import { useEmulators } from '@/store/emulators'
 import { useSettings } from '@/store/settings'
-import { padDetail, padTitle, usePads } from '@/store/pads'
+import { hasJoyconChoice, padDetail, padTitle, usePads } from '@/store/pads'
+import { PadIcon } from '@/ui/PadIcon'
 import { CONSOLES, platformLabel } from '@shared/consoles'
 import { EMULATORS } from '@shared/emulators'
 import type { CatalogPage } from '@shared/catalog'
@@ -294,7 +295,12 @@ function BpSettings({ onExit }: { onExit: () => void }) {
       {!detected.ready ? <button data-nav className="bp-row"><span>{t('settings.padChecking')}</span></button>
         : !detected.ok ? <button data-nav className="bp-row"><span>{t('settings.padUnavailable')}</span></button>
         : detected.pads.length === 0 ? <button data-nav className="bp-row"><span>{t('settings.padNone')}</span></button>
-        : detected.pads.map((p) => <button key={p.id} data-nav className="bp-row"><span>{padTitle(p)}</span><strong>{padDetail(p)}</strong></button>)}
+        : detected.pads.map((p) => <button key={p.id} data-nav className={`bp-row bp-pad${p.lastUsed ? ' used' : ''}`}><PadIcon kind={p.kind} size={40} /><span>{padTitle(p)}</span><strong>{padDetail(p)}</strong></button>)}
+      {hasJoyconChoice(detected.pads) && (
+        <button data-nav className="bp-row" onClick={() => void update({ joyconSplit: !settings.joyconSplit })}>
+          <span>{t('settings.padJoyconTitle')}</span><strong>{settings.joyconSplit ? t('settings.padJoyconSplit') : t('settings.padJoyconPair')}</strong>
+        </button>
+      )}
       <h2 className="bp-h">{t('nav.emulators')}</h2>
       {EMULATORS.map((def) => {
         const s = list.find((e) => e.id === def.id)

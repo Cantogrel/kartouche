@@ -9,7 +9,6 @@ import { Modal } from '@/ui/CollectionDialogs'
 import { useApp } from '@/store/app'
 import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
-import { padDetail, padTitle, usePads } from '@/store/pads'
 import { useUpdate } from '@/store/update'
 import { useChangelog } from '@/store/changelog'
 import { useEmulators } from '@/store/emulators'
@@ -17,6 +16,7 @@ import { ACCENTS, UI_SCALES, type Accent, type LanguageSetting, type ThemeSettin
 import { formatSize } from '@shared/format'
 import { AccentCustom, AppearanceOptions } from '@/ui/AppearanceOptions'
 import { LaunchersSection } from '@/ui/LaunchersSection'
+import { PadSettings } from '@/ui/PadSettings'
 import { LanguageFiles } from '@/ui/LanguageFiles'
 import { HomeLayoutEditor } from '@/ui/HomeLayoutEditor'
 
@@ -146,7 +146,7 @@ export function Settings() {
             </label>
             <p className="muted">{t('settings.autoBackupHint')}</p>
             <h3>{t('settings.groupController')}</h3>
-            <ControllerSection />
+            <PadSettings />
           </>
         )}
 
@@ -417,50 +417,3 @@ function SourcesSection() {
   )
 }
 
-/** Manette : réglages du Big Picture + contrôle en direct des manettes détectées (API Gamepad, profil standard). */
-function ControllerSection() {
-  const { settings, update } = useSettings()
-  const [pads, setPads] = useState<{ id: string; pressed: string[] }[]>([])
-  const detected = usePads()
-  useEffect(() => {
-    const names = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Select', 'Start', 'L3', 'R3', '↑', '↓', '←', '→']
-    const timer = window.setInterval(() => {
-      const list = [...navigator.getGamepads()].filter((p): p is Gamepad => !!p).map((p) => ({
-        id: p.id.replace(/\s*\(.*$/, ''),
-        pressed: [...p.buttons].flatMap((b, i) => (b.pressed ? [names[i] ?? String(i)] : []))
-      }))
-      setPads((old) => (JSON.stringify(old) === JSON.stringify(list) ? old : list))
-    }, 150)
-    return () => window.clearInterval(timer)
-  }, [])
-  return (
-    <>
-      <label className="check">
-        <input type="checkbox" checked={settings.padSwapAB} onChange={(e) => void update({ padSwapAB: e.target.checked })} /> {t('settings.padSwap')}
-      </label>
-      <p className="muted">{t('settings.padSwapHint')}</p>
-      <label className="field">
-        {t('settings.padThreshold')}
-        <input type="range" min={0.3} max={0.9} step={0.05} value={settings.padThreshold} onChange={(e) => void update({ padThreshold: Number(e.target.value) })} />
-        <span className="muted">{t('settings.padThresholdHint')}</span>
-      </label>
-      <h3>{t('settings.padDetected')}</h3>
-      {!detected.ready ? <p className="muted">{t('settings.padChecking')}</p>
-        : !detected.ok ? <p className="muted">{t('settings.padUnavailable')}</p>
-        : detected.pads.length === 0 ? <p className="muted">{t('settings.padNone')}</p>
-        : detected.pads.map((p) => (
-          <div key={p.id} className="copy-row">
-            <strong>{padTitle(p)}</strong>
-            <div className="muted">{padDetail(p)}</div>
-          </div>
-        ))}
-      {pads.length > 0 && <h3>{t('settings.padTest')}</h3>}
-      {pads.map((p) => (
-        <div key={p.id} className="copy-row">
-          <strong>{p.id}</strong>
-          <div className="muted">{p.pressed.length ? p.pressed.join(' + ') : t('settings.padIdle')}</div>
-        </div>
-      ))}
-    </>
-  )
-}

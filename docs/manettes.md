@@ -95,3 +95,10 @@ Accepté seulement sur ces cinq consoles (N64 : refusé). SDL2 2.32 est install�
 - Joy-Con droit : stick = croix, boutons = A/B/X/Y (A et B inversés), SL = L, SR = R, Start = Home, Select = Plus, menu RetroArch = le bouton R du dessus (16).
 - Fermeture du jeu : voir plus haut (Moins + Capture ou Home + Plus).
 Limite connue : dans le menu de RetroArch, A (valider) et B (annuler) sont à l'inverse de la position voulue ; `menu_swap_ok_cancel_buttons` n'a rien changé à l'essai, laissé tel quel.
+
+## Paramètres → Manette : cartes, Joy-Con assemblés ou séparés
+
+- Chaque manette détectée a sa carte (silhouette, nom, étiquettes Bluetooth / emplacement / dernière utilisée), dans les Paramètres (`PadSettings.tsx`, `PadIcon.tsx`) et le Big Picture (rangées avec silhouette).
+- **Joy-Con assemblés / séparés** (réglage global `joyconSplit`, visible quand un Joy-Con gauche et un droit sont allumés). Séparés : `classifyPads` ne forme plus de paire (deux Joy-Con seuls, un joueur chacun) et `emulatorEnv` coupe `SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS` pour que SDL ne les réunisse pas (état recopié côté principal par `joyconMode.ts`). Pas de choix par Joy-Con ni de mélange (2 assemblés + 2 seuls) : Chromium et SDL forment les paires eux-mêmes, dans l'ordre de connexion, avec un seul interrupteur global.
+- **Interface Kartouche (Big Picture, test des boutons)** : Chromium réunit toujours deux Joy-Con en une manette « Joy-Con L+R » (aucun réglage ne l'évite). Séparés, `nav.ts` la lit moitié par moitié (`JOYCON_HALVES`, relevé sur de vrais Joy-Con tenus à l'horizontale) : stick = directions, bouton à l'est = valider, sud = retour, nord = X, ouest = Y, SL/SR = onglet précédent/suivant, L/ZL (gauche) ou R/ZR (droit) = filtre précédent/suivant.
+- **A et B échangés d'office** sur toute manette Nintendo (Pro, Joy-Con) dans l'interface Kartouche (`isNintendoPad`) : valider = le A de la manette. L'ancien réglage « Inverser A et B » et le curseur d'inclinaison du stick ne sont plus proposés (`padThreshold` garde sa valeur par défaut).

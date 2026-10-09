@@ -44,3 +44,17 @@ export function padDetail(p: DetectedPad): string {
   if (p.lastUsed) parts.push(t('pad.lastUsed'))
   return parts.join(' · ')
 }
+
+/** Étiquettes courtes de la carte : Bluetooth, emplacement XInput, « dernière utilisée ». */
+export function padTags(p: DetectedPad): string[] {
+  const tags: string[] = []
+  if (p.slot !== null) tags.push(t('pad.xinputSlot', { n: p.slot + 1 }))
+  if (p.wireless) tags.push(t('pad.bluetooth'))
+  if (p.lastUsed) tags.push(t('pad.lastUsed'))
+  return tags
+}
+
+/** Un Joy-Con gauche et un droit sont allumés (assemblés en paire ou déjà séparés) : l'utilisateur peut choisir de les assembler ou de les séparer. */
+export function hasJoyconChoice(pads: readonly DetectedPad[]): boolean {
+  return pads.some((p) => p.kind === 'joycon-pair') || (pads.some((p) => p.kind === 'joycon-left') && pads.some((p) => p.kind === 'joycon-right'))
+}
