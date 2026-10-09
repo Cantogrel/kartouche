@@ -25,8 +25,8 @@ export interface Settings {
   raApiKey: string
   /** Copie automatique des sauvegardes à la fin de chaque partie. */
   autoBackupSaves: boolean
-  /** Manette : inverser A et B (valider = B, retour = A, disposition Nintendo). */
-  padSwapAB: boolean
+  /** Deux Joy-Con branchés : séparés en deux Joy-Con seuls (vrai) ou assemblés en une manette (faux, par défaut). */
+  joyconSplit: boolean
   /** Manette : seuil d'inclinaison du stick pour compter comme une direction (0.3 = sensible, 0.9 = ferme). */
   padThreshold: number
   /** Apparence : thème clair/sombre, échelle de l'interface, couleur d'accent, animations réduites. */
@@ -64,7 +64,7 @@ export const DEFAULT_SETTINGS: Settings = {
   raUsername: '',
   raApiKey: '',
   autoBackupSaves: true,
-  padSwapAB: false,
+  joyconSplit: false,
   padThreshold: 0.6,
   theme: 'auto',
   uiScale: 1,
@@ -95,7 +95,7 @@ export function mergeSettings(base: Settings, patch: unknown): Settings {
   if (typeof p.raUsername === 'string') out.raUsername = p.raUsername.trim()
   if (typeof p.raApiKey === 'string') out.raApiKey = p.raApiKey.trim()
   if (typeof p.autoBackupSaves === 'boolean') out.autoBackupSaves = p.autoBackupSaves
-  if (typeof p.padSwapAB === 'boolean') out.padSwapAB = p.padSwapAB
+  if (typeof p.joyconSplit === 'boolean') out.joyconSplit = p.joyconSplit
   if (typeof p.padThreshold === 'number' && p.padThreshold >= 0.3 && p.padThreshold <= 0.9) out.padThreshold = Math.round(p.padThreshold * 100) / 100
   if (p.theme === 'auto' || p.theme === 'light' || p.theme === 'dark') out.theme = p.theme
   if (typeof p.uiScale === 'number' && (UI_SCALES as readonly number[]).includes(p.uiScale)) out.uiScale = p.uiScale

@@ -12,6 +12,7 @@ import { connectedNintendoPids, lastUsedPad, preferActive, rankAmong, startPadTr
 import { chooseDolphinPads } from './dolphinChoice'
 import { chooseMainNintendo, chooseSupportedMain, chooseSupportedPlayers, type SupportedPlayer } from './mainPad'
 import { startCemuKeyboardMouse } from './cemuKeyboard'
+import { joyconsSplit, setJoyconsSplit } from './joyconMode'
 import { ensureRetroJoyconProfiles } from './retroJoycon'
 import { ensureModernSdl2 } from './sdlUpdate'
 import { ANY_SDL, applyPsPlayers, type PsPlayer } from './psPads'
@@ -228,13 +229,14 @@ export async function stopGameAndWait(entryId: number, timeoutMs = 8000): Promis
 async function retroJoyconReady(cacheDir: string, dir: string, lone: boolean): Promise<boolean> {
   const pids = connectedNintendoPids()
   const left = pids.includes(0x2006), right = pids.includes(0x2007)
-  if (!((left && right) || (lone && (left || right)))) return false
+  if (!((left && right && !joyconsSplit()) || (lone && (left || right)))) return false
   return ensureModernSdl2(dir, cacheDir).catch(() => false)
 }
 
 /** Lance le jeu dans son émulateur, puis cumule le temps de jeu à la fermeture. */
 export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: GameSession) => void, cacheDir: string, savesRoot: string, romsDir?: string): Promise<LaunchResult> {
   if (running.has(entryId)) return { ok: false, error: 'running' }
+  setJoyconsSplit(loadSettings(db).joyconSplit)
   // Un seul jeu à la fois : deux émulateurs en parallèle se disputent la manette/le focus, et rien n'avertit qu'une
   // partie tourne déjà si on en relance une autre depuis un autre écran. Le renderer propose de fermer l'autre jeu
   // (cf. `stopGameAndWait`) plutôt que de bloquer sans recours.

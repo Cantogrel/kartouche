@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { heldActions, pickNext, Repeater, rightStickScroll, type Box } from './nav'
+import { heldActions, joyconHalvesPressed, padActions, pickNext, Repeater, rightStickScroll, type Box } from './nav'
 
 const box = (x: number, y: number): Box => ({ x, y, w: 100, h: 100 })
 
@@ -69,5 +69,41 @@ describe('manette', () => {
     expect(r.update(new Set(['right', 'accept']), 500)).toEqual(['right'])
     expect(r.update(new Set(), 520)).toEqual([])
     expect(r.update(new Set(['accept']), 530)).toEqual(['accept'])
+  })
+})
+
+describe('manettes Nintendo', () => {
+  const mk = (id: string, pressed: number[], axes = [0, 0, 0, 0]) => ({ id, buttons: Array.from({ length: 22 }, (_, i) => ({ pressed: pressed.includes(i) })), axes })
+  const pro = 'Pro Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)'
+  const xbox = 'Xbox 360 Controller (STANDARD GAMEPAD Vendor: 045e Product: 028e)'
+  const pair = 'Joy-Con L+R (STANDARD GAMEPAD Vendor: 057e Product: 200e)'
+
+  it('A et B sont échangés automatiquement sur une manette Nintendo, pas sur une Xbox', () => {
+    expect([...padActions(mk(pro, [1]))]).toEqual(['accept'])
+    expect([...padActions(mk(pro, [0]))]).toEqual(['back'])
+    expect([...padActions(mk(xbox, [0]))]).toEqual(['accept'])
+  })
+
+  it('Joy-Con assemblés : une seule manette standard, A et B échangés', () => {
+    expect([...padActions(mk(pair, [1]), { split: false })]).toEqual(['accept'])
+  })
+
+  it('Joy-Con séparés : chaque moitié est un Joy-Con seul tenu à l’horizontale', () => {
+    // Gauche : flèche du bas (13) = valider, stick vers le haut (axe 0 positif) = haut, SL (18) = précédent.
+    expect([...padActions(mk(pair, [13, 18], [0.9, 0, 0, 0]), { split: true })].sort()).toEqual(['accept', 'prev', 'up'])
+    // Droit : bouton X (3) = valider (le X gravé est à la place du A à l'horizontale), stick vers la droite (axe 3 négatif) = droite.
+    expect([...padActions(mk(pair, [3], [0, 0, 0, -0.9]), { split: true })].sort()).toEqual(['accept', 'right'])
+    // SL est à gauche sur le Joy-Con gauche, mais SR l'est sur le droit ; L/ZL (gauche) et R/ZR (droit) remplacent LT/RT.
+    expect([...padActions(mk(pair, [20]), { split: true })]).toEqual(['prev'])
+    expect([...padActions(mk(pair, [4, 6]), { split: true })].sort()).toEqual(['nextFilter', 'prevFilter'])
+    expect([...padActions(mk(pair, [5, 7]), { split: true })].sort()).toEqual(['nextFilter', 'prevFilter'])
+    expect([...padActions(mk(pair, [1]), { split: true })]).toEqual(['back'])
+  })
+
+  it('test des boutons : une entrée par Joy-Con, avec les noms gravés', () => {
+    expect(joyconHalvesPressed(mk(pair, [4, 17, 1, 9]))).toEqual([
+      { title: 'Joy-Con (L)', pressed: ['L', 'Capture'] },
+      { title: 'Joy-Con (R)', pressed: ['A', '+'] }
+    ])
   })
 })

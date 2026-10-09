@@ -1,6 +1,7 @@
 import { app, dialog, globalShortcut, ipcMain, nativeTheme, screen, shell, BrowserWindow } from 'electron'
 import type { DatabaseSync } from 'node:sqlite'
 import type { IpcChannel, IpcChannels, AppPaths } from '@shared/ipc'
+import { setJoyconsSplit } from './emulators/joyconMode'
 import { loadSettings, loadUserSettings, saveSettings } from './db/settingsStore'
 import { setDataDir } from './paths'
 import { checkForUpdate, downloadUpdate, installUpdate, lastChangelog, olderChangelogs, pendingChangelog, updateState } from './updater'
@@ -107,7 +108,8 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   handle('update:olderChangelogs', (version) => olderChangelogs(version))
   handle('update:pendingChangelog', () => pendingChangelog(db))
   handle('settings:get', () => loadUserSettings(db))
-  handle('settings:set', (patch) => saveSettings(db, patch))
+  setJoyconsSplit(loadSettings(db).joyconSplit)
+  handle('settings:set', (patch) => { const next = saveSettings(db, patch); setJoyconsSplit(loadSettings(db).joyconSplit); return next })
   handle('lang:user', () => listUserLanguages(paths.dataDir))
   handle('lang:import', async () => {
     const win = BrowserWindow.getFocusedWindow()

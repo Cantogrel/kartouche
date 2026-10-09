@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useSettings } from '@/store/settings'
 import type { Settings } from '@shared/settings'
-import { heldActions, pickNext, Repeater, rightStickScroll, type Dir, type PadAction } from './nav'
+import { isJoyconPair, padActions, pickNext, Repeater, rightStickScroll, type Dir, type PadAction } from './nav'
 
 const KEYS: Record<string, PadAction> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Escape: 'back', F11: 'start', PageUp: 'prev', PageDown: 'next', Home: 'prevFilter', End: 'nextFilter' }
 
@@ -72,7 +72,8 @@ const cfg = (): Settings => useSettings.getState().settings
 
 /** Défilement continu au stick droit de la zone `[data-scroll]` de l'écran actif, quel que soit l'élément ciblé par le stick gauche. */
 function scrollWithRightStick(): void {
-  const delta = rightStickScroll(navigator.getGamepads(), 0.15, 6)
+  // Joy-Con séparés : le stick du Joy-Con droit sert de direction, pas de défilement.
+  const delta = rightStickScroll([...navigator.getGamepads()].filter((p) => !(p && cfg().joyconSplit && isJoyconPair(p))), 0.15, 6)
   if (!delta) return
   const el = activeRoot()?.querySelector<HTMLElement>('[data-scroll]')
   if (el) el.scrollTop += delta
@@ -92,7 +93,7 @@ export function useNav(onAction: (a: PadAction, fromKeyboard: boolean) => void, 
     let raf = 0
     const heldNow = (): Set<PadAction> => {
       const held = new Set<PadAction>()
-      for (const pad of navigator.getGamepads()) if (pad) heldActions(pad, { swapAB: cfg().padSwapAB, threshold: cfg().padThreshold }).forEach((a) => held.add(a))
+      for (const pad of navigator.getGamepads()) if (pad) padActions(pad, { split: cfg().joyconSplit, threshold: cfg().padThreshold }).forEach((a) => held.add(a))
       return held
     }
     // Un bouton déjà maintenu au montage (celui qui a ouvert cet écran) ne compte pas comme un nouvel appui.
