@@ -349,7 +349,7 @@ export async function deleteGameSaves(db: DatabaseSync, savesRoot: string, entry
  * RetroArch : range sauvegardes et états dans le dossier de données de Kartouche (par jeu, hors de l'installation).
  * Les fichiers déjà présents dans les anciens dossiers de l'installation y sont recopiés une fois.
  */
-export async function prepareRetroarch(dir: string, savesRoot: string, padSlot: number | null = null, nintendo: { port: number } | null = null): Promise<void> {
+export async function prepareRetroarch(dir: string, savesRoot: string, padSlot: number | null = null, nintendo: { port: number } | null = null, players: { driver: 'xinput' | 'sdl2'; indexes: number[] } | null = null): Promise<void> {
   const cfg = join(dir, 'retroarch.cfg')
   const root = retroarchSavesRoot(savesRoot)
   const wanted = { savefile_directory: join(root, 'saves'), savestate_directory: join(root, 'states') }
@@ -366,12 +366,18 @@ export async function prepareRetroarch(dir: string, savesRoot: string, padSlot: 
   // est l'un des deux de Kartouche (un autre, choisi par l'utilisateur, reste).
   const driver = /^input_joypad_driver\s*=\s*"?(\w+)"?\s*$/m.exec(text)?.[1] ?? 'xinput'
   const ours = driver === 'xinput' || driver === 'sdl2'
-  const pad: Record<string, string | number> = nintendo && ours ? { input_joypad_driver: 'sdl2', input_player1_joypad_index: nintendo.port } : padSlot === null ? (driver === 'sdl2' ? { input_joypad_driver: 'xinput' } : {}) : { ...(driver === 'sdl2' ? { input_joypad_driver: 'xinput' } : {}), input_player1_joypad_index: padSlot }
+  // Plusieurs joueurs : pilote commun et un rang de manette par joueur (`input_player<n>_joypad_index`).
+  const multi: Record<string, string | number> = players && players.indexes.length >= 2 && ours ? { input_joypad_driver: players.driver, ...Object.fromEntries(players.indexes.map((i, n) => [`input_player${n + 1}_joypad_index`, i])) } : {}
+  const pad: Record<string, string | number> = players && players.indexes.length >= 2 && ours ? multi : nintendo && ours ? { input_joypad_driver: 'sdl2', input_player1_joypad_index: nintendo.port } : padSlot === null ? (driver === 'sdl2' ? { input_joypad_driver: 'xinput' } : {}) : { ...(driver === 'sdl2' ? { input_joypad_driver: 'xinput' } : {}), input_player1_joypad_index: padSlot }
   // Stick gauche aussi sur la croix (« Analog to Digital Type » = Left Analog) : sans lui, la plupart des jeux 2D (SNES, GB…) ne répondent qu'à la croix. Sans effet sur les cœurs à manette analogique (N64),
   // où le stick reste analogique. Écrit une seule fois (marqueur) : un choix fait ensuite dans RetroArch n'est pas refait à chaque lancement.
   const stickMarker = join(dir, 'romvault-analog-dpad')
   const stick: Record<string, string | number> = existsSync(stickMarker) ? {} : { input_player1_analog_dpad_mode: 1 }
-  const next = patchCfg(text, { ...wanted, ...pad, ...stick })
+  // Joueurs 2 à 4 (ajoutés après le joueur 1) : même réglage, une seule fois aussi (autre marqueur).
+  const stickMarkerOthers = join(dir, 'romvault-analog-dpad-2-4')
+  const stickOthers: Record<string, string | number> = existsSync(stickMarkerOthers) ? {} : { input_player2_analog_dpad_mode: 1, input_player3_analog_dpad_mode: 1, input_player4_analog_dpad_mode: 1 }
+  const next = patchCfg(text, { ...wanted, ...pad, ...stick, ...stickOthers })
   if (next !== text) await writeFile(cfg, next)
   if (!existsSync(stickMarker)) await writeFile(stickMarker, '').catch(() => {})
+  if (!existsSync(stickMarkerOthers)) await writeFile(stickMarkerOthers, '').catch(() => {})
 }

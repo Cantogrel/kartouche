@@ -66,19 +66,25 @@ const SWITCH_PRO_MAPPING: [string, string][] = XINPUT_MAPPING.map(([k, v]) => [k
 /**
  * Profil de manette du joueur 1. XInput : `slot` = emplacement XInput (0 à 3) de la manette connectée, écrit en « XInput Pad #<slot+1> » (RPCS3 numérote à partir de 1) ;
  * mapping Xbox explicite (celui que RPCS3 charge, relevé dans son journal). Manettes Sony : handler natif, mapping par défaut de RPCS3 pour ce handler (non testé : aucune
- * manette Sony sur la machine de développement). Les joueurs 2 à 7 restent sur « Null ».
+ * manette Sony sur la machine de développement). `others` : les joueurs 2 et suivants (une manette par joueur) ; les autres restent sur « Null ».
  */
-export function rpcs3InputYaml(kind: PadKind, slot = 0): Yaml {
-  const head = [RPCS3_INPUT_MARKER, 'Player 1 Input:']
+export function rpcs3InputYaml(kind: PadKind, slot = 0, others: readonly { kind: PadKind; slot?: number }[] = []): Yaml {
+  const players = [{ kind, slot }, ...others]
+  return [RPCS3_INPUT_MARKER, ...players.flatMap((p, i) => rpcs3PlayerLines(i + 1, p.kind, p.slot ?? 0))].join('\n') + '\n'
+}
+
+/** Le bloc « Player <n> Input » d'une manette (voir `rpcs3InputYaml`) ; les joueurs sans manette restent sur « Null » (valeur par défaut de RPCS3). */
+function rpcs3PlayerLines(n: number, kind: PadKind, slot: number): string[] {
+  const head = [`Player ${n} Input:`]
   if (kind === 'switch-pro' || kind === 'joycon-pair') {
     // La paire de Joy-Con est UN périphérique pour le SDL 3 de RPCS3 (« Nintendo Switch Joy-Con (L/R) 1 », relevé dans son journal et dans le Default.yml qu'il écrit : même mapping que la Pro).
     const name = kind === 'switch-pro' ? 'Nintendo Switch Pro Controller' : 'Nintendo Switch Joy-Con (L/R)'
-    return [...head, '  Handler: SDL', `  Device: ${q(`${name} ${slot + 1}`)}`, '  Config:', ...SWITCH_PRO_MAPPING.map(([k, v]) => `    ${k}: ${v}`), '  Buddy Device: ""'].join('\n') + '\n'
+    return [...head, '  Handler: SDL', `  Device: ${q(`${name} ${slot + 1}`)}`, '  Config:', ...SWITCH_PRO_MAPPING.map(([k, v]) => `    ${k}: ${v}`), '  Buddy Device: ""']
   }
   if (kind === 'xinput') {
-    return [...head, '  Handler: XInput', `  Device: ${q(`XInput Pad #${slot + 1}`)}`, '  Config:', ...XINPUT_MAPPING.map(([k, v]) => `    ${k}: ${v}`), '  Buddy Device: ""'].join('\n') + '\n'
+    return [...head, '  Handler: XInput', `  Device: ${q(`XInput Pad #${slot + 1}`)}`, '  Config:', ...XINPUT_MAPPING.map(([k, v]) => `    ${k}: ${v}`), '  Buddy Device: ""']
   }
-  return [...head, `  Handler: ${kind === 'dualsense' ? 'DualSense' : 'DualShock 4'}`, `  Device: ${q(kind === 'dualsense' ? 'DualSense Pad #1' : 'DS4 Pad #1')}`, '  Config: {}', '  Buddy Device: ""'].join('\n') + '\n'
+  return [...head, `  Handler: ${kind === 'dualsense' ? 'DualSense' : 'DualShock 4'}`, `  Device: ${q(kind === 'dualsense' ? 'DualSense Pad #1' : 'DS4 Pad #1')}`, '  Config: {}', '  Buddy Device: ""']
 }
 
 /** Vrai si le profil global est absent ou encore celui de Kartouche (marqueur présent) : on peut alors le réécrire ou le retirer (retour au clavier de RPCS3). */

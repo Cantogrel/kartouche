@@ -10,13 +10,17 @@ import { resolveLanguage } from '@shared/settings'
 import { getRow } from './emulatorStore'
 import { connectedNintendoPids, lastUsedPad, preferActive, rankAmong, startPadTracker } from './padChoice'
 import { chooseDolphinPads } from './dolphinChoice'
-import { chooseMainNintendo, chooseSupportedMain } from './mainPad'
+import { chooseMainNintendo, chooseSupportedMain, chooseSupportedPlayers, type SupportedPlayer } from './mainPad'
 import { startCemuKeyboardMouse } from './cemuKeyboard'
 import { ensureModernSdl2 } from './sdlUpdate'
+import { ANY_SDL, applyPsPlayers, type PsPlayer } from './psPads'
+import { assignSdlNumbers, listSdlPads } from './sdlOrder'
+import { assignSdl2Indexes, listSdl2Joysticks } from './sdl2Order'
+import type { EdenNintendo } from './edenPads'
 import { chooseEdenPads, edenRefusalReason, shouldCloseOnRefusal, type EdenPlayerPad } from './edenChoice'
 import { anyGamepadConnected, autoConfirmEdenApplet, closeGracefully, connectedXInputPads, connectedXInputSlots, watchQuitChord } from './quit'
 import { emulatorEnv } from './sdlEnv'
-import { applyCemuControls, applyCemuPad } from './cemu'
+import { applyCemuControls, applyCemuPad, applyCemuPlayers, needsGamePad, type CemuPlayerPad } from './cemu'
 import { isVWiiWrapper, readWuaFiles } from '../library/content/wua'
 import { applyDolphinFastDiscExclusion, applyDolphinPads, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyMelondsPad, applyPpssppPads, migrateHybridLayout, applyPsPads, applyEdenPads, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
 import { loadSettings } from '../db/settingsStore'
@@ -301,10 +305,21 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     // officielle (voir sdlUpdate.ts) ; si ce n'est pas possible, ou pour un Joy-Con seul, message clair.
     let retroNintendo: { port: number } | null = null
     let cemuNintendo = false
+    let retroPlayers: { driver: 'xinput' | 'sdl2'; indexes: number[] } | null = null
     if (def.id === 'retroarch') {
-      const sup = await chooseSupportedMain(cacheDir, (await retroPairReady(cacheDir, row.dir)) ? ['switch-pro', 'joycon-pair'] : ['switch-pro']).catch(() => ({ pad: null, refused: false }))
+      const retroAccepted: EdenNintendo[] = (await retroPairReady(cacheDir, row.dir)) ? ['switch-pro', 'joycon-pair'] : ['switch-pro']
+      const sup = await chooseSupportedMain(cacheDir, retroAccepted).catch(() => ({ pad: null, refused: false }))
       if (sup.refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
       if (sup.pad && 'nintendo' in sup.pad) retroNintendo = { port: sup.pad.port ?? 0 }
+      // Plusieurs joueurs (jusqu'à quatre) : XInput seules = pilote xinput (rang = emplacement) ; avec une manette Nintendo = pilote sdl2, dont on demande les rangs à SDL2 juste avant (voir sdl2Order.ts).
+      const rp = await chooseSupportedPlayers(cacheDir, retroAccepted, 4).catch(() => [])
+      if (rp.length >= 2) {
+        if (rp.every((p) => p.kind === 'xinput')) retroPlayers = { driver: 'xinput', indexes: rp.map((p) => (p.kind === 'xinput' ? p.slot : 0)) }
+        else {
+          const indexes = assignSdl2Indexes(rp, await listSdl2Joysticks(cacheDir, join(row.dir, 'SDL2.dll'), emulatorEnv('retroarch', true, true)))
+          if (indexes.every((i) => i !== null)) retroPlayers = { driver: 'sdl2', indexes: indexes as number[] }
+        }
+      }
     }
     // PPSSPP lit les manettes par XInput et DirectInput seulement : la Switch Pro y est une manette DirectInput, mais la paire de Joy-Con y est DEUX manettes séparées (message clair plutôt qu'un
     // jeu muet).
@@ -322,11 +337,20 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       if (sup.refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
       if (sup.pad && 'nintendo' in sup.pad) melondsNintendo = { port: sup.pad.port ?? 0 }
     }
-    // DuckStation et PCSX2 lisent les manettes SDL par numéro : les quatre premières sont liées, quelle que soit celle qu'on utilise.
-    // Manette Nintendo principale : sans vibration (gênante), et A/B / X/Y échangés pour la paire de Joy-Con sur DuckStation (voir `tuneSdlPad`).
-    const psNin = def.id === 'duckstation' || def.id === 'pcsx2' ? await chooseMainNintendo(cacheDir).catch(() => null) : null
-    if (def.id === 'duckstation') await applyPsPads(join(row.dir, 'settings.ini'), { nintendo: psNin !== null, swapFace: psNin === 'joycon-pair' }).catch(() => {})
-    if (def.id === 'pcsx2') await applyPsPads(join(row.dir, 'inis', 'PCSX2.ini'), { nintendo: psNin !== null, swapFace: false }).catch(() => {})
+    // DuckStation et PCSX2 lisent les manettes SDL par numéro (« SDL-n », l'indice de joueur que SDL leur donne). Un seul joueur : les quatre premières sont liées, quelle que soit celle qu'on utilise.
+    // Plusieurs joueurs (deux ports) : chacun lit SA manette, dont on demande le numéro à SDL juste avant (voir sdlOrder.ts) ; sans réponse claire, retour à « n'importe laquelle » pour le joueur 1.
+    // Manette Nintendo : sans vibration (gênante), et A/B / X/Y échangés pour la paire de Joy-Con sur DuckStation (voir psPads.ts).
+    if (def.id === 'duckstation' || def.id === 'pcsx2') {
+      const psFile = def.id === 'duckstation' ? join(row.dir, 'settings.ini') : join(row.dir, 'inis', 'PCSX2.ini')
+      const psPlayers = await chooseSupportedPlayers(cacheDir, ['switch-pro', 'joycon-pair', 'joycon-left', 'joycon-right'], 2).catch(() => [])
+      const psPlayer = (p: SupportedPlayer, indexes: number[]): PsPlayer => ({ indexes, nintendo: p.kind !== 'xinput', swapFace: def.id === 'duckstation' && p.kind === 'joycon-pair' })
+      let psPads: PsPlayer[] = psPlayers.slice(0, 1).map((p) => psPlayer(p, ANY_SDL))
+      if (psPlayers.length >= 2) {
+        const numbers = assignSdlNumbers(psPlayers, await listSdlPads(cacheDir, join(row.dir, 'SDL3.dll')))
+        if (numbers.every((n) => n !== null)) psPads = psPlayers.map((p, i) => psPlayer(p, [numbers[i] as number]))
+      }
+      await applyPsPlayers(psFile, def.id, psPads).catch(() => {})
+    }
     if (def.id === 'melonds') await applyMelondsPad(row.dir, melondsNintendo ? melondsNintendo.port : padSlot === null ? null : rankAmong(padSlots, padSlot), melondsNintendo !== null).catch(() => {})
     if (def.id === 'melonds') await applyMelondsGame(row.dir, await readNdsCode(romPath).catch(() => null)).catch(() => {})
     let edenAssigned: EdenPlayerPad[] = []
@@ -351,13 +375,14 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     // RPCS3 : sans profil de manette il n'en utilise aucune. Manette XInput (à son emplacement réel), sinon manette Sony native, sinon clavier ; réglages propres au jeu seulement si
     // une exception est connue (numéro de série lu sur le disque).
     if (def.id === 'rpcs3') {
-      const slots = preferActive(await connectedXInputSlots(cacheDir), (s) => s)
-      // Switch Pro : handler SDL de RPCS3 (la dernière manette utilisée passe en premier, XInput ou Pro). Paire de Joy-Con / Joy-Con seul : pas lisibles, message clair s'il n'y a rien d'autre.
+      // Une manette par joueur (joueurs 1 à 7) : XInput, Switch Pro ou paire de Joy-Con, la dernière utilisée en premier ; Joy-Con seul : pas lisible, message clair s'il n'y a rien d'autre. Manette Sony native
+      // seulement quand il n'y en a pas d'autre.
+      const rpcs3Players = await chooseSupportedPlayers(cacheDir, ['switch-pro', 'joycon-pair'], 7).catch(() => [])
+      const rpcs3Pad = (p: SupportedPlayer): { kind: 'xinput' | 'switch-pro' | 'joycon-pair'; slot: number } => (p.kind === 'xinput' ? { kind: 'xinput', slot: p.slot } : { kind: p.kind === 'joycon-pair' ? 'joycon-pair' : 'switch-pro', slot: p.port })
       const sup = await chooseSupportedMain(cacheDir, ['switch-pro', 'joycon-pair']).catch(() => ({ pad: null, refused: false }))
-      const nintendoPad = sup.pad && 'nintendo' in sup.pad ? { kind: sup.pad.nintendo === 'joycon-pair' ? 'joycon-pair' as const : 'switch-pro' as const, slot: sup.pad.port ?? 0 } : null
-      const pad = nintendoPad ?? (slots.length ? { kind: 'xinput' as const, slot: slots[0] } : await detectSonyPad().then((kind) => (kind ? { kind } : null)).catch(() => null))
+      const pad = rpcs3Players[0] ? rpcs3Pad(rpcs3Players[0]) : await detectSonyPad().then((kind) => (kind ? { kind } : null)).catch(() => null)
       if (!pad && sup.refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
-      await applyRpcs3Pad(row.dir, pad).catch(() => {})
+      await applyRpcs3Pad(row.dir, pad, rpcs3Players.slice(1).map(rpcs3Pad)).catch(() => {})
       await applyRpcs3Game(row.dir, await readPs3Serial(romPath).catch(() => null)).catch(() => {})
     }
     // Cemu : Pro Controller par défaut, profil GamePad pour les jeux qui l'exigent (profil de l'utilisateur jamais touché).
@@ -367,10 +392,13 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       cemuNintendo = sup.pad !== null && 'nintendo' in sup.pad
       if (sup.refused) { running.delete(entryId); return { ok: false, error: 'padRefusedEmulator' } }
       await applyCemuControls(row.dir, entry.title, basename(entry.path)).catch(() => {})
+      // Une manette par joueur (jusqu'à huit) : XInput, Switch Pro, paire de Joy-Con, la dernière utilisée au joueur 1.
+      const cemuPlayers = (await chooseSupportedPlayers(cacheDir, ['switch-pro', 'joycon-pair'], 8).catch(() => [])).flatMap((p): CemuPlayerPad[] => (p.kind === 'xinput' ? [{ kind: 'xinput', slot: p.slot }] : p.kind === 'switch-pro' || p.kind === 'joycon-pair' ? [{ kind: p.kind, port: p.port }] : []))
+      await applyCemuPlayers(row.dir, cemuPlayers, needsGamePad(entry.title, basename(entry.path)) ? 'gamepad' : 'pro').catch(() => {})
       await applyCemuPad(row.dir, preferActive(await connectedXInputSlots(cacheDir), (s) => s)[0] ?? 0).catch(() => {})
     }
     // RetroArch range ses sauvegardes et états dans le dossier de données de Kartouche (par jeu, hors de l'installation).
-    if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot, padSlot, retroNintendo).catch(() => {})
+    if (def.id === 'retroarch') await prepareRetroarch(row.dir, savesRoot, padSlot, retroNintendo, retroPlayers).catch(() => {})
     // DuckStation n'écrit rien sur la sortie standard : sans ça, un jeu qui se ferme tout seul ne laisse aucune trace exploitable.
     if (def.id === 'duckstation') {
       await ensureDuckstationLogging(row.dir).catch(() => {})
@@ -389,7 +417,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
       })().catch(() => {})
     }
     const started = Date.now()
-    const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: ['ignore', 'pipe', 'pipe'], env: emulatorEnv(def.id, melondsNintendo !== null || retroNintendo !== null || azaharNintendo === 'switch-pro' || azaharNintendo === 'joycon-pair' || cemuNintendo) })
+    const child = spawn(row.exe, args, { cwd: dirname(row.exe), stdio: ['ignore', 'pipe', 'pipe'], env: emulatorEnv(def.id, melondsNintendo !== null || retroNintendo !== null || retroPlayers?.driver === 'sdl2' || azaharNintendo === 'switch-pro' || azaharNintendo === 'joycon-pair' || cemuNintendo, retroPlayers?.driver === 'sdl2') })
     // Vita3K : fermer la fenêtre du jeu ne fait que revenir à sa bibliothèque, le process ne sort jamais seul ; on le force après 2 s au lieu de 5.
     running.set(entryId, { pid: child.pid ?? 0, stopped: false, graceMs: def.id === 'vita3k' ? 2000 : undefined })
     // Capturé au cas où l'émulateur écrit sur la sortie standard (RetroArch, par ex.) ; sert de diagnostic si le jeu se ferme vite.

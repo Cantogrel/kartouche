@@ -555,12 +555,12 @@ export async function applyPcsx2Game(dir: string, game: Ps2Game | null, table: R
  * Sunshine/Moonlight), sinon manette Sony native, sinon clavier — le profil de Kartouche est alors retiré et RPCS3 retombe sur son pad clavier par défaut. Sans profil, RPCS3
  * n'utilise AUCUNE manette. Seulement tant que le fichier est absent ou porte le marqueur de Kartouche : un profil réglé dans RPCS3 par l'utilisateur n'est jamais touché.
  */
-export async function applyRpcs3Pad(dir: string, pad: { kind: PadKind; slot?: number } | null): Promise<void> {
+export async function applyRpcs3Pad(dir: string, pad: { kind: PadKind; slot?: number } | null, others: readonly { kind: PadKind; slot?: number }[] = []): Promise<void> {
   const file = join(dir, 'config', 'input_configs', 'global', 'Default.yml')
   const text = existsSync(file) ? await readFile(file, 'utf8') : null
   if (!isRomvaultInput(text)) return
   if (!pad) { if (text !== null) await rm(file, { force: true }); return }
-  const yaml = rpcs3InputYaml(pad.kind, pad.slot)
+  const yaml = rpcs3InputYaml(pad.kind, pad.slot, others)
   if (text === null || text.replace(/\r\n/g, '\n') !== yaml) {
     await mkdir(dirname(file), { recursive: true })
     await writeFile(file, yaml)

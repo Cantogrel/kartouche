@@ -36,3 +36,30 @@ export async function chooseSupportedMain(cacheDir: string, accepted: readonly E
   const xinput = await connectedXInputPads(cacheDir)
   return pickSupportedMain(xinput, connectedNintendoPids(), lastUsedPad(), (pads) => preferActive(pads, (p) => p.slot), accepted)
 }
+
+/** Un joueur lisible par l'émulateur : une XInput (emplacement `slot`) ou une manette Nintendo ; `port` = rang parmi les manettes de même identité (deux Pro, deux paires…), à partir de 0. */
+export type SupportedPlayer = { kind: 'xinput'; slot: number; port: number } | { kind: EdenNintendo; port: number }
+
+/**
+ * Les manettes des joueurs 1 à `max` que l'émulateur sait lire, dans l'ordre habituel (joueur 1 = dernière utilisée, puis XInput, Switch Pro, paires de Joy-Con, Joy-Con seuls) :
+ * une manette par joueur. Les manettes qu'il ne lit pas sont sautées (les suivantes prennent leur place). Pure.
+ */
+export function pickSupportedPlayers(xinput: readonly XInputPad[], nintendoPids: readonly number[], last: Parameters<typeof pickEdenPads>[2], xinputOrder: (pads: readonly XInputPad[]) => XInputPad[], accepted: readonly EdenNintendo[], max: number): SupportedPlayer[] {
+  const out: SupportedPlayer[] = []
+  for (const p of pickEdenPads(xinput, nintendoPids, last, xinputOrder)) {
+    if ('nintendo' in p) {
+      if (accepted.includes(p.nintendo)) out.push({ kind: p.nintendo, port: p.port ?? 0 })
+    } else {
+      // Rang parmi les manettes de même identité (voir `pickEdenPads`) : l'emplacement XInput correspondant.
+      const slots = xinput.filter((x) => x.vid === p.vid && x.pid === p.pid && x.ver === p.ver).map((x) => x.slot).sort((a, b) => a - b)
+      const slot = slots[p.port ?? 0]
+      if (slot !== undefined) out.push({ kind: 'xinput', slot, port: p.port ?? 0 })
+    }
+  }
+  return out.slice(0, max)
+}
+
+export async function chooseSupportedPlayers(cacheDir: string, accepted: readonly EdenNintendo[], max: number): Promise<SupportedPlayer[]> {
+  const xinput = await connectedXInputPads(cacheDir)
+  return pickSupportedPlayers(xinput, connectedNintendoPids(), lastUsedPad(), (pads) => preferActive(pads, (p) => p.slot), accepted, max)
+}
