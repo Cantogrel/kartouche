@@ -3,6 +3,20 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.3.2
+
+- **Manettes Nintendo** : la Switch Pro et les Joy-Con (en paire) fonctionnent maintenant dans les émulateurs, avec le bon profil de boutons (PPSSPP : Switch Pro seulement).
+  La manette du joueur 1 est la dernière sur laquelle vous avez appuyé, les autres manettes branchées deviennent les joueurs suivants, et une paire de Joy-Con compte pour une seule manette.
+  La manette XInput (Xbox) reste inchangée. Quand un émulateur ne sait pas lire une manette, Kartouche l'indique au lieu de lancer un jeu qui ne répond pas.
+- **Joy-Con seul** : accepté dans Eden, dans Dolphin (le Joy-Con droit devient la Wiimote) et dans RetroArch pour la NES, la SNES, la Game Boy, la Game Boy Color et la Game Boy Advance (tenu à l'horizontale). Fermer le jeu : Moins + Capture (gauche) ou Home + Plus (droit).
+- **Dolphin** : Wiimote avec une Switch Pro, une paire de Joy-Con ou le Joy-Con droit seul (pointage par gyroscope, recentrage), manette GameCube, et jusqu'à quatre joueurs. Le lancement est plus rapide.
+- **Autres émulateurs** : DuckStation, PCSX2, RPCS3, Cemu, melonDS, Azahar, Vita3K, PPSSPP et RetroArch lisent les manettes Nintendo ; plusieurs joueurs sur les consoles de salon (DuckStation, PCSX2, RPCS3, Cemu, RetroArch). RetroArch met à jour son SDL2 au besoin (téléchargement officiel). Cemu : le clavier à l'écran se commande avec le stick droit.
+- **Eden** : la fenêtre de configuration des manettes ne s'ouvre plus à chaque appui sur + ou - dans un jeu.
+- **Import** : les jeux Wii et GameCube compressés (zip) sont décompressés à l'import, pour un lancement plus rapide.
+- **Paramètres → Manette** : nouvel écran avec une carte par manette détectée. Quand un Joy-Con gauche et un droit sont allumés, vous choisissez de les **assembler** (une manette) ou de les **séparer** (deux Joy-Con seuls, un joueur chacun). Dans l'interface, A et B sont échangés d'office sur les manettes Nintendo, et les réglages A/B et inclinaison du stick disparaissent.
+- **Mode classique à la manette** : navigation au stick ou à la croix, A pour valider, B pour revenir, stick droit pour défiler, L1/R1 pour changer de section, Y pour passer du menu à la page, Start pour passer en Big Picture. Chaque Joy-Con séparé fonctionne seul.
+- **Big Picture** : le bouton Jouer réagit dès l'appui.
+
 ## 0.3.1
 
 - **Manettes avec Sunshine / Moonlight** : Sunshine ajoute des manettes virtuelles à Windows, et les émulateurs lisaient la première
