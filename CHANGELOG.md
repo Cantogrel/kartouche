@@ -3,6 +3,16 @@
 Notes affichées dans l'app après une mise à jour (Paramètres → À propos → Voir le changelog).
 Une section `## <version>` par version ; le texte est repris tel quel dans le popup.
 
+## 0.3.3
+
+- **Temps de jeu** : affiché en minutes sous 1 h, puis en heures avec une décimale jusqu'à 99,9 h (« 2.5 h », « 1 h » sans « .0 »), et sans décimale à partir de 100 h. Sur les fiches du mode classique, du catalogue et de Big Picture.
+- **Favoris** : l'épingle est supprimée, le favori (♥) en reprend le rôle. Les jeux favoris remontent en tête de la liste latérale et de la grille Bibliothèque. Les jeux déjà épinglés deviennent des favoris.
+- **Émulateurs** : les fenêtres « mise à jour disponible » des émulateurs ne s'ouvrent plus au lancement d'un jeu, les mises à jour se gèrent uniquement depuis l'onglet Émulateurs. Kartouche y cherche maintenant les mises à jour tout seul, au démarrage puis toutes les 6 h, sans message. Nouveau bouton **Tout mettre à jour** quand il y en a, et le téléchargement d'un émulateur peut être annulé.
+- **Téléchargements de jeux** : une confirmation est demandée avant d'annuler un téléchargement (mode classique et Big Picture).
+- **Catalogue** : l'application se fige beaucoup moins à l'ouverture de l'onglet, et Big Picture affiche des tuiles de chargement au lieu d'un onglet vide.
+- **PlayStation (DuckStation)** : des polygones qui disparaissaient dans certains jeux (Spyro, par exemple) sont corrigés en n'activant plus le tampon de profondeur PGXP. Les installations existantes sont corrigées une fois.
+- **Manettes** : les manettes Nintendo virtuelles (Moonlight / Sunshine) sont reconnues, et avec plusieurs Switch Pro (ou Joy-Con du même côté) la fermeture Moins + Plus et la « dernière utilisée » fonctionnent manette par manette.
+
 ## 0.3.2
 
 - **Manettes Nintendo** : la Switch Pro et les Joy-Con (en paire) fonctionnent maintenant dans les émulateurs, avec le bon profil de boutons (PPSSPP : Switch Pro seulement).
