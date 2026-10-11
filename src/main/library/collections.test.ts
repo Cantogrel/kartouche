@@ -9,16 +9,14 @@ beforeEach(() => { db = new DatabaseSync(':memory:'); db.exec('PRAGMA foreign_ke
 const addEntry = (title: string): number =>
   Number(db.prepare("INSERT INTO library (console, title, path, size, added_at) VALUES ('nes', ?, ?, 1, 1)").run(title, `C:\\r\\${title}.nes`).lastInsertRowid)
 
-describe('favoris et épingles', () => {
-  it('bascule chaque indicateur sans toucher à l’autre', () => {
+describe('favoris', () => {
+  it('bascule le favori', () => {
     const id = addEntry('A')
-    expect(listLibrary(db)[0]).toMatchObject({ favorite: false, pinned: false, collections: [] })
+    expect(listLibrary(db)[0]).toMatchObject({ favorite: false, collections: [] })
     setFlags(db, id, { favorite: true })
-    expect(listLibrary(db)[0]).toMatchObject({ favorite: true, pinned: false })
-    setFlags(db, id, { pinned: true })
-    expect(listLibrary(db)[0]).toMatchObject({ favorite: true, pinned: true })
+    expect(listLibrary(db)[0]).toMatchObject({ favorite: true })
     setFlags(db, id, { favorite: false })
-    expect(listLibrary(db)[0]).toMatchObject({ favorite: false, pinned: true })
+    expect(listLibrary(db)[0]).toMatchObject({ favorite: false })
   })
 })
 

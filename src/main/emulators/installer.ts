@@ -9,7 +9,7 @@ import { RETROARCH_CORES, type EmulatorDef, type EmulatorProgress } from '@share
 import type { AppPaths } from '@shared/ipc'
 import { coreUrl, latestRelease } from './source'
 import { deleteEmulator, getRow, saveEmulator } from './emulatorStore'
-import { configureEmulator, type ConfigContext } from './configure'
+import { configureEmulator, disableUpdateChecks, type ConfigContext } from './configure'
 import { installResolutionPacks, maxRenderHeight } from './cemu'
 import { detectGpu } from './gpu'
 import { hasQuarterResolutions } from './eden'
@@ -39,8 +39,8 @@ export async function extract(archive: string, dest: string): Promise<void> {
   }
 }
 
-export async function download(url: string, file: string, onProgress: (done: number, total: number) => void, userAgent = 'Kartouche'): Promise<void> {
-  const res = await fetch(url, { headers: { 'user-agent': userAgent }, redirect: 'follow' })
+export async function download(url: string, file: string, onProgress: (done: number, total: number) => void, userAgent = 'Kartouche', signal?: AbortSignal): Promise<void> {
+  const res = await fetch(url, { headers: { 'user-agent': userAgent }, redirect: 'follow', signal })
   if (!res.ok || !res.body) throw new Error(`Téléchargement impossible (HTTP ${res.status})`)
   const total = Number(res.headers.get('content-length') ?? 0)
   let done = 0
@@ -51,7 +51,7 @@ export async function download(url: string, file: string, onProgress: (done: num
     const now = Date.now()
     if (now - last > 150) { last = now; onProgress(done, total) }
   })
-  await pipeline(src, createWriteStream(file))
+  await pipeline(src, createWriteStream(file), { signal })
   onProgress(done, done)
 }
 
@@ -114,7 +114,7 @@ export function isFreshInstall(prevRow: { exe: string } | undefined): boolean {
 }
 
 /** Télécharge la dernière version, l'extrait (par-dessus l'installation existante en cas de mise à jour : les données portables sont conservées) et l'enregistre. */
-export async function installEmulator(db: DatabaseSync, def: EmulatorDef, paths: AppPaths, report: Report, ctx: Omit<ConfigContext, 'biosDir'>): Promise<void> {
+export async function installEmulator(db: DatabaseSync, def: EmulatorDef, paths: AppPaths, report: Report, ctx: Omit<ConfigContext, 'biosDir'>, signal?: AbortSignal): Promise<void> {
   const id = def.id
   // Réglages automatiques (langue, plein écran, résolution, manette) seulement à la première installation : une mise à jour garde ceux de l'utilisateur.
   const fresh = isFreshInstall(getRow(db, id))
@@ -125,7 +125,7 @@ export async function installEmulator(db: DatabaseSync, def: EmulatorDef, paths:
     const rel = await latestRelease(def)
     await mkdir(cache, { recursive: true })
     const archive = join(cache, basename(rel.name))
-    await download(rel.url, archive, (done, total) => report({ id, phase: 'download', done, total }))
+    try { await download(rel.url, archive, (done, total) => report({ id, phase: 'download', done, total }), 'Kartouche', signal) } catch (e) { await rm(archive, { force: true }).catch(() => {}); throw e }
     report({ id, phase: 'extract', done: 0, total: 0 })
     await rm(tmp, { recursive: true, force: true })
     await mkdir(tmp, { recursive: true })
@@ -147,6 +147,7 @@ export async function installEmulator(db: DatabaseSync, def: EmulatorDef, paths:
     // Eden : l'énumération des niveaux de résolution a changé entre versions ; on lit celle du binaire installé.
     const edenNewResolutions = fresh && id === 'eden' ? hasQuarterResolutions(await readFile(exe)) : undefined
     if (fresh) await configureEmulator(id, dest, { ...ctx, biosDir: join(paths.bios, id), gpu, edenNewResolutions })
+    await disableUpdateChecks(id, dest).catch(() => {})
     // Résolution de Cemu = graphic packs officiels, par jeu : facultatif, Cemu reste utilisable en 720p natif si le téléchargement échoue.
     if (gpu && id === 'cemu') await installResolutionPacks(dest, maxRenderHeight(gpu, ctx.displayHeight), { download: (u, f) => download(u, f, () => {}), extract, cache }).catch(() => {})
     if (id === 'retroarch') await installCores(def, dest, cache, report)

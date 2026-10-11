@@ -17,7 +17,7 @@ import { loadPcArt, removePcArt } from './pcMeta'
 
 interface Row {
   id: number; game_id: number | null; console: string; title: string; path: string; size: number; match: string
-  missing: number; added_at: number; play_minutes: number; last_played: number | null; favorite: number; pinned: number
+  missing: number; added_at: number; play_minutes: number; last_played: number | null; favorite: number
   kind: string; source: string | null; launch: string | null; emulator_id: string | null
 }
 
@@ -27,7 +27,7 @@ const toEntry = (r: Row, collections: number[] = [], hasSources = false, overrid
   // Images affichées : celles de l'utilisateur, sinon la jaquette et la bannière trouvées pour un jeu PC (jamais comptée dans `overridden`).
   art: { ...pcArt, ...Object.fromEntries(OVERRIDE_IMAGE_FIELDS.filter((f) => overrides[f] !== undefined).map((f) => [f, overrides[f]])) } as Partial<Record<OverrideImageField, string>>, kind: r.kind as EntryKind, source: r.source, emulatorId: r.emulator_id, path: r.path, size: r.size, match: r.match as MatchKind,
   missing: r.missing === 1, addedAt: r.added_at, playMinutes: r.play_minutes, lastPlayed: r.last_played,
-  favorite: r.favorite === 1, pinned: r.pinned === 1, collections, hasSources
+  favorite: r.favorite === 1, collections, hasSources
 })
 
 /** Collections de chaque jeu (id de bibliothèque → ids de collection), en une seule requête. */

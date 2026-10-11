@@ -172,13 +172,12 @@ export function queryCatalog(db: DatabaseSync, q: CatalogQuery): CatalogPage {
   // comptage (LIKE ne se prête pas à un GROUP BY). Renvoyés même à 0 résultat (comme les consoles) : la liste des
   // filtres reste stable, seul le compteur change.
   const wp = where(q, 'publishers')
-  const publishers = [...PUBLISHERS.map((p) => p.id), PUBLISHER_OTHER]
-    .map((id) => {
-      const c = publisherClause(id, '')
-      const sql = wp.sql ? `${wp.sql} AND ${c.sql}` : `WHERE ${c.sql}`
-      const count = (db.prepare(`SELECT COUNT(*) AS n FROM catalog_games ${sql}`).get(...wp.args, ...c.args) as { n: number }).n
-      return { id, count }
-    })
+  // Un seul balayage de la table (une colonne SUM par éditeur) : une requête par éditeur bloquait le processus principal ~300 ms à chaque recherche.
+  const pubIds = [...PUBLISHERS.map((p) => p.id), PUBLISHER_OTHER]
+  const pubClauses = pubIds.map((id) => publisherClause(id, ''))
+  const pubRow = db.prepare(`SELECT ${pubClauses.map((c, i) => `COALESCE(SUM(${c.sql}), 0) AS p${i}`).join(', ')} FROM catalog_games ${wp.sql}`)
+    .get(...pubClauses.flatMap((c) => c.args), ...wp.args) as Record<string, number>
+  const publishers = pubIds.map((id, i) => ({ id, count: pubRow[`p${i}`] }))
   const sources = sourcesFacet(db, q)
   attachSourceLists(db, games)
   return { total, games, consoles, genres, publishers, sources }

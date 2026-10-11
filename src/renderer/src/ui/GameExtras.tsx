@@ -12,13 +12,12 @@ import type { SaveInfo } from '@shared/saves'
 const fmtDate = (ms: number): string => new Date(ms).toLocaleString(getLang(), { dateStyle: 'medium', timeStyle: 'short' })
 const fmtSize = (b: number): string => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
 
-/** Favori et épingle d'un jeu de la bibliothèque (boutons de la fiche). */
+/** Favori d'un jeu de la bibliothèque (boutons de la fiche). */
 export function FlagButtons({ entry }: { entry: LibraryEntry }) {
   const setFlag = useLibrary((s) => s.setFlag)
   return (
     <>
       <Button variant="icon" aria-pressed={entry.favorite} title={t(entry.favorite ? 'fav.remove' : 'fav.add')} aria-label={t('favorite')} onClick={() => void setFlag(entry.id, { favorite: !entry.favorite })}>{entry.favorite ? '♥' : '♡'}</Button>
-      <Button variant="icon" aria-pressed={entry.pinned} title={t(entry.pinned ? 'pin.remove' : 'pin.add')} aria-label={t('pin')} onClick={() => void setFlag(entry.id, { pinned: !entry.pinned })}>{entry.pinned ? '★' : '☆'}</Button>
     </>
   )
 }

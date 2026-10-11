@@ -254,6 +254,18 @@ export async function ensureDuckstationLogging(dir: string): Promise<void> {
   await writeIni(join(dir, 'settings.ini'), { Logging: { LogLevel: 'Warning', LogToFile: true } })
 }
 
+/**
+ * Installations faites avant que Kartouche cesse d'activer le tampon de profondeur PGXP (il faisait disparaître des polygones, voir `duckstationGpu`) : le coupe UNE fois
+ * (marqueur dans le dossier), sans jamais revenir sur un choix fait ensuite par l'utilisateur dans DuckStation.
+ */
+export async function migrateDuckstationDepthBuffer(dir: string): Promise<void> {
+  const marker = join(dir, 'kartouche-pgxp-depth-off')
+  const file = join(dir, 'settings.ini')
+  if (existsSync(marker) || !existsSync(file)) return
+  await writeIni(file, { GPU: { PGXPDepthBuffer: false } })
+  await writeFile(marker, '')
+}
+
 /** Langue de la console Wii = octet « IPL.LNG » du fichier SYSCONF (0 JP, 1 EN, 2 DE, 3 FR, 4 ES, 5 IT, 6 NL). */
 export function setSysconfLanguage(data: Buffer, language: number): boolean {
   if (data.length < 8 || data.subarray(0, 4).toString('latin1') !== 'SCv0') return false
@@ -1058,6 +1070,45 @@ export async function configureEmulator(id: string, dir: string, ctx: ConfigCont
         'sys-lang': fr ? 2 : 1, ...vita3kRenderer(gpu, ctx.displayHeight), 'boot-apps-full-screen': true,
         'show-welcome': false, 'warn-missing-firmware': false, 'confirm_exit_app': false, 'check-for-updates-mode': 0
       }))
+    }
+  }
+}
+
+/** Remplace (ou ajoute) `<tag>valeur</tag>` à la racine d'un XML de réglages Cemu. */
+export function setXmlFlag(xml: string, tag: string, value: boolean): string {
+  const re = new RegExp(`<${tag}>[^<]*</${tag}>`)
+  return re.test(xml) ? xml.replace(re, `<${tag}>${value}</${tag}>`) : xml.replace('<content>', `<content>\n  <${tag}>${value}</${tag}>`)
+}
+
+/**
+ * Coupe la vérification de mise à jour de l'émulateur : sa fenêtre « mise à jour disponible » s'ouvrait par-dessus le jeu. Les mises à jour des émulateurs
+ * ne se font que depuis l'onglet Émulateurs de Kartouche. Appliqué à l'installation et à chaque lancement (installations existantes comprises) ;
+ * un fichier de réglages absent n'est jamais créé (l'émulateur le jugerait incomplet), il recevra ce réglage dès sa création par `configureEmulator`.
+ */
+export async function disableUpdateChecks(id: string, dir: string): Promise<void> {
+  const ini = async (file: string, patch: IniPatch, sep?: string): Promise<void> => { if (existsSync(file)) await writeIni(file, patch, sep) }
+  switch (id) {
+    case 'duckstation': return ini(join(dir, 'settings.ini'), { AutoUpdater: { CheckAtStartup: false } })
+    case 'pcsx2': return ini(join(dir, 'inis', 'PCSX2.ini'), { AutoUpdater: { CheckAtStartup: false } })
+    // UpdateTrack vide = pas de mise à jour automatique.
+    case 'dolphin': return ini(join(dir, 'User', 'Config', 'Dolphin.ini'), { AutoUpdate: { UpdateTrack: '' } })
+    // Sections et clés relevées dans le qt-config.ini réel de chaque émulateur : Azahar les range dans [Miscellaneous], Eden dans [UI] sous un autre nom.
+    case 'azahar': return ini(join(dir, 'user', 'config', 'qt-config.ini'), { Miscellaneous: qt({ check_for_update_on_start: false }) }, '=')
+    case 'eden': return ini(join(dir, 'user', 'config', 'qt-config.ini'), { UI: qt({ check_for_updates: false }) }, '=')
+    case 'ppsspp': return ini(join(dir, 'memstick', 'PSP', 'SYSTEM', 'ppsspp.ini'), { General: { CheckForNewVersion: false } })
+    case 'rpcs3': return ini(join(dir, 'GuiConfigs', 'CurrentSettings.ini'), { Meta: { checkUpdateStart: false }, main_window: { checkUpdateStart: false } }, '=')
+    case 'cemu': {
+      const file = join(dir, 'settings.xml')
+      if (!existsSync(file)) return
+      const xml = await readFile(file, 'utf8')
+      const next = setXmlFlag(xml, 'check_update', false)
+      if (next !== xml) await writeFile(file, next)
+      return
+    }
+    case 'vita3k': {
+      const file = join(dir, 'config.yml')
+      if (existsSync(file)) await writeFile(file, patchYaml(await readText(file), { 'check-for-updates-mode': 0 }))
+      return
     }
   }
 }

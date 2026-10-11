@@ -30,7 +30,7 @@ interface Opened { gameId: number | null; entryId?: number }
 /** Dernière tuile ouverte : le focus y revient à la fermeture de la fiche. */
 let lastOpened: string | null = null
 
-function Tile({ id, gameId, entryId, title, art, cons, dim, fav, pinned, state, onOpen }: { id: string; gameId: number | null; entryId?: number; title: string; /** image personnelle de la jaquette (chemin relatif) */ art?: string; cons: string; dim?: boolean; fav?: boolean; pinned?: boolean; state?: 'installed' | 'library' | 'downloading'; onOpen: () => void }) {
+function Tile({ id, gameId, entryId, title, art, cons, dim, fav, state, onOpen }: { id: string; gameId: number | null; entryId?: number; title: string; /** image personnelle de la jaquette (chemin relatif) */ art?: string; cons: string; dim?: boolean; fav?: boolean; state?: 'installed' | 'library' | 'downloading'; onOpen: () => void }) {
   const tag = <Badge>{label(cons)}</Badge>
   const name = <span className="card-title">{title}</span>
   return (
@@ -40,7 +40,6 @@ function Tile({ id, gameId, entryId, title, art, cons, dim, fav, pinned, state, 
         : <div className="cover-fill" style={artStyle(title)}>{name}{tag}</div>}
       <DownloadVeil gameId={gameId} />
       {fav && <span className="fav-mark">♥</span>}
-      {pinned && <span className="pin-mark">★</span>}
       {state && <span className={`state-mark ${state}`}>{t(state === 'installed' ? 'catalog.installed' : state === 'downloading' ? 'catalog.downloading' : 'catalog.inLibrary')}</span>}
     </button>
   )
@@ -185,7 +184,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
   const openEntry = (e: LibraryEntry): void => setOpened({ gameId: e.gameId, entryId: e.id })
   const openedEntry = opened?.entryId !== undefined ? entries.find((e) => e.id === opened.entryId) : undefined
   const playing = entries.find((e) => running.includes(e.id))
-  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} entryId={e.id} title={e.shownTitle} art={e.art.cover} cons={e.console} fav={e.favorite} pinned={e.pinned} onOpen={() => openEntry(e)} />)
+  const libTiles = (list: LibraryEntry[], prefix: string): ReactElement[] => list.map((e) => <Tile key={`${prefix}${e.id}`} id={`${prefix}${e.id}`} gameId={e.gameId} entryId={e.id} title={e.shownTitle} art={e.art.cover} cons={e.console} fav={e.favorite} onOpen={() => openEntry(e)} />)
   const searchable = section === 'library' || section === 'catalog'
   // Clavier physique : on tape directement la recherche (le clavier virtuel reste pour la manette).
   useTypeText(query, (v) => { setQuery(v); setLimit(PAGE) }, searchable && !overlay && !inGame)
@@ -243,6 +242,7 @@ export function BigPicture({ onExit }: { onExit: () => void }) {
 
         {section === 'catalog' && (
           <div className="bp-grid" ref={grid}>
+            {page === null && Array.from({ length: 12 }).map((_, i) => <div key={i} className="bp-tile skeleton-block" aria-hidden />)}
             {(page?.games ?? []).map((g) => <Tile key={g.id} id={`g${g.id}`} gameId={g.id} entryId={entries.find((e) => e.gameId === g.id)?.id} title={g.name} cons={g.console} dim={!entries.some((e) => e.gameId === g.id) && !downloadingGames.has(g.id)} state={downloadingGames.has(g.id) ? 'downloading' : catalogState(g.id)} onOpen={() => setOpened({ gameId: g.id })} />)}
             {page && page.total > page.games.length && <button data-nav className="bp-tile bp-more" onClick={() => { focusAfterMore.current = page.games.length; setLimit(limit + PAGE) }}>{t('catalog.more')}</button>}
           </div>

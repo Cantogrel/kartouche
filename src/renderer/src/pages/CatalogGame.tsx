@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Button, Cover, Tag } from '@/ui'
+import { confirmDialog } from '@/ui/AskDialog'
 import { useApp } from '@/store/app'
 import { t } from '@/i18n'
 import { platformLabel } from '@shared/consoles'
 import { canonicalGenre, genreLabel } from '@shared/genres'
-import { formatSize } from '@shared/format'
+import { formatMinutes, formatSize } from '@shared/format'
 import { isTorrentSource } from '@shared/uriKind'
 import { useSettings } from '@/store/settings'
 import type { CatalogGame, GameDetails } from '@shared/catalog'
@@ -133,7 +134,7 @@ function DownloadButton({ sources, gameName, gameId }: { sources: GameSource[]; 
     const r = await startDownload(selected, gameName, gameId)
     if (r.ok) await useLibrary.getState().refresh()
   }
-  const cancel = (): void => { if (selected !== undefined) cancelDownload(selected) }
+  const cancel = async (): Promise<void> => { if (selected !== undefined && await confirmDialog(t('download.confirmCancel', { name: gameName }))) cancelDownload(selected) }
   const percent = job && job.total > 0 ? Math.round((job.done / job.total) * 100) : null
   // Plusieurs entrées d'une même liste n'ont souvent ni nom ni poids distincts : le titre brut de l'entrée
   // (convention No-Intro/Redump) porte lui la région/langues/révision qui les différencient vraiment.
@@ -155,10 +156,10 @@ function DownloadButton({ sources, gameName, gameId }: { sources: GameSource[]; 
       {busy
         // Juste après le clic, avant la première mesure réelle (comme « Lancement… » sur le bouton Jouer) : pas encore annulable.
         ? (percent !== null
-            ? <Button onClick={cancel}>{t('download.cancel')} ({percent} %)</Button>
+            ? <Button onClick={() => void cancel()}>{t('download.cancel')} ({percent} %)</Button>
             : job?.message === 'connecting'
               // Torrent : recherche de pairs/métadonnées (jusqu'à 2 min), annulable contrairement au court instant avant la 1re mesure HTTP.
-              ? <Button onClick={cancel}>{t('download.connecting')}</Button>
+              ? <Button onClick={() => void cancel()}>{t('download.connecting')}</Button>
               : <Button disabled>{t('download.downloading')}</Button>)
         : <Button variant="primary" onClick={() => void start()}>{t('download.button')}{sources.length === 1 && sources[0].sizeBytes ? ` · ${formatSize(sources[0].sizeBytes)}` : ''}</Button>}
       </div>
@@ -202,7 +203,7 @@ export function LibraryFile({ entry }: { entry: LibraryEntry }) {
       {entry.missing
         ? <div className="muted">{t('game.noFile')}</div>
         : <><div className="muted">{entry.path}</div><div className="muted">{t(`match.${entry.match}`)} · {formatSize(entry.size)}</div></>}
-      <div className="muted">{days === null ? t('game.neverPlayed') : t('game.lastPlayed', { n: days })}{entry.playMinutes > 0 && ` · ${t('game.playtime', { n: entry.playMinutes })}`}</div>
+      <div className="muted">{days === null ? t('game.neverPlayed') : t('game.lastPlayed', { n: days })}{entry.playMinutes > 0 && ` · ${formatMinutes(entry.playMinutes)}`}</div>
     </div>
   )
 }

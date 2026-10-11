@@ -10,11 +10,11 @@ export function formatSize(bytes: number): string {
   return `${value.toFixed(decimals)} ${UNITS[unit]}`
 }
 
-/** Durée de jeu lisible : 45 min, 2 h, 2 h 30 (les secondes ne comptent pas). */
+/** Durée de jeu lisible : 45 min, 2.5 h (une décimale de 1 h à 99.9 h), 120 h (sans décimale dès 100 h). */
 export function formatMinutes(minutes: number): string {
   const m = Math.max(0, Math.round(Number.isFinite(minutes) ? minutes : 0))
   if (m < 60) return `${m} min`
-  const h = Math.floor(m / 60)
-  const r = m % 60
-  return r === 0 ? `${h} h` : `${h} h ${String(r).padStart(2, '0')}`
+  const tenths = Math.round(m / 6) // dixièmes d'heure
+  if (tenths >= 1000) return `${Math.round(m / 60)} h`
+  return `${tenths % 10 === 0 ? tenths / 10 : (tenths / 10).toFixed(1)} h`
 }

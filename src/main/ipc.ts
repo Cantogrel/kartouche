@@ -427,23 +427,28 @@ export function registerIpc(ctx: { db: DatabaseSync; paths: AppPaths; sqliteVers
   })
   handle('downloads:cancel', (sourceId) => { cancelDownload(sourceId) })
   const installing = new Set<string>()
+  // Installations annulables (phase de téléchargement) : l'annulation interrompt le téléchargement, l'installation existante n'est pas touchée.
+  const installAborts = new Map<string, AbortController>()
   handle('emulators:list', () => listEmulators(db))
   handle('emulators:install', async (id) => {
     const def = emulatorById(id)
     if (!def) return { ok: false, error: 'unknown' }
     if (installing.has(id)) return { ok: false, error: 'busy' }
     installing.add(id)
+    const abort = new AbortController()
+    installAborts.set(id, abort)
     try {
       const d = screen.getPrimaryDisplay()
       const ctx = { lang: resolveLanguage(loadSettings(db).language, app.getLocale()), displayHeight: Math.round(d.size.height * d.scaleFactor) }
-      await installEmulator(db, def, paths, (p) => broadcast('emulators:progress', p), ctx)
+      await installEmulator(db, def, paths, (p) => broadcast('emulators:progress', p), ctx, abort.signal)
       // RPCS3 / Vita3K : le firmware officiel de Sony se télécharge et s'installe seul à la suite de l'émulateur, sans aucune boîte à valider ; un échec (réseau…) n'invalide
       // pas l'installation : le panneau BIOS propose toujours le bouton d'installation automatique.
       const fw = BIOS_SLOTS.find((s) => s.emulator === id && s.auto)
       if (fw && !(await biosStatus({ db, paths })).some((s) => s.id === fw.id && s.state === 'ok')) await autoInstallFirmware({ db, paths }, id, (p) => broadcast('emulators:progress', p)).catch(() => {})
       return { ok: true }
-    } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) } } finally { installing.delete(id) }
+    } catch (e) { return { ok: false, error: abort.signal.aborted ? 'canceled' : e instanceof Error ? e.message : String(e) } } finally { installing.delete(id); installAborts.delete(id) }
   })
+  handle('emulators:cancel', (id) => { installAborts.get(id)?.abort() })
   handle('emulators:uninstall', (id) => uninstallEmulator(db, id))
   handle('emulators:locate', async (id) => {
     const def = emulatorById(id)

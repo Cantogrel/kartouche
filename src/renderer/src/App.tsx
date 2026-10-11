@@ -43,6 +43,7 @@ export default function App() {
   useEffect(() => { void load(); void useLibrary.getState().refresh(); void useEmulators.getState().refresh(); void useCustomEmulators.getState().refresh(); void window.api.invoke('connectors:scan', undefined).then((r) => (r.some((x) => x.added > 0 || x.gone > 0) ? useLibrary.getState().refresh() : undefined)); return useEmulators.getState().listen() }, [load])
   // Barre d'état : un téléchargement démarré depuis une fiche continue, et doit y rester visible, même après avoir changé de page.
   useEffect(() => useDownloads.getState().listen(), [])
+  useEffect(() => useEmulators.getState().autoCheck(), [])
   useEffect(() => window.api.on('library:metaUpdated', () => void useLibrary.getState().refresh()), [])
   // Mises à jour : état tenu à jour partout (pas seulement pendant que Paramètres est monté), et changelog de la
   // version qu'on vient de démarrer proposé une seule fois, où que l'utilisateur se trouve dans l'app.
@@ -73,15 +74,15 @@ export default function App() {
     el.style.setProperty('--radius-lg', `${RADIUS_PX[radius][1]}px`)
   }, [uiScale, accent, theme, reduceMotion, accentColor, radius, highContrast, lang])
 
-  // Liste latérale : jeux Kartouche (ROM) puis jeux PC (exécutables, launchers), séparés par un filet ; les épinglés remontent en tête de chaque groupe.
-  const sideEntries = libEntries.filter((g) => !librarySearch || g.shownTitle.toLowerCase().includes(librarySearch.toLowerCase())).sort((a, b) => Number(b.pinned) - Number(a.pinned))
+  // Liste latérale : jeux Kartouche (ROM) puis jeux PC (exécutables, launchers), séparés par un filet ; les favoris remontent en tête de chaque groupe.
+  const sideEntries = libEntries.filter((g) => !librarySearch || g.shownTitle.toLowerCase().includes(librarySearch.toLowerCase())).sort((a, b) => Number(b.favorite) - Number(a.favorite))
   const sideGroups = { rom: sideEntries.filter((g) => g.kind === 'rom'), pc: sideEntries.filter((g) => g.kind !== 'rom') }
   const sideItem = (g: (typeof libEntries)[number]) => (
 
               <button key={g.id} className={`nav-item small${gameId === `lib:${g.id}` && route === 'game' ? ' active' : ''}${g.missing ? ' dim' : ''}`} aria-current={gameId === `lib:${g.id}` && route === 'game' ? 'page' : undefined} onClick={() => go('game', `lib:${g.id}`)} onContextMenu={onEntryContext(g.id)}>
                 <DownloadVeil gameId={g.gameId} />
                 <GameIcon gameId={g.gameId} console={g.console} art={g.art.icon ?? (g.kind !== 'rom' ? g.art.cover : undefined)} />
-                <span className="side-name">{g.shownTitle}</span>{g.pinned && <span className="side-pin">★</span>}
+                <span className="side-name">{g.shownTitle}</span>{g.favorite && <span className="side-pin">♥</span>}
               </button>
   )
 

@@ -52,6 +52,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   const [sources, setSources] = useState<GameSource[]>([])
   const [pickedId, setSourceId] = useState<number | undefined>(undefined)
   const [pickingSource, setPickingSource] = useState(false)
+  const [confirmCancel, setConfirmCancel] = useState(false)
   // Le job vit dans le store global : si la fiche est ouverte pendant un téléchargement, la source active prime sur la 1re de la liste.
   const activeId = useDownloads((s) => sources.find((x) => s.jobs[x.id])?.id)
   const sourceId = activeId ?? pickedId
@@ -70,6 +71,8 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
   useEffect(() => { focusEl(navItems()[0]) }, [])
   useEffect(() => { if (confirmStop) focusEl(navItems()[0]) }, [confirmStop])
   useEffect(() => { if (pickingSource) focusEl(navItems()[0]) }, [pickingSource])
+  useEffect(() => { if (confirmCancel) focusEl(navItems()[0]) }, [confirmCancel])
+  useEffect(() => (confirmCancel ? pushLayer((a) => { if (a === 'back') { setConfirmCancel(false); return true } return false }) : undefined), [confirmCancel])
 
   // Fiche ouverte depuis la bibliothèque (`entry`) : les modifications de l'utilisateur s'appliquent, comme en mode classique. Depuis le catalogue, la fiche reste celle d'origine.
   const overrides = useEntryOverrides(entry)
@@ -148,7 +151,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
           : <div className="bp-detail-cover" style={artStyle(title)} />}
         <div className="bp-detail-body">
           <h2>{title}</h2>
-          <div className="muted"><Badge>{label(cons)}</Badge>{owned && ` ${t('bp.played', { n: owned.playMinutes })}`}</div>
+          <div className="muted"><Badge>{label(cons)}</Badge>{owned && ` ${formatMinutes(owned.playMinutes)}`}</div>
           {stats && stats.playMinutes > 0 && <div className="muted">{[formatMinutes(stats.playMinutes), stats.sessions > 0 && `${stats.sessions} ${t('stats.sessions').toLowerCase()}`, stats.rank !== null && `${t('stats.rank')} ${t('stats.rankValue', { r: stats.rank, n: stats.playedGames })}`].filter(Boolean).join(' \u00b7 ')}</div>}
           <div className="muted">{[year && t('game.released', { d: String(year) }), details?.publisher && t('game.publishedBy', { p: details.publisher }), developer && t('game.developedBy', { p: developer })].filter(Boolean).join(' · ')}</div>
           {genres.length > 0 && <div className="tags">{genres.map((g) => <Tag key={g}>{g}</Tag>)}</div>}
@@ -162,7 +165,7 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
               : <button data-nav className={`bp-btn primary${launching ? ' busy' : ''}`} aria-disabled={launching} onClick={() => { if (!launching) void launch() }}>{launching ? t('play.launching') : `▶ ${t('play')}`}</button>)}
             {!owned && gameId !== null && <button data-nav className="bp-btn primary" onClick={() => void useLibrary.getState().add(gameId)}>+ {t('addToLibrary')}</button>}
             {downloadable && (downloading
-              ? <button data-nav className="bp-btn" onClick={() => sourceId !== undefined && cancelDownload(sourceId)}>
+              ? <button data-nav className="bp-btn" onClick={() => setConfirmCancel(true)}>
                   {job && job.total > 0 ? `${t('download.cancel')} (${Math.round((job.done / job.total) * 100)}%)` : job?.message === 'connecting' ? t('download.connecting') : t('download.downloading')}
                 </button>
               : <button data-nav className="bp-btn primary" onClick={clickDownload}>⬇ {t('download.button')}{sources.length === 1 && sources[0].sizeBytes ? ` · ${formatSize(sources[0].sizeBytes)}` : ''}</button>)}
@@ -191,6 +194,15 @@ export function Detail({ gameId, entry, onClose }: { gameId: number | null; entr
             <p>{t('play.confirmStopOther', { title: confirmStop.title })}</p>
             <button data-nav className="bp-btn" onClick={() => setConfirmStop(null)}>{t('dialog.cancel')}</button>
             <button data-nav className="bp-btn primary" onClick={() => void stopOtherAndLaunch()}>{t('play.confirmStopOtherYes')}</button>
+          </div>
+        </div>
+      )}
+      {confirmCancel && (
+        <div className="bp-overlay">
+          <div className="bp-menu" data-focus-root>
+            <p>{t('download.confirmCancel', { name: title })}</p>
+            <button data-nav className="bp-btn" onClick={() => setConfirmCancel(false)}>{t('download.keep')}</button>
+            <button data-nav className="bp-btn primary" onClick={() => { setConfirmCancel(false); if (sourceId !== undefined) cancelDownload(sourceId) }}>{t('download.confirmCancelYes')}</button>
           </div>
         </div>
       )}

@@ -27,15 +27,16 @@ export const duckstationScale = (gpu: Gpu, displayHeight: number): number =>
 
 /**
  * Section [GPU] : Vulkan si le pilote le gère (sinon Direct3D 11, l'API la plus répandue sous Windows, vérifié fonctionnel), sur le GPU détecté
- * (`Adapter` = son nom ; un nom inconnu retombe sur le premier GPU, vérifié). PGXP : correction de géométrie, des textures et « culling » (sûrs), plus le
- * tampon de profondeur (tampon réel, vérifié actif en Vulkan) dès qu'on est au-dessus d'un iGPU. Jamais : mode CPU, cache de sommets, ni widescreen
+ * (`Adapter` = son nom ; un nom inconnu retombe sur le premier GPU, vérifié). PGXP : correction de géométrie, des textures et « culling » (sûrs), mais JAMAIS le
+ * tampon de profondeur : il contredit l'ordre de dessin (tables d'ordonnancement) de nombreux jeux PS1 et fait disparaître des polygones (constaté sur Spyro) ; DuckStation le laisse
+ * lui-même désactivé par défaut. Jamais non plus : mode CPU, cache de sommets, ni widescreen
  * (le 4:3 natif reste, `Display.AspectRatio` n'est pas touché) — DuckStation active lui-même ce qu'un jeu connu exige.
  */
 export function duckstationGpu(gpu: Gpu, displayHeight: number): Record<string, string | number | boolean> {
   const gpuSection: Record<string, string | number | boolean> = {
     Renderer: gpu.vulkan ? 'Vulkan' : 'D3D11',
     ResolutionScale: duckstationScale(gpu, displayHeight),
-    PGXPEnable: true, PGXPCulling: true, PGXPTextureCorrection: true, PGXPDepthBuffer: gpu.tier !== 'igpu'
+    PGXPEnable: true, PGXPCulling: true, PGXPTextureCorrection: true, PGXPDepthBuffer: false
   }
   if (gpu.vulkan && gpu.name) gpuSection.Adapter = gpu.name
   return gpuSection

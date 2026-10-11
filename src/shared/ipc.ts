@@ -140,8 +140,8 @@ export interface IpcChannels {
   'library:removeContent': { req: number; res: { ok: boolean; error?: string; leftover?: string } }
   /** Importe des fichiers/dossiers comme mises à jour/DLC DE CE JEU : tout ce qui n'en est pas (ou est d'un autre jeu) est refusé avec la raison. */
   'library:importContent': { req: { entryId: number; paths: string[] }; res: ImportResult }
-  /** Favori et/ou épingle d'un jeu (champ absent = inchangé). */
-  'library:flag': { req: { id: number; favorite?: boolean; pinned?: boolean }; res: void }
+  /** Favori d'un jeu (champ absent = inchangé). */
+  'library:flag': { req: { id: number; favorite?: boolean }; res: void }
   /** Ouvre le sélecteur pour un fichier .sbi ; null si annulé. */
   'library:pickSbi': { req: void; res: string | null }
   /** Copie un .sbi à côté de la ROM d'un jeu (protection libcrypt PS1). */
@@ -188,6 +188,8 @@ export interface IpcChannels {
   'emulators:list': { req: void; res: EmulatorState[] }
   /** Télécharge et installe (ou met à jour) un émulateur ; la progression arrive par 'emulators:progress'. */
   'emulators:install': { req: string; res: { ok: boolean; error?: string } }
+  /** Annule le téléchargement d'un émulateur en cours (l'installation précédente reste intacte). */
+  'emulators:cancel': { req: string; res: void }
   'emulators:uninstall': { req: string; res: void }
   /** Indique à la main l'exécutable d'un émulateur déjà installé ; null si annulé. */
   'emulators:locate': { req: string; res: EmulatorState | null }

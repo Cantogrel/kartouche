@@ -24,7 +24,7 @@ import { anyGamepadConnected, autoConfirmEdenApplet, closeGracefully, connectedX
 import { emulatorEnv } from './sdlEnv'
 import { applyCemuControls, applyCemuPad, applyCemuPlayers, needsGamePad, type CemuPlayerPad } from './cemu'
 import { isVWiiWrapper, readWuaFiles } from '../library/content/wua'
-import { applyDolphinFastDiscExclusion, applyDolphinPads, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyMelondsPad, applyPpssppPads, migrateHybridLayout, applyPsPads, applyEdenPads, azaharCfgPath, ensureDuckstationLogging, setCfgLanguage } from './configure'
+import { applyDolphinFastDiscExclusion, applyDolphinPads, applyAzaharGameConfig, applyAzaharPad, applyDuckstationGame, applyPcsx2Game, applyPpssppGame, applyRpcs3Game, applyRpcs3Pad, applyEdenGameConfig, applyMelondsGame, applyMelondsPad, applyPpssppPads, migrateHybridLayout, applyPsPads, applyEdenPads, azaharCfgPath, ensureDuckstationLogging, migrateDuckstationDepthBuffer, setCfgLanguage, disableUpdateChecks } from './configure'
 import { loadSettings } from '../db/settingsStore'
 import { backupSaves, cemuMlcDir, learnCemuKey, prepareRetroarch, readDiscId, snapshotCemuSaves } from '../saves/saves'
 import { identifyGame } from '../saves/identify'
@@ -283,6 +283,8 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
   // Réservé pendant la préparation (détection de la manette) pour qu'un double clic ne lance pas deux fois le jeu.
   running.set(entryId, { pid: 0, stopped: false })
   try {
+    // Pas de fenêtre « mise à jour disponible » de l'émulateur : elles se font depuis l'onglet Émulateurs.
+    await disableUpdateChecks(def.id, row.dir).catch(() => {})
     // Un Joy-Con seul n'est accepté que là où il est réellement configuré : Eden (le jeu décide, applet) et Dolphin Wii (Joy-Con droit = Wiimote). Ailleurs, message clair plutôt qu'un jeu qui répond de travers.
     const pairOk: EdenNintendo[] = ['switch-pro', 'joycon-pair']
     const readable = def.id === 'dolphin' ? (entry.console === 'gc' ? pairOk : [...pairOk, 'joycon-right' as const]) : ['duckstation', 'pcsx2', 'vita3k', 'azahar'].includes(def.id) ? pairOk : null
@@ -414,6 +416,7 @@ export async function launchGame(db: DatabaseSync, entryId: number, notify: (s: 
     // DuckStation n'écrit rien sur la sortie standard : sans ça, un jeu qui se ferme tout seul ne laisse aucune trace exploitable.
     if (def.id === 'duckstation') {
       await ensureDuckstationLogging(row.dir).catch(() => {})
+      await migrateDuckstationDepthBuffer(row.dir).catch(() => {})
       // Réglages propres au jeu (numéro de série lu sur le disque) seulement si une exception est connue ; les autres jeux n'en reçoivent jamais.
       await applyDuckstationGame(row.dir, await readPs1Serial(romPath).catch(() => null)).catch(() => {})
     }

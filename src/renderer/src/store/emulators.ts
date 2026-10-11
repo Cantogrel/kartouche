@@ -19,12 +19,17 @@ interface EmulatorsState {
   /** Dernière fermeture suspecte (probable échec de lancement) par jeu ; effacée au lancement suivant. */
   quickExits: Record<number, QuickExit>
   refresh: () => Promise<void>
-  install: (id: string) => Promise<void>
+  /** Faux si l'installation a échoué ou a été annulée (`errors[id]` vide dans ce dernier cas). */
+  install: (id: string) => Promise<boolean>
+  cancelInstall: (id: string) => void
   uninstall: (id: string) => Promise<void>
   /** Désinstalle tous les émulateurs installés (Réglages → Zone dangereuse). */
   uninstallAll: () => Promise<void>
   locate: (id: string) => Promise<void>
-  check: () => Promise<void>
+  /** Recherche des mises à jour ; renvoie faux si au moins un émulateur n'a pas pu être vérifié (réseau, GitHub…). */
+  check: () => Promise<boolean>
+  /** Recherche automatique, sans message : au démarrage (une nouvelle tentative 10 s plus tard en cas d'échec) puis toutes les 6 h ; le résultat se voit dans l'onglet Émulateurs. Renvoie l'arrêt. */
+  autoCheck: () => () => void
   play: (entryId: number) => Promise<LaunchResult>
   dismissQuickExit: (entryId: number) => void
   listen: () => () => void
@@ -37,16 +42,18 @@ export const useEmulators = create<EmulatorsState>((set, get) => ({
     set({ list, running, loaded: true })
   },
   install: async (id) => {
-    if (get().progress[id]) return
+    if (get().progress[id]) return false
     set((s) => ({ progress: { ...s.progress, [id]: { id, phase: 'resolve', done: 0, total: 0 } }, errors: { ...s.errors, [id]: '' } }))
     const res = await window.api.invoke('emulators:install', id)
     set((s) => {
       const progress = { ...s.progress }
       delete progress[id]
-      return { progress, errors: { ...s.errors, [id]: res.ok ? '' : res.error ?? 'error' } }
+      return { progress, errors: { ...s.errors, [id]: res.ok || res.error === 'canceled' ? '' : res.error ?? 'error' } }
     })
     await get().refresh()
+    return res.ok
   },
+  cancelInstall: (id) => void window.api.invoke('emulators:cancel', id),
   uninstall: async (id) => {
     if (get().removing[id]) return
     set((s) => ({ removing: { ...s.removing, [id]: true } }))
@@ -60,11 +67,25 @@ export const useEmulators = create<EmulatorsState>((set, get) => ({
   },
   locate: async (id) => { if (await window.api.invoke('emulators:locate', id)) await get().refresh() },
   check: async () => {
+    if (get().checking) return true
     set({ checking: true })
     try {
       const res: LatestVersion[] = await window.api.invoke('emulators:check')
-      set({ latest: Object.fromEntries(res.map((r) => [r.id, r.version])) })
-    } finally { set({ checking: false }) }
+      // Un émulateur dont la vérification échoue garde sa dernière version connue.
+      set((s) => ({ latest: { ...s.latest, ...Object.fromEntries(res.filter((r) => r.version).map((r) => [r.id, r.version])) } }))
+      return res.every((r) => !r.error)
+    } catch { return false } finally { set({ checking: false }) }
+  },
+  autoCheck: () => {
+    let stopped = false
+    let retry: ReturnType<typeof setTimeout> | undefined
+    const run = async (again: boolean): Promise<void> => {
+      const ok = await get().check()
+      if (!ok && again && !stopped) retry = setTimeout(() => void run(false), 10_000)
+    }
+    void run(true)
+    const every = setInterval(() => void run(false), 6 * 3600 * 1000)
+    return () => { stopped = true; clearTimeout(retry); clearInterval(every) }
   },
   play: async (entryId) => {
     get().dismissQuickExit(entryId)

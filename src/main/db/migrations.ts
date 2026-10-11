@@ -156,7 +156,9 @@ export const MIGRATIONS: readonly string[] = [
     year INTEGER, developer TEXT, media TEXT, cover TEXT, fetched_at INTEGER NOT NULL
   )`,
   // v24 : bannière des jeux PC (illustration ou capture IGDB, `pc/<entrée>/banner-<ts>.<ext>`). Chaîne vide = aucune image disponible (on ne réessaie pas).
-  `ALTER TABLE pc_meta ADD COLUMN banner TEXT`
+  `ALTER TABLE pc_meta ADD COLUMN banner TEXT`,
+  // v25 : l'épingle fusionne avec le favori (la colonne `pinned` n'est plus lue)
+  `UPDATE library SET favorite = 1 WHERE pinned = 1`
 ]
 
 export function migrate(db: DatabaseSync, migrations: readonly string[] = MIGRATIONS): number {

@@ -40,8 +40,6 @@ const sep = (key: string): Action => ({ key, separator: true })
 
 const favAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>): Action =>
   ({ key: 'fav', label: `${entry.favorite ? '♥' : '♡'} ${t(entry.favorite ? 'fav.remove' : 'fav.add')}`, run: () => lib.setFlag(entry.id, { favorite: !entry.favorite }) })
-const pinAction = (entry: LibraryEntry, lib: ReturnType<typeof useLibrary.getState>): Action =>
-  ({ key: 'pin', label: `${entry.pinned ? '★' : '☆'} ${t(entry.pinned ? 'pin.remove' : 'pin.add')}`, run: () => lib.setFlag(entry.id, { pinned: !entry.pinned }) })
 const editAction = (entry: LibraryEntry): Action =>
   ({ key: 'edit', label: `✎ ${t('edit.menu')}`, run: () => useDialog.getState().open({ kind: 'edit', entryId: entry.id }) })
 const playWithAction = (entry: LibraryEntry): Action | null =>
@@ -76,7 +74,7 @@ function quickActionsFor(entry: LibraryEntry): Action[] {
   if (entry.kind !== 'rom') {
     // Exécutable ou jeu de launcher : lancement direct, et seule l'entrée peut être retirée (jamais ses fichiers).
     if (hasFile) list.push(running ? { key: 'stop', label: `■ ${t('play.stop')}`, run: () => window.api.invoke('game:stop', entry.id) } : { key: 'play', label: `▶ ${t('play')}`, run: () => playEntry(entry) }, sep('sep1'))
-    list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), sep('sep2'), removeEntryAction(entry, lib, useApp.getState().back))
+    list.push(favAction(entry, lib), collectionAction(entry), sep('sep2'), removeEntryAction(entry, lib, useApp.getState().back))
     return list
   }
   if (hasFile && emulatorInstalled) {
@@ -87,7 +85,7 @@ function quickActionsFor(entry: LibraryEntry): Action[] {
     list.push({ key: 'link', label: t('action.link'), run: () => lib.link() })
   }
   if (list.length) list.push(sep('sep1'))
-  list.push(favAction(entry, lib), pinAction(entry, lib), collectionAction(entry))
+  list.push(favAction(entry, lib), collectionAction(entry))
   // Avec une source de téléchargement : « Désinstaller » (le jeu se retélécharge) ; sinon « Supprimer le fichier » (aller simple). Jamais les deux.
   if (hasFile) list.push(sep('sep2'), entry.hasSources ? uninstallAction(entry, lib) : deleteFileAction(entry))
   // Dans la bibliothèque mais pas installé (sans fichier) : on peut retirer la fiche.
@@ -100,7 +98,7 @@ function fullActionsFor(entry: LibraryEntry, back: () => void, withEdit: boolean
   const lib = useLibrary.getState()
   const hasFile = !entry.missing
   const ask = (key: string): Promise<boolean> => confirmDialog(t(`confirm.${key}`, { title: entry.shownTitle }))
-  const list: Action[] = [favAction(entry, lib), pinAction(entry, lib), collectionAction(entry), ...(withEdit ? [editAction(entry)] : []), ...(playWithAction(entry) ? [playWithAction(entry)!] : []), sep('sep1')]
+  const list: Action[] = [favAction(entry, lib), collectionAction(entry), ...(withEdit ? [editAction(entry)] : []), ...(playWithAction(entry) ? [playWithAction(entry)!] : []), sep('sep1')]
   if (entry.kind !== 'rom') {
     if (hasFile) list.push({ key: 'reveal', label: t('action.reveal'), run: () => window.api.invoke('library:reveal', entry.id) })
     list.push(sep('sep2'), removeEntryAction(entry, lib, back))

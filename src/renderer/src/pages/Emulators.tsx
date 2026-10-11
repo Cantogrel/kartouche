@@ -1,5 +1,5 @@
 import { confirmDialog } from '@/ui/AskDialog'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Button, ProgressBar, Section, Tag } from '@/ui'
 import { t } from '@/i18n'
 import { EMULATORS, MANUAL_PAD_EMULATORS, compareVersions, emulatorMaker, emulatorRank, type EmulatorDef } from '@shared/emulators'
@@ -16,21 +16,33 @@ import { platformLabel } from '@shared/consoles'
 const consoleNames = (def: EmulatorDef): string => def.consoles.map((c) => CONSOLES.find((x) => x.id === c)?.label ?? c).join(', ')
 const acceptedFiles = (def: EmulatorDef): string => extensionsForConsoles(def.consoles).map((x) => `.${x}`).join(' ')
 
+const isNewer = (current: string | null | undefined, newer: string | null | undefined): boolean =>
+  !!current && !!newer && newer !== current && (compareVersions(newer, current) > 0 || !/^[\d.]+$/.test(newer))
+
 const mb = (n: number): string => (n / 1048576).toFixed(n > 10485760 ? 0 : 1)
 
 export function Emulators() {
-  const { list, loaded, progress, removing, errors, latest, checking, refresh, install, uninstall, locate, check } = useEmulators()
+  const { list, loaded, progress, removing, errors, latest, checking, refresh, install, uninstall, locate, check, cancelInstall } = useEmulators()
   useEffect(() => { void refresh() }, [refresh])
   const state = (id: string) => list.find((e) => e.id === id)
   const customs = useCustomEmulators((s) => s.list)
   const defaults = useSettings((s) => s.settings.emulatorDefaults)
   useEffect(() => { void useCustomEmulators.getState().refresh() }, [])
+  // Émulateurs installés par Kartouche dont une version plus récente est connue (même règle que le badge de chaque carte).
+  const canceled = useRef(false)
+  const updatable = list.filter((e) => e.installed && !e.custom && !e.missing && !progress[e.id] && !removing[e.id] && isNewer(e.version, latest[e.id])).map((e) => e.id)
+  // Une annulation arrête aussi la suite : l'utilisateur ne veut plus de la série, pas seulement de cet émulateur.
+  const updateAll = async (): Promise<void> => { canceled.current = false; for (const id of updatable) { await install(id); if (canceled.current) break } }
+  const cancel = async (name: string, id: string): Promise<void> => { if (await confirmDialog(t('emu.confirmCancel', { name }))) { canceled.current = true; cancelInstall(id) } }
   const setDefault = async (console: string, id: string | null): Promise<void> => { await window.api.invoke('emulators:setDefault', { console, emulatorId: id }); await useSettings.getState().load() }
   return (
     <div className="content">
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <p className="muted">{t('emu.subtitle')}</p>
-        <Button onClick={() => void check()} disabled={checking || !list.some((e) => e.installed && !e.custom)}>{checking ? t('emu.checking') : t('emu.checkUpdates')}</Button>
+        <div className="row">
+          {updatable.length > 0 && <Button variant="primary" onClick={() => void updateAll()}>{t('emu.updateAll')} ({updatable.length})</Button>}
+          <Button onClick={() => void check()} disabled={checking || !list.some((e) => e.installed && !e.custom)}>{checking ? t('emu.checking') : t('emu.checkUpdates')}</Button>
+        </div>
       </div>
       {MAKERS.map((maker) => (
       <Section key={maker} title={maker}>
@@ -40,7 +52,7 @@ export function Emulators() {
           const p = progress[def.id]
           const rm = !!removing[def.id]
           const newer = latest[def.id]
-          const update = !!s?.version && !!newer && newer !== s.version && (compareVersions(newer, s.version) > 0 || !/^[\d.]+$/.test(newer))
+          const update = isNewer(s?.version, newer)
           const status = !loaded ? '' : rm ? t('emu.removing') : p ? t('emu.installing') : !s?.installed ? t('status.notInstalled') : s.missing ? t('emu.missing') : update ? t('emu.updateAvailable', { v: newer ?? '' }) : t('status.installed')
           return (
             <div key={def.id} className="emu-card">
@@ -68,6 +80,7 @@ export function Emulators() {
               <div className="emu-foot">
                 <Tag>{status}</Tag>
                 <div className="row">
+                  {p?.phase === 'download' && <Button onClick={() => void cancel(def.name, def.id)}>{t('emu.cancelDownload')}</Button>}
                   {s?.installed && !p && (
                     <>
                       <Button onClick={() => void window.api.invoke('emulators:open', { id: def.id, what: 'app' })} disabled={s.missing}>{t('emu.open')}</Button>

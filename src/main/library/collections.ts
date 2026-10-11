@@ -38,10 +38,9 @@ export function setMembership(db: DatabaseSync, collectionId: number, entryId: n
   else db.prepare('DELETE FROM collection_items WHERE collection_id = ? AND library_id = ?').run(collectionId, entryId)
 }
 
-/** Favori et/ou épingle d'un jeu (champ absent = inchangé). */
-export function setFlags(db: DatabaseSync, entryId: number, flags: { favorite?: boolean; pinned?: boolean }): void {
+/** Favori d'un jeu (champ absent = inchangé). */
+export function setFlags(db: DatabaseSync, entryId: number, flags: { favorite?: boolean }): void {
   if (flags.favorite !== undefined) db.prepare('UPDATE library SET favorite = ? WHERE id = ?').run(flags.favorite ? 1 : 0, entryId)
-  if (flags.pinned !== undefined) db.prepare('UPDATE library SET pinned = ? WHERE id = ?').run(flags.pinned ? 1 : 0, entryId)
 }
 
 /** Remplace d'un coup la liste des jeux d'une collection. */

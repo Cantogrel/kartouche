@@ -290,11 +290,7 @@ select, .field input { background: var(--bg-elevated); border: 1px solid var(--b
 .fav-wrap .state-mark { position: absolute; left: 8px; top: 8px; z-index: 2; padding: 2px 8px; border-radius: 5px; font-size: 13px; background: rgba(0,0,0,.75); color: #fff; pointer-events: none; }
 .state-mark.installed { background: #1f5a34; }
 .state-mark.downloading { background: #7d672e; }
-.pin-mark { top: 34px; }
 .fav-mark { position: absolute; right: 8px; top: 8px; z-index: 2; color: #ff5d7a; font-size: 18px; text-shadow: 0 1px 4px rgba(0,0,0,.9); pointer-events: none; }
-.pin-mark { position: absolute; right: 8px; top: 8px; z-index: 2; color: var(--accent); font-size: 18px; text-shadow: 0 1px 4px rgba(0,0,0,.9); pointer-events: none; }
-/* Les deux à la fois : l'étoile se décale pour ne pas chevaucher le cœur, sinon elle prend sa place. */
-.fav-mark + .pin-mark { right: 34px; }
 .pill .count { opacity: .7; font-size: 12px; margin-left: 4px; }
 .toolbar > .row:first-child { flex-wrap: wrap; }
 .collection-input { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 10px; color: var(--text); width: 180px; }

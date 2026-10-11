@@ -71,12 +71,12 @@ describe('configuration automatique des émulateurs', () => {
     expect(t).toContain('Renderer = Vulkan')
     expect(t).toContain('Adapter = NVIDIA GeForce RTX 3060')
     expect(t).toContain('ResolutionScale = 5')
-    for (const k of ['PGXPEnable = true', 'PGXPCulling = true', 'PGXPTextureCorrection = true', 'PGXPDepthBuffer = true']) expect(t).toContain(k)
+    for (const k of ['PGXPEnable = true', 'PGXPCulling = true', 'PGXPTextureCorrection = true', 'PGXPDepthBuffer = false']) expect(t).toContain(k)
     expect(t).not.toMatch(/WidescreenHack|PGXPCPU|PGXPVertexCache|AspectRatio/)
     // Audio : aucun réglage écrit, les défauts (100 %, périphérique Windows) s'appliquent.
     expect(t).not.toMatch(/\[Audio\]|OutputVolume|OutputDevice/)
   })
-  it('DuckStation : Direct3D 11 sans Vulkan, iGPU sans tampon de profondeur ni grosse résolution', async () => {
+  it('DuckStation : Direct3D 11 sans Vulkan, iGPU sans grosse résolution', async () => {
     await configureEmulator('duckstation', dir, ctx({ displayHeight: 2160, gpu: { vulkan: false, tier: 'igpu', name: 'Intel(R) HD Graphics 4600' } }))
     const t = read('settings.ini')
     expect(t).toContain('Renderer = D3D11')
@@ -891,5 +891,13 @@ describe('classement des émulateurs', () => {
     const order = (maker: string): string[] => EMULATORS.filter((e) => emulatorMaker(e) === maker).sort((a, b) => emulatorRank(a) - emulatorRank(b)).map((e) => e.id)
     expect(order('Nintendo')).toEqual(['retroarch', 'melonds', 'azahar', 'dolphin', 'cemu', 'eden'])
     expect(order('Sony')).toEqual(['duckstation', 'pcsx2', 'rpcs3', 'ppsspp', 'vita3k'])
+  })
+})
+
+describe('disableUpdateChecks', () => {
+  it('Cemu : ajoute puis remplace check_update', async () => {
+    const { setXmlFlag } = await import('./configure')
+    expect(setXmlFlag('<content>\n  <fullscreen>true</fullscreen>\n</content>', 'check_update', false)).toContain('<check_update>false</check_update>')
+    expect(setXmlFlag('<content>\n  <check_update>true</check_update>\n</content>', 'check_update', false)).toBe('<content>\n  <check_update>false</check_update>\n</content>')
   })
 })

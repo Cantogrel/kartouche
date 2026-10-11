@@ -56,8 +56,8 @@ export function Library() {
     .filter((g) => (tab === 'ready' ? !g.missing : tab === 'missing' ? g.missing : tab === 'favorites' ? g.favorite : collectionId !== null ? g.collections.includes(collectionId) : true))
     .filter((g) => !consoleFilter || g.console === consoleFilter)
     .filter((g) => !q || g.shownTitle.toLowerCase().includes(q))
-    // Épinglé : remonte en tête de la grille (pas seulement de la liste latérale), sans changer l'ordre du reste.
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned))
+    // Favori : remonte en tête de la grille (pas seulement de la liste latérale), sans changer l'ordre du reste.
+    .sort((a, b) => Number(b.favorite) - Number(a.favorite))
   const [exeNote, setExeNote] = useState<string | null>(null)
   const pick = async (kind: 'files' | 'folder'): Promise<void> => { setMenu(false); await importPaths(await window.api.invoke('library:pick', kind)) }
   const addExe = async (paths?: string[]): Promise<void> => {

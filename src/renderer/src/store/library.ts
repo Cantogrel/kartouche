@@ -29,7 +29,7 @@ interface LibraryState {
   clearAll: () => Promise<void>
   /** Supprime le fichier ROM de tous les jeux (Réglages → Zone dangereuse) ; les entrées restent, marquées sans fichier. */
   deleteAllFiles: () => Promise<void>
-  setFlag: (id: number, flags: { favorite?: boolean; pinned?: boolean }) => Promise<void>
+  setFlag: (id: number, flags: { favorite?: boolean }) => Promise<void>
   /** Crée une collection et renvoie son id (null si le nom est vide). */
   createCollection: (name: string) => Promise<number | null>
   renameCollection: (id: number, name: string) => Promise<boolean>

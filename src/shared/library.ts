@@ -86,8 +86,6 @@ export interface LibraryEntry {
   playMinutes: number
   lastPlayed: number | null
   favorite: boolean
-  /** Épinglé en tête de la liste latérale. */
-  pinned: boolean
   /** Ids des collections auxquelles le jeu appartient. */
   collections: number[]
   /** Au moins une liste de sources propose un téléchargement pour ce jeu (bouton/action « Désinstaller »). */
@@ -210,7 +208,7 @@ export const SOURCE_LABELS: Record<string, string> = {
 export const LIBRARY_SORTS = ['title', 'recent', 'added', 'time'] as const
 export type LibrarySort = (typeof LIBRARY_SORTS)[number]
 
-/** Tri de la grille (stable, l'épinglé reste en tête côté affichage) : titre affiché, dernière partie, date d'ajout ou temps de jeu, du plus grand au plus petit. */
+/** Tri de la grille (stable, le favori reste en tête côté affichage) : titre affiché, dernière partie, date d'ajout ou temps de jeu, du plus grand au plus petit. */
 export function sortEntries<T extends Pick<LibraryEntry, 'shownTitle' | 'lastPlayed' | 'addedAt' | 'playMinutes'>>(list: readonly T[], sort: LibrarySort): T[] {
   const byTitle = (a: T, b: T): number => a.shownTitle.toLowerCase().localeCompare(b.shownTitle.toLowerCase())
   const key: Record<LibrarySort, (a: T, b: T) => number> = {
