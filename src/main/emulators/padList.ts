@@ -2,7 +2,7 @@ import { joyconsSplit } from './joyconMode'
 import { NINTENDO_VID, PID_JOYCON_LEFT, PID_JOYCON_RIGHT, PID_SWITCH_PRO, type DetectedPad, type RawPad } from '@shared/pads'
 
 /** Dernière manette utilisée, côté XInput (emplacement) ou côté Nintendo (PID du Joy-Con ou de la Pro) : celle des deux sur laquelle on a appuyé le plus récemment. */
-export interface LastUsed { source: 'xinput' | 'hid'; slot?: number; pid?: number }
+export interface LastUsed { source: 'xinput' | 'hid'; slot?: number; pid?: number; ord?: number }
 
 type Hid = Extract<RawPad, { source: 'hid' }>
 
@@ -32,17 +32,18 @@ export function classifyPads(raw: readonly RawPad[], last: LastUsed | null = nul
 
   const lefts = kept.filter((h) => h.vid === NINTENDO_VID && h.pid === PID_JOYCON_LEFT)
   const rights = kept.filter((h) => h.vid === NINTENDO_VID && h.pid === PID_JOYCON_RIGHT)
-  const isUsed = (...pids: number[]): boolean => last?.source === 'hid' && last.pid !== undefined && pids.includes(last.pid)
+  // `ord` : rang de la manette parmi celles de son modèle dans la liste (0 pour la première). Sans rang dans la dernière activité, toutes celles du modèle comptent (comme avant).
+  const isUsed = (pid: number, ord: number): boolean => last?.source === 'hid' && last.pid === pid && (last.ord === undefined || last.ord === ord)
   const pairs = split ? 0 : Math.min(lefts.length, rights.length)
   let n = 0
   for (const h of kept) {
-    if (h.vid === NINTENDO_VID && h.pid === PID_SWITCH_PRO) out.push({ id: `pro:${n++}`, kind: 'switch-pro', name: '', slot: null, wireless: h.wireless, lastUsed: isUsed(PID_SWITCH_PRO) })
+    if (h.vid === NINTENDO_VID && h.pid === PID_SWITCH_PRO) { out.push({ id: `pro:${n}`, kind: 'switch-pro', name: '', slot: null, wireless: h.wireless, lastUsed: isUsed(PID_SWITCH_PRO, n) }); n++ }
   }
   for (let i = 0; i < pairs; i++) {
-    out.push({ id: `pair:${i}`, kind: 'joycon-pair', name: '', slot: null, wireless: lefts[i].wireless && rights[i].wireless, lastUsed: isUsed(PID_JOYCON_LEFT, PID_JOYCON_RIGHT) })
+    out.push({ id: `pair:${i}`, kind: 'joycon-pair', name: '', slot: null, wireless: lefts[i].wireless && rights[i].wireless, lastUsed: isUsed(PID_JOYCON_LEFT, i) || isUsed(PID_JOYCON_RIGHT, i) })
   }
-  lefts.slice(pairs).forEach((h, i) => out.push({ id: `joycon-left:${i}`, kind: 'joycon-left', name: '', slot: null, wireless: h.wireless, lastUsed: isUsed(PID_JOYCON_LEFT) && (split || rights.length === 0) }))
-  rights.slice(pairs).forEach((h, i) => out.push({ id: `joycon-right:${i}`, kind: 'joycon-right', name: '', slot: null, wireless: h.wireless, lastUsed: isUsed(PID_JOYCON_RIGHT) && (split || lefts.length === 0) }))
+  lefts.slice(pairs).forEach((h, i) => out.push({ id: `joycon-left:${i}`, kind: 'joycon-left', name: '', slot: null, wireless: h.wireless, lastUsed: isUsed(PID_JOYCON_LEFT, pairs + i) && (split || rights.length === 0) }))
+  rights.slice(pairs).forEach((h, i) => out.push({ id: `joycon-right:${i}`, kind: 'joycon-right', name: '', slot: null, wireless: h.wireless, lastUsed: isUsed(PID_JOYCON_RIGHT, pairs + i) && (split || lefts.length === 0) }))
   kept.filter((h) => !(h.vid === NINTENDO_VID && [PID_SWITCH_PRO, PID_JOYCON_LEFT, PID_JOYCON_RIGHT].includes(h.pid)))
     .forEach((h, i) => out.push({ id: `other:${h.vid.toString(16)}:${h.pid.toString(16)}:${i}`, kind: 'other', name: h.name, slot: null, wireless: h.wireless, lastUsed: false }))
   return out

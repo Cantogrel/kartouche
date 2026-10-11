@@ -13,6 +13,8 @@ let lastActive: number | null = null
 // Des deux familles (XInput et Nintendo, lu en HID), celle sur laquelle on a appuyé en dernier : sert à désigner « la dernière manette utilisée » dans la liste des manettes.
 let lastSource: 'xinput' | 'hid' | null = null
 let lastHidPid: number | null = null
+// Rang de la manette actionnée parmi celles du même modèle (deux Switch Pro : laquelle des deux) ; undefined si la surveillance ne le dit pas.
+let lastHidOrd: number | undefined
 // Manettes Nintendo ouvertes par la lecture HID (PID -> nombre) : ce qui est branché, connu en permanence et sans coût au lancement d'un jeu.
 const nintendoPresent = new Map<number, number>()
 
@@ -31,12 +33,12 @@ let activityGate: () => boolean = () => true
 export const setPadActivityGate = (gate: () => boolean): void => { activityGate = gate }
 
 export const noteActivePad = (slot: number): void => { if (!activityGate()) return; lastActive = slot; lastSource = 'xinput' }
-export const noteActiveHid = (pid: number): void => { if (!activityGate()) return; lastHidPid = pid; lastSource = 'hid' }
+export const noteActiveHid = (pid: number, ord?: number): void => { if (!activityGate()) return; lastHidPid = pid; lastHidOrd = ord; lastSource = 'hid' }
 
 /** La dernière manette utilisée, toutes familles confondues ; null tant qu'aucune n'a servi. */
 export function lastUsedPad(): LastUsed | null {
   if (lastSource === 'xinput' && lastActive !== null) return { source: 'xinput', slot: lastActive }
-  if (lastSource === 'hid' && lastHidPid !== null) return { source: 'hid', pid: lastHidPid }
+  if (lastSource === 'hid' && lastHidPid !== null) return { source: 'hid', pid: lastHidPid, ord: lastHidOrd }
   return null
 }
 
@@ -56,5 +58,5 @@ export function startPadTracker(cacheDir: string): void {
   started = true
   void watchPadActivity(cacheDir, noteActivePad).catch(() => { started = false })
   // Manettes Nintendo (Joy-Con, Switch Pro) : pas du XInput, lues en HID. Sans effet si aucune n'est branchée.
-  void watchNintendoHid(cacheDir, (e) => { if (e.type === 'active') noteActiveHid(e.pid); else if (e.type === 'device') noteNintendoDevice(e.pid, e.present); else setNintendoChord(e.down) }).catch(() => {})
+  void watchNintendoHid(cacheDir, (e) => { if (e.type === 'active') noteActiveHid(e.pid, e.ord); else if (e.type === 'device') noteNintendoDevice(e.pid, e.present); else setNintendoChord(e.down) }).catch(() => {})
 }

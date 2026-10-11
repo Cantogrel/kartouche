@@ -117,9 +117,26 @@ public static class NHid {
   static readonly Dictionary<string, int> tries = new Dictionary<string, int>();
   static void Ignore(string path, bool now) { lock (open) { int n = 0; tries.TryGetValue(path, out n); n++; tries[path] = n; if (now || n >= 5) ignored.Add(path); } }
   static readonly object gate = new object();
-  static bool leftMinus, rightPlus, leftCap, rightHome, proMinus, proPlus, chord;
+  // État PAR MANETTE (chemin HID) : avec deux manettes du même modèle (deux Switch Pro), un état par modèle se faisait écraser à chaque rapport de la manette
+  // au repos et la combinaison Moins + Plus n'était jamais vue. La combinaison est vraie si une même Pro a Moins ET Plus, ou si un Joy-Con gauche a Moins
+  // et un Joy-Con droit a Plus, etc. (n'importe quelles manettes présentes).
+  class Dev { public ushort pid; public bool minus, plus, cap, home; }
+  static readonly Dictionary<string, Dev> devs = new Dictionary<string, Dev>();
+  // Ordre d'ouverture des manettes (ordre d'énumération de Windows, comme la liste des manettes) : le rang d'une manette parmi celles du même modèle dit LAQUELLE de plusieurs Switch Pro (ou Joy-Con du même côté) vient d'être actionnée.
+  static readonly List<string> order = new List<string>();
+  static int Ord(string path, ushort pid) { lock (gate) { int k = 0; foreach (string p in order) { if (p == path) return k; Dev v; if (devs.TryGetValue(p, out v) && v.pid == pid) k++; } } return 0; }
+  static bool chord;
   static void Emit(string s) { lock (gate) { Console.Out.WriteLine(s); Console.Out.Flush(); } }
-  static void Chord() { bool c = (proMinus && proPlus) || (leftMinus && rightPlus) || (leftMinus && leftCap) || (rightHome && rightPlus); if (c != chord) { chord = c; Emit(c ? "CHORD 1" : "CHORD 0"); } }
+  static void Chord() {
+    bool pro = false, lm = false, rp = false, lc = false, rh = false;
+    foreach (Dev v in devs.Values) {
+      if (v.pid == 0x2009) { if (v.minus && v.plus) pro = true; }
+      else if (v.pid == 0x2006) { if (v.minus) lm = true; if (v.cap) lc = true; }
+      else if (v.pid == 0x2007) { if (v.plus) rp = true; if (v.home) rh = true; }
+    }
+    bool c = pro || (lm && rp) || (lm && lc) || (rh && rp);
+    if (c != chord) { chord = c; Emit(c ? "CHORD 1" : "CHORD 0"); }
+  }
   static int[] Sticks(byte[] b) { return new int[] { b[6] | ((b[7] & 15) << 8), (b[7] >> 4) | (b[8] << 4), b[9] | ((b[10] & 15) << 8), (b[10] >> 4) | (b[11] << 4) }; }
   public static void Scan() {
     Guid g; HidD_GetHidGuid(out g);
@@ -155,6 +172,8 @@ public static class NHid {
   }
   static void Read(SafeFileHandle h, string path, ushort pid, int len) {
     byte[] b = new byte[len]; int[] baseline = null; int[] base3f = null; long lastAct = 0;
+    Dev me = new Dev(); me.pid = pid;
+    lock (gate) { devs[path] = me; order.Remove(path); order.Add(path); }
     try {
       while (true) {
         int r;
@@ -165,35 +184,25 @@ public static class NHid {
           if (base3f == null) base3f = ax;
           // Moins = bit 0 et Plus = bit 1 de l'octet 2 (relevé sur la Switch Pro) : la fermeture du jeu à la manette doit marcher aussi dans ce format (DuckStation, PCSX2… dont le pilote SDL ne passe pas la manette en rapports complets).
           bool minus3 = (b[2] & 1) != 0, plus3 = (b[2] & 2) != 0;
-          lock (gate) {
-            if (pid == 0x2009) { proMinus = minus3; proPlus = plus3; }
-            else if (pid == 0x2006) leftMinus = minus3;
-            else if (pid == 0x2007) rightPlus = plus3;
-            Chord();
-          }
+          lock (gate) { me.minus = minus3; me.plus = plus3; Chord(); }
           bool simple = (b[1] | b[2]) != 0 || b[3] != 8;
           for (int k = 0; k < 4 && !simple; k++) if (Math.Abs(ax[k] - base3f[k]) > 9000) simple = true;
           long t3 = Environment.TickCount;
-          if (simple && t3 - lastAct > 250) { lastAct = t3; Emit("ACT " + pid.ToString("x")); }
+          if (simple && t3 - lastAct > 250) { lastAct = t3; Emit("ACT " + pid.ToString("x") + " " + Ord(path, pid)); }
           continue;
         }
         if (b[0] != 0x30) continue;
         bool minus = (b[4] & 1) != 0, plus = (b[4] & 2) != 0, home = (b[4] & 0x10) != 0, cap = (b[4] & 0x20) != 0;
-        lock (gate) {
-          if (pid == 0x2009) { proMinus = minus; proPlus = plus; }
-          else if (pid == 0x2006) { leftMinus = minus; leftCap = cap; }
-          else if (pid == 0x2007) { rightPlus = plus; rightHome = home; }
-          Chord();
-        }
+        lock (gate) { me.minus = minus; me.plus = plus; me.cap = cap; me.home = home; Chord(); }
         int[] s = Sticks(b);
         if (baseline == null) baseline = s;
         bool active = (b[3] | b[4] | b[5]) != 0;
         for (int k = 0; k < 4 && !active; k++) if (Math.Abs(s[k] - baseline[k]) > 700) active = true;
         long now = Environment.TickCount;
-        if (active && now - lastAct > 250) { lastAct = now; Emit("ACT " + pid.ToString("x")); }
+        if (active && now - lastAct > 250) { lastAct = now; Emit("ACT " + pid.ToString("x") + " " + Ord(path, pid)); }
       }
     } finally {
-      lock (gate) { if (pid == 0x2009) { proMinus = false; proPlus = false; } else if (pid == 0x2006) { leftMinus = false; leftCap = false; } else if (pid == 0x2007) { rightPlus = false; rightHome = false; } Chord(); }
+      lock (gate) { devs.Remove(path); order.Remove(path); Chord(); }
       lock (open) { open.Remove(path); }
       Emit("DEV " + pid.ToString("x") + " 0");
       h.Dispose();
@@ -207,12 +216,12 @@ while (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) {
 }
 `
 
-export type NintendoEvent = { type: 'active'; pid: number } | { type: 'chord'; down: boolean } | { type: 'device'; pid: number; present: boolean }
+export type NintendoEvent = { type: 'active'; pid: number; ord?: number } | { type: 'chord'; down: boolean } | { type: 'device'; pid: number; present: boolean }
 
 /** Une ligne de `HID_SCRIPT` ; null si ce n'est pas un évènement. */
 export function parseHidLine(line: string): NintendoEvent | null {
-  const a = /^ACT ([0-9a-f]{1,4})$/.exec(line)
-  if (a) return { type: 'active', pid: parseInt(a[1], 16) }
+  const a = /^ACT ([0-9a-f]{1,4})(?: (\d{1,2}))?$/.exec(line)
+  if (a) return a[2] === undefined ? { type: 'active', pid: parseInt(a[1], 16) } : { type: 'active', pid: parseInt(a[1], 16), ord: parseInt(a[2], 10) }
   const c = /^CHORD ([01])$/.exec(line)
   if (c) return { type: 'chord', down: c[1] === '1' }
   const d = /^DEV ([0-9a-f]{1,4}) ([01])$/.exec(line)

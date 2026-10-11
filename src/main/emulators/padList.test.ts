@@ -74,6 +74,20 @@ describe('liste des manettes', () => {
     expect(classifyPads([left], { source: 'hid', pid: 0x2006 })[0].lastUsed).toBe(true)
     expect(classifyPads([left], { source: 'hid', pid: 0x2007 })[0].lastUsed).toBe(false)
   })
+
+  it('deux Switch Pro : seule celle qui vient d\'être actionnée passe en dernière utilisée', () => {
+    const raw = [pro, pro]
+    expect(classifyPads(raw, { source: 'hid', pid: 0x2009, ord: 0 }).map((p) => p.lastUsed)).toEqual([true, false])
+    expect(classifyPads(raw, { source: 'hid', pid: 0x2009, ord: 1 }).map((p) => p.lastUsed)).toEqual([false, true])
+    // sans rang (ancienne surveillance) : comme avant, toutes celles du modèle
+    expect(classifyPads(raw, { source: 'hid', pid: 0x2009 }).map((p) => p.lastUsed)).toEqual([true, true])
+  })
+
+  it('deux paires de Joy-Con : seule la paire actionnée est la dernière utilisée', () => {
+    const raw = [left, right, left, right]
+    expect(classifyPads(raw, { source: 'hid', pid: 0x2007, ord: 1 }, false).map((p) => p.lastUsed)).toEqual([false, true])
+    expect(classifyPads(raw, { source: 'hid', pid: 0x2006, ord: 0 }, false).map((p) => p.lastUsed)).toEqual([true, false])
+  })
 })
 
 describe('manette à lire en priorité', () => {

@@ -39,6 +39,7 @@ describe('lecture des lignes des surveillances de manettes', () => {
   it('Nintendo : activité (PID en hexadécimal) et combinaison', () => {
     expect(parseHidLine('ACT 2009')).toEqual({ type: 'active', pid: 0x2009 })
     expect(parseHidLine('ACT 2006')).toEqual({ type: 'active', pid: 0x2006 })
+    expect(parseHidLine('ACT 2009 1')).toEqual({ type: 'active', pid: 0x2009, ord: 1 })
     expect(parseHidLine('CHORD 1')).toEqual({ type: 'chord', down: true })
     expect(parseHidLine('CHORD 0')).toEqual({ type: 'chord', down: false })
   })
